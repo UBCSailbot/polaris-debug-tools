@@ -2,6 +2,9 @@ import sys
 import paramiko
 import multiprocessing
 import time
+import csv
+import os
+from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
@@ -42,6 +45,19 @@ def parse_0x206_frame(data_hex):
         "temp_3": val(8, 10, 100.0),
         "volt_4": val(10, 12, 10000.0),
         "volt_1": val(12, 14, 10000.0)
+    }
+
+def parse_0x204_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) < 4:
+        raise ValueError("Insufficient data length for 0x204 frame")
+    
+    # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
+    actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
+    actual_rudder_angle = (actual_rudder_raw / 1000.0) - 90
+    
+    return {
+        "actual_rudder_angle": actual_rudder_angle
     }
 
 ### ----------  Background CAN Dump Process ---------- ###
@@ -135,12 +151,86 @@ class CANWindow(QWidget):
         self.volt2_history = []
         self.volt3_history = []
         self.volt4_history = []
+        self.actual_rudder_history = []
+        self.set_rudder_history = []
+
+        # Initialize logging
+        self._init_logging()
 
         self.init_ui()
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_status)
         self.timer.start(500)
+
+    def _init_logging(self):
+        """Initialize CSV logging files with timestamped names"""
+        # Create logs directory if it doesn't exist
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
+        
+        # Create timestamped filenames
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # CAN dump log file
+        self.candump_log_file = os.path.join('logs', f'candump_{timestamp}.csv')
+        self.candump_csv_file = open(self.candump_log_file, 'w', newline='')
+        self.candump_writer = csv.writer(self.candump_csv_file)
+        self.candump_writer.writerow(['Timestamp', 'Elapsed_Time_s', 'CAN_Message'])
+        self.candump_csv_file.flush()  # Ensure header is written immediately
+        
+        # Values log file
+        self.values_log_file = os.path.join('logs', f'values_{timestamp}.csv')
+        self.values_csv_file = open(self.values_log_file, 'w', newline='')
+        self.values_writer = csv.writer(self.values_csv_file)
+        self.values_writer.writerow([
+            'Timestamp', 'Elapsed_Time_s', 
+            'Temp1_C', 'Temp2_C', 'Temp3_C',
+            'Volt1_V', 'Volt2_V', 'Volt3_V', 'Volt4_V',
+            'Set_Rudder_deg', 'Actual_Rudder_deg'
+        ])
+        self.values_csv_file.flush()  # Ensure header is written immediately
+        
+        print(f"Logging initialized:")
+        print(f"  CAN dump: {self.candump_log_file}")
+        print(f"  Values: {self.values_log_file}")
+
+    def _log_candump(self, message):
+        """Log CAN dump message to CSV file"""
+        try:
+            timestamp = datetime.now().isoformat()
+            elapsed_time = time.time() - self.time_start
+            self.candump_writer.writerow([timestamp, f'{elapsed_time:.3f}', message])
+            self.candump_csv_file.flush()  # Flush immediately to prevent data loss
+        except Exception as e:
+            print(f"Error logging CAN dump: {e}")
+
+    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder):
+        """Log current values to CSV file"""
+        try:
+            timestamp = datetime.now().isoformat()
+            elapsed_time = time.time() - self.time_start
+            self.values_writer.writerow([
+                timestamp, f'{elapsed_time:.3f}',
+                f'{temp1:.2f}', f'{temp2:.2f}', f'{temp3:.2f}',
+                f'{volt1:.2f}', f'{volt2:.2f}', f'{volt3:.2f}', f'{volt4:.2f}',
+                f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else ''
+            ])
+            self.values_csv_file.flush()  # Flush immediately to prevent data loss
+        except Exception as e:
+            print(f"Error logging values: {e}")
+
+    def closeEvent(self, event):
+        """Handle window close event to ensure files are properly closed"""
+        try:
+            if hasattr(self, 'candump_csv_file'):
+                self.candump_csv_file.close()
+            if hasattr(self, 'values_csv_file'):
+                self.values_csv_file.close()
+            print("Log files closed successfully")
+        except Exception as e:
+            print(f"Error closing log files: {e}")
+        event.accept()
 
     def init_ui(self):
         # === Top Bar ===
@@ -163,27 +253,33 @@ class CANWindow(QWidget):
         top_bar_layout.addStretch()
 
         # === Live Value Display ===
+        value_style = """
+            color: black;
+            font-size: 18px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            padding: 8px;
+            background-color: #f0f0f0;
+            border: 2px solid #cccccc;
+            border-radius: 6px;
+            margin: 2px;
+        """
+        
         self.temp_values_label = QLabel("Temperature Values: --")
         self.temp_values_label.setAlignment(Qt.AlignLeft)
-        self.temp_values_label.setStyleSheet("""
-            color: black;
-            font-size: 16px;
-            font-weight: bold;
-            padding: 4px;
-        """)
+        self.temp_values_label.setStyleSheet(value_style)
         
         self.volt_values_label = QLabel("Voltage Values: --")
         self.volt_values_label.setAlignment(Qt.AlignLeft)
-        self.volt_values_label.setStyleSheet("""
-            color: black;
-            font-size: 16px;
-            font-weight: bold;
-            padding: 4px;
-        """)
+        self.volt_values_label.setStyleSheet(value_style)
+        
+        self.rudder_values_label = QLabel("Rudder Angles:        Set:    0°       Actual:    --")
+        self.rudder_values_label.setAlignment(Qt.AlignLeft)
+        self.rudder_values_label.setStyleSheet(value_style)
 
         
         # === Temperature Plot ===
-        self.temp_figure = Figure(figsize=(8, 4))
+        self.temp_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.temp_canvas = FigureCanvas(self.temp_figure)
         self.temp_ax = self.temp_figure.add_subplot(111)
         self.temp_ax.set_title("Temperatures vs Time")
@@ -198,10 +294,9 @@ class CANWindow(QWidget):
         self.temp2_line, = self.temp_ax.plot([], [], 'g-', label='Temp 2')
         self.temp3_line, = self.temp_ax.plot([], [], 'y-', label='Temp 3')
         self.temp_ax.legend()
-        self.temp_figure.tight_layout()
 
         # === Voltage Plot ===
-        self.volt_figure = Figure(figsize=(8, 4))
+        self.volt_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.volt_canvas = FigureCanvas(self.volt_figure)
         self.volt_ax = self.volt_figure.add_subplot(111)
         self.volt_ax.set_title("Cell Voltages vs Time")
@@ -217,7 +312,22 @@ class CANWindow(QWidget):
         self.volt3_line, = self.volt_ax.plot([], [], 'm-', label='Volt 3')
         self.volt4_line, = self.volt_ax.plot([], [], 'orange', label='Volt 4')
         self.volt_ax.legend()
-        self.volt_figure.tight_layout()
+
+        # === Rudder Angle Plot ===
+        self.rudder_figure = Figure(figsize=(8, 4), tight_layout=True)
+        self.rudder_canvas = FigureCanvas(self.rudder_figure)
+        self.rudder_ax = self.rudder_figure.add_subplot(111)
+        self.rudder_ax.set_title("Rudder Angle Comparison vs Time")
+        self.rudder_ax.set_xlabel("Time (s)")
+        self.rudder_ax.set_ylabel("Angle (degrees)")
+        self.rudder_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
+        self.rudder_ax.set_ylim(-50, 50)  # Rudder range is typically -45 to +45 degrees
+        self.rudder_ax.grid(True, alpha=0.3)
+        
+        # Initialize empty lines for rudder data
+        self.actual_rudder_line, = self.rudder_ax.plot([], [], 'r-', linewidth=2, label='Actual Rudder')
+        self.set_rudder_line, = self.rudder_ax.plot([], [], 'b--', linewidth=2, label='Set Rudder')
+        self.rudder_ax.legend()
 
         # Auto-scaling enabled for proper initial display
 
@@ -225,8 +335,8 @@ class CANWindow(QWidget):
         self.keyboard_checkbox = QCheckBox("Keyboard Mode")
         self.keyboard_checkbox.toggled.connect(self.toggle_keyboard_mode)
 
-        self.instructions1_display = QLabel("For Rudder    (+/- 3 degrees): A / S / D (Left / Center / Right)")
-        self.instructions2_display = QLabel("For Trim Tab (+/- 3 degrees): Q / E / W (Left / Center / Right)")
+        self.instructions1_display = QLabel("For Rudder    (+/- 3 degrees): A / S / D  (Left / Center / Right)")
+        self.instructions2_display = QLabel("For Trim Tab (+/- 3 degrees): Q / W / E (Left / Center / Right)")
 
         self.rudder_display = QLabel("Current Rudder Angle:      0 degrees")
         self.trimtab_display = QLabel("Current Trim Tab Angle:   0 degrees")
@@ -276,18 +386,24 @@ class CANWindow(QWidget):
 
         left_layout = QVBoxLayout()
         left_layout.addWidget(self.keyboard_checkbox)
+        left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(self.instructions1_display)
         left_layout.addWidget(self.instructions2_display)
+        left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(self.rudder_display)
         left_layout.addWidget(self.trimtab_display)
+        left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Rudder Angle:"))
         left_layout.addWidget(self.rudder_input)
         left_layout.addWidget(self.rudder_button)
+        left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Trim Tab Angle:"))
         left_layout.addWidget(self.trim_input)
         left_layout.addWidget(self.trim_button)
+        left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
+        left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(self.power_checkbox)
         left_layout.addWidget(self.power_off_btn)
         left_layout.addWidget(self.restart_btn)
@@ -296,9 +412,11 @@ class CANWindow(QWidget):
         right_layout.setSpacing(0)  # Remove spacing between widgets
         right_layout.addWidget(self.temp_values_label)
         right_layout.addWidget(self.volt_values_label)
+        right_layout.addWidget(self.rudder_values_label)
         right_layout.addSpacing(10)  # Add small spacing before plots
         right_layout.addWidget(self.temp_canvas)
         right_layout.addWidget(self.volt_canvas)
+        right_layout.addWidget(self.rudder_canvas)
 
         bottom_layout = QHBoxLayout()
         bottom_layout.addLayout(left_layout, 2)
@@ -368,6 +486,16 @@ class CANWindow(QWidget):
             self.cansend_queue.put(msg)
             self.output_display.append(f"[RUDDER SENT] {msg}")
             self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
+            
+            # Update rudder values display
+            current_actual = "---"
+            if self.actual_rudder_history:
+                current_actual = f"{self.actual_rudder_history[-1]:6.1f}°"
+            else:
+                current_actual = "    --"
+            self.rudder_values_label.setText(
+                f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {current_actual}"
+            )
         except ValueError:
             self.show_error("Invalid angle input for Rudder")
 
@@ -382,88 +510,110 @@ class CANWindow(QWidget):
         self.output_display.append(f"[RESTART POWER] {msg}")
 
     def update_status(self):
+        # Update time independently of CAN messages
+        current_time = time.time() - self.time_start
+        
+        # Process any new CAN messages
         while not self.queue.empty():
             line = self.queue.get()
             self.output_display.append(line)
+            
+            # Log all CAN dump output
+            self._log_candump(line)
 
             if line.startswith("can1"):
                 parts = line.split()
-                if len(parts) > 2 and parts[1].lower() == "206":
-                    try:
-                        raw_data = line.split(']')[-1].strip().split()
-                        parsed = parse_0x206_frame(''.join(raw_data))
-                        self.temp_values_label.setText(
-                            f"Temperature Values: "
-                            f"Temp 1: {parsed['temp_1']:.2f} °C, "
-                            f"Temp 2: {parsed['temp_2']:.2f} °C, "
-                            f"Temp 3: {parsed['temp_3']:.2f} °C"
-                        )
-                        self.volt_values_label.setText(
-                            f"Voltage Values: "
-                            f"Volt 1: {parsed['volt_1']:.2f} V, "
-                            f"Volt 2: {parsed['volt_2']:.2f} V, "
-                            f"Volt 3: {parsed['volt_3']:.2f} V, "
-                            f"Volt 4: {parsed['volt_4']:.2f} V"
-                        )
+                if len(parts) > 2:
+                    frame_id = parts[1].lower()
+                    
+                    # Handle 0x206 frame (temperature and voltage data)
+                    if frame_id == "206":
+                        try:
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x206_frame(''.join(raw_data))
+                            self.temp_values_label.setText(
+                                f"Temperature Values: "
+                                f"Temp 1: {parsed['temp_1']:6.2f}°C   "
+                                f"Temp 2: {parsed['temp_2']:6.2f}°C   "
+                                f"Temp 3: {parsed['temp_3']:6.2f}°C"
+                            )
+                            self.volt_values_label.setText(
+                                f"Voltage Values:     "
+                                f"Volt 1: {parsed['volt_1']:5.2f}V   "
+                                f"Volt 2: {parsed['volt_2']:5.2f}V   "
+                                f"Volt 3: {parsed['volt_3']:5.2f}V   "
+                                f"Volt 4: {parsed['volt_4']:5.2f}V"
+                            )
 
-                        current_time = time.time() - self.time_start
-                        self.time_history.append(current_time)
+                            # Add new data point with current time
+                            self.time_history.append(current_time)
+                            self.temp1_history.append(parsed['temp_1'])
+                            self.temp2_history.append(parsed['temp_2'])
+                            self.temp3_history.append(parsed['temp_3'])
+                            self.volt1_history.append(parsed['volt_1'])
+                            self.volt2_history.append(parsed['volt_2'])
+                            self.volt3_history.append(parsed['volt_3'])
+                            self.volt4_history.append(parsed['volt_4'])
+                            self.set_rudder_history.append(self.rudder_angle)
+                            
+                            # Fill in missing actual rudder data if needed
+                            while len(self.actual_rudder_history) < len(self.time_history):
+                                # Use last known value or 0 if no data yet
+                                last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
+                                self.actual_rudder_history.append(last_rudder)
 
-                        self.temp1_history.append(parsed['temp_1'])
-                        self.temp2_history.append(parsed['temp_2'])
-                        self.temp3_history.append(parsed['temp_3'])
+                            # Log current values
+                            actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+                            self._log_values(
+                                parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
+                                parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
+                                self.rudder_angle, actual_rudder
+                            )
 
-                        self.volt1_history.append(parsed['volt_1'])
-                        self.volt2_history.append(parsed['volt_2'])
-                        self.volt3_history.append(parsed['volt_3'])
-                        self.volt4_history.append(parsed['volt_4'])
-
-                        self.temp1_line.set_data(self.time_history, self.temp1_history)
-                        self.temp2_line.set_data(self.time_history, self.temp2_history)
-                        self.temp3_line.set_data(self.time_history, self.temp3_history)
-
-                        self.volt1_line.set_data(self.time_history, self.volt1_history)
-                        self.volt2_line.set_data(self.time_history, self.volt2_history)
-                        self.volt3_line.set_data(self.time_history, self.volt3_history)
-                        self.volt4_line.set_data(self.time_history, self.volt4_history)
-                        
-                        # === Auto-scale and scroll X axis ===
-                        scroll_window = 60
-                        if len(self.time_history) > 2:
-                            # Automatically scroll X axis to show latest data
-                            self.temp_ax.set_xlim(max(0, current_time - scroll_window), current_time)
-                            self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
-                        else:
-                            # For initial data points, auto-scale
-                            self.temp_ax.relim()
-                            self.temp_ax.autoscale_view()
-                            self.volt_ax.relim()
-                            self.volt_ax.autoscale_view()
-
-                        # === Auto Y adjustment (Temp) ===
-                        if self.temp1_history and self.temp2_history and self.temp3_history:
-                            temp_max = max(self.temp1_history + self.temp2_history + self.temp3_history)
-                            temp_min = min(self.temp1_history + self.temp2_history + self.temp3_history)
-                            if temp_max > 75 or temp_min < 10:
-                                self.temp_ax.set_ylim(min(temp_min - 2, 10), max(temp_max + 2, 75))
+                        except Exception as e:
+                            self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
+                    
+                    # Handle 0x204 frame (actual rudder angle)
+                    elif frame_id == "204":
+                        try:
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x204_frame(''.join(raw_data))
+                            
+                            # Update the most recent actual rudder value
+                            if self.actual_rudder_history:
+                                self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
                             else:
-                                self.temp_ax.set_ylim(10, 75)
+                                # If no history yet, add initial value
+                                self.actual_rudder_history.append(parsed['actual_rudder_angle'])
+                            
+                            # Update rudder display
+                            actual_angle = parsed['actual_rudder_angle']
+                            self.rudder_values_label.setText(
+                                f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
+                            )
 
-                        # === Auto Y adjustment (Volt) ===
-                        if self.volt1_history and self.volt2_history and self.volt3_history and self.volt4_history:
-                            volt_max = max(self.volt1_history + self.volt2_history + self.volt3_history + self.volt4_history)
-                            volt_min = min(self.volt1_history + self.volt2_history + self.volt3_history + self.volt4_history)
-                            if volt_max > 4 or volt_min < 2.5:
-                                self.volt_ax.set_ylim(min(volt_min - 0.1, 2.5), max(volt_max + 0.1, 4))
-                            else:
-                                self.volt_ax.set_ylim(2.5, 4)
-
-                        # Update the canvas to reflect changes
-                        self.temp_canvas.draw()
-                        self.volt_canvas.draw()
-
-                    except Exception as e:
-                        self.output_display.append(f"[PARSE ERROR] {str(e)}")
+                        except Exception as e:
+                            self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
+        
+        # Always update plots every timer cycle (independent of CAN messages)
+        if len(self.time_history) > 0:
+            # Update all plot data
+            self.temp1_line.set_data(self.time_history, self.temp1_history)
+            self.temp2_line.set_data(self.time_history, self.temp2_history)
+            self.temp3_line.set_data(self.time_history, self.temp3_history)
+            
+            self.volt1_line.set_data(self.time_history, self.volt1_history)
+            self.volt2_line.set_data(self.time_history, self.volt2_history)
+            self.volt3_line.set_data(self.time_history, self.volt3_history)
+            self.volt4_line.set_data(self.time_history, self.volt4_history)
+            
+            self.actual_rudder_line.set_data(self.time_history, self.actual_rudder_history)
+            self.set_rudder_line.set_data(self.time_history, self.set_rudder_history)
+            
+            self._update_plot_ranges(current_time)
+        else:
+            # Even with no data, update the time axis to show progression
+            self._update_plot_ranges(current_time)
 
         if self.temp_pipe.poll():
             connected, value = self.temp_pipe.recv()
@@ -477,6 +627,56 @@ class CANWindow(QWidget):
                 self.output_display.append(f"[ERR] {err.strip()}")
             elif out:
                 self.output_display.append(f"[OUT] {out.strip()}")
+
+    def _update_plot_ranges(self, current_time):
+        # === Auto-scale and scroll X axis ===
+        scroll_window = 60
+        if len(self.time_history) > 1:
+            # Automatically scroll X axis to show latest data
+            self.temp_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+        else:
+            # For initial data points, auto-scale
+            self.temp_ax.relim()
+            self.temp_ax.autoscale_view()
+            self.volt_ax.relim()
+            self.volt_ax.autoscale_view()
+            self.rudder_ax.relim()
+            self.rudder_ax.autoscale_view()
+
+        # === Auto Y adjustment (Temp) ===
+        if self.temp1_history and self.temp2_history and self.temp3_history:
+            temp_max = max(self.temp1_history + self.temp2_history + self.temp3_history)
+            temp_min = min(self.temp1_history + self.temp2_history + self.temp3_history)
+            if temp_max > 75 or temp_min < 10:
+                self.temp_ax.set_ylim(min(temp_min - 2, 10), max(temp_max + 2, 75))
+            else:
+                self.temp_ax.set_ylim(10, 75)
+
+        # === Auto Y adjustment (Volt) ===
+        if self.volt1_history and self.volt2_history and self.volt3_history and self.volt4_history:
+            volt_max = max(self.volt1_history + self.volt2_history + self.volt3_history + self.volt4_history)
+            volt_min = min(self.volt1_history + self.volt2_history + self.volt3_history + self.volt4_history)
+            if volt_max > 4 or volt_min < 2.5:
+                self.volt_ax.set_ylim(min(volt_min - 0.1, 2.5), max(volt_max + 0.1, 4))
+            else:
+                self.volt_ax.set_ylim(2.5, 4)
+
+        # === Auto Y adjustment (Rudder) ===
+        if self.actual_rudder_history or self.set_rudder_history:
+            all_rudder_angles = self.actual_rudder_history + self.set_rudder_history
+            if all_rudder_angles:
+                rudder_max = max(all_rudder_angles)
+                rudder_min = min(all_rudder_angles)
+                # Keep some margin around the data
+                margin = 5
+                self.rudder_ax.set_ylim(max(-50, rudder_min - margin), min(50, rudder_max + margin))
+
+        # Update the canvas to reflect changes
+        self.temp_canvas.draw()
+        self.volt_canvas.draw()
+        self.rudder_canvas.draw()
 
 
     def show_error(self, msg):
@@ -504,15 +704,28 @@ if __name__ == "__main__":
 
     try:
         sys.exit(app.exec_())
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt received, shutting down...")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
     finally:
+        print("Cleaning up...")
+        
+        # Close window and log files
+        try:
+            window.closeEvent(None)
+        except:
+            pass
+        
+        # Clean up processes
         cmd_queue.put("__EXIT__")
         candump_proc.terminate()
         temp_proc.terminate()
         cansend_proc.terminate()
 
-        candump_proc.join()
-        temp_proc.join()
-        cansend_proc.join()
+        candump_proc.join(timeout=2)
+        temp_proc.join(timeout=2)
+        cansend_proc.join(timeout=2)
 
         parent_conn.close()
         child_conn.close()
@@ -521,3 +734,5 @@ if __name__ == "__main__":
         queue.close()
         response_queue.close()
         cmd_queue.close()
+        
+        print("Cleanup complete.")
