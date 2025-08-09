@@ -19,8 +19,8 @@ import matplotlib.dates as mdates
 from datetime import datetime
 
 # SSH Credentials
-hostname = "raspberrypi.local"
-username = "soft"
+hostname = "192.168.0.10"
+username = "sailbot"
 password = "sailbot"
 
 ### ----------  Utility Functions ---------- ###
