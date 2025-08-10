@@ -289,7 +289,6 @@ class CANWindow(QWidget):
             color: black;
             font-size: 24px;
             font-weight: bold;
-            font-family: 'Courier New', monospace;
             padding: 12px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
