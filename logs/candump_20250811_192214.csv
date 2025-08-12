@@ -1,0 +1,2 @@
+Timestamp,Elapsed_Time_s,CAN_Message
+2025-08-11T19:22:35.875551,21.388,"[ERROR] [WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond"
