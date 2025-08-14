@@ -287,9 +287,9 @@ class CANWindow(QWidget):
         # === Live Value Display ===
         value_style = """
             color: black;
-            font-size: 18px;
+            font-size: 14px;
             font-weight: bold;
-            padding: 8px;
+            padding: 6px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
             border-radius: 6px;
@@ -440,9 +440,9 @@ class CANWindow(QWidget):
         self.ssh_instructions_label.setStyleSheet("""
             QLabel {
                 color: blue;
-                font-size: 16px;
+                font-size: 12px;
                 font-weight: bold;
-                padding: 15px;
+                padding: 10px;
                 background-color: #e6f3ff;
                 border: 2px solid #4d94ff;
                 border-radius: 6px;
