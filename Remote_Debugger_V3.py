@@ -425,30 +425,118 @@ class CANWindow(QWidget):
         self.restart_btn.clicked.connect(self.send_restart_power)
 
         # SSH Instructions for CAN and system control
-        self.ssh_instructions_label = QLabel(
-            "SSH Terminal Instructions:\n"
-            "1. Open separate terminal/PowerShell\n"
-            "2. ssh sailbot@192.168.0.10\n"
-            "3. Password: sailbot\n"
-            "\nUseful Commands:\n"
-            "• sudo ip link set can1 down\n"
-            "• sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on\n"
-            "\nDISCLAIMER: If CAN HAT doesn't work, try:\n"
-            "• sudo rmmod spi_bcm2835aux\n"
-            "• sudo modprobe spi_bcm2835aux"
-        )
-        self.ssh_instructions_label.setStyleSheet("""
-            QLabel {
-                color: blue;
-                font-size: 12px;
-                font-weight: bold;
-                padding: 10px;
+        self.ssh_instructions_widget = QWidget()
+        self.ssh_instructions_widget.setStyleSheet("""
+            QWidget {
                 background-color: #e6f3ff;
                 border: 2px solid #4d94ff;
                 border-radius: 6px;
                 margin: 2px;
+                padding: 5px;
             }
         """)
+        
+        ssh_layout = QVBoxLayout(self.ssh_instructions_widget)
+        ssh_layout.setSpacing(2)
+        ssh_layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Add instruction text
+        instruction_text = QLabel(
+            "SSH Terminal Instructions:\n"
+            "1. Open separate terminal/PowerShell\n"
+            "2. ssh sailbot@192.168.0.10\n"
+            "3. Password: sailbot\n"
+            "\nUseful Commands:"
+        )
+        instruction_text.setStyleSheet("""
+            QLabel {
+                color: blue;
+                font-size: 12px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+                margin: 0px;
+                padding: 0px;
+            }
+        """)
+        ssh_layout.addWidget(instruction_text)
+        
+        # Define commands with shorter labels for inline display
+        commands = [
+            ("ssh sailbot@192.168.0.10", "SSH Connect"),
+            ("sudo ip link set can1 down", "CAN Down"),
+            ("sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on", "CAN Up"),
+            ("sudo rmmod spi_bcm2835aux", "Remove SPI"),
+            ("sudo modprobe spi_bcm2835aux", "Load SPI")
+        ]
+        
+        # Create horizontal layouts for each command with inline copy button
+        self.command_copy_buttons = []
+        for command, label in commands:
+            cmd_layout = QHBoxLayout()
+            cmd_layout.setContentsMargins(0, 0, 0, 0)
+            cmd_layout.setSpacing(5)
+            
+            # Command text
+            cmd_label = QLabel(f"• {command}")
+            cmd_label.setStyleSheet("""
+                QLabel {
+                    color: blue;
+                    font-size: 11px;
+                    font-weight: bold;
+                    background: transparent;
+                    border: none;
+                    margin: 0px;
+                    padding: 0px;
+                }
+            """)
+            
+            # Small copy button
+            copy_btn = QPushButton(f"Copy")
+            copy_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #4d94ff;
+                    color: white;
+                    border: none;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    min-height: 18px;
+                    max-height: 18px;
+                    min-width: 35px;
+                    max-width: 35px;
+                }
+                QPushButton:hover {
+                    background-color: #0066cc;
+                }
+                QPushButton:pressed {
+                    background-color: #003d7a;
+                }
+            """)
+            copy_btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
+            self.command_copy_buttons.append(copy_btn)
+            
+            cmd_layout.addWidget(cmd_label)
+            cmd_layout.addStretch()
+            cmd_layout.addWidget(copy_btn)
+            
+            ssh_layout.addLayout(cmd_layout)
+        
+        # Add disclaimer
+        disclaimer_text = QLabel("\nDISCLAIMER: If CAN HAT doesn't work, try the SPI commands above")
+        disclaimer_text.setStyleSheet("""
+            QLabel {
+                color: blue;
+                font-size: 11px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+                margin: 0px;
+                padding: 0px;
+            }
+        """)
+        ssh_layout.addWidget(disclaimer_text)
 
         # Style for emergency buttons (power controls)
         red_button_style = """
@@ -500,7 +588,7 @@ class CANWindow(QWidget):
         left_layout.addWidget(self.power_off_btn)
         left_layout.addWidget(self.restart_btn)
         left_layout.addSpacing(10)  # Add spacing before SSH instructions
-        left_layout.addWidget(self.ssh_instructions_label)
+        left_layout.addWidget(self.ssh_instructions_widget)
 
         right_layout = QVBoxLayout()
         right_layout.setSpacing(0)  # Remove spacing between widgets
@@ -532,6 +620,13 @@ class CANWindow(QWidget):
         enabled = state == Qt.Checked
         self.power_off_btn.setEnabled(enabled)
         self.restart_btn.setEnabled(enabled)
+
+    def copy_to_clipboard(self, text):
+        """Copy text to system clipboard"""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        # Show a brief confirmation
+        self.output_display.append(f"[COPIED] {text}")
 
     def keyPressEvent(self, event):
         if not self.keyboard_checkbox.isChecked():
