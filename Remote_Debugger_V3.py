@@ -622,10 +622,10 @@ class CANWindow(QWidget):
             self.rudder_angle = 0
             self.send_rudder(from_keyboard=True)
         elif key == Qt.Key_Q:
-            self.trimtab_angle = max(self.trimtab_angle - 3, -45)
+            self.trimtab_angle = max(self.trimtab_angle - 3, -90)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_E:
-            self.trimtab_angle = min(self.trimtab_angle + 3, 45)
+            self.trimtab_angle = min(self.trimtab_angle + 3, 90)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_W:
             self.trimtab_angle = 0
