@@ -287,13 +287,13 @@ class CANWindow(QWidget):
         # === Live Value Display ===
         value_style = """
             color: black;
-            font-size: 24px;
+            font-size: 18px;
             font-weight: bold;
-            padding: 12px;
+            padding: 8px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
             border-radius: 6px;
-            margin: 2px;
+            margin: 1px;
         """
         
         self.temp_values_label = QLabel("Temperature Values: --")
@@ -494,12 +494,12 @@ class CANWindow(QWidget):
         left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
-        left_layout.addSpacing(10)  # Add small spacing
+        left_layout.addSpacing(8)  # Add small spacing
         left_layout.addWidget(self.emergency_checkbox)
-        left_layout.addSpacing(15)  # Add spacing before emergency buttons
+        left_layout.addSpacing(10)  # Add spacing before emergency buttons
         left_layout.addWidget(self.power_off_btn)
         left_layout.addWidget(self.restart_btn)
-        left_layout.addSpacing(15)  # Add spacing before SSH instructions
+        left_layout.addSpacing(10)  # Add spacing before SSH instructions
         left_layout.addWidget(self.ssh_instructions_label)
 
         right_layout = QVBoxLayout()
@@ -507,7 +507,7 @@ class CANWindow(QWidget):
         right_layout.addWidget(self.temp_values_label)
         right_layout.addWidget(self.volt_values_label)
         right_layout.addWidget(self.rudder_values_label)
-        right_layout.addSpacing(10)  # Add small spacing before plots
+        right_layout.addSpacing(5)  # Add small spacing before plots
         right_layout.addWidget(self.temp_canvas)
         right_layout.addWidget(self.volt_canvas)
         right_layout.addWidget(self.rudder_canvas)
