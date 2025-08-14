@@ -430,7 +430,9 @@ class CANWindow(QWidget):
             "1. Open separate terminal/PowerShell\n"
             "2. ssh sailbot@192.168.0.10\n"
             "3. Password: sailbot\n"
-            "\nUse buttons below to copy commands:\n"
+            "\nUseful Commands:\n"
+            "• sudo ip link set can1 down\n"
+            "• sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on\n"
             "\nDISCLAIMER: If CAN HAT doesn't work, try:\n"
             "• sudo rmmod spi_bcm2835aux\n"
             "• sudo modprobe spi_bcm2835aux"
@@ -447,51 +449,6 @@ class CANWindow(QWidget):
                 margin: 2px;
             }
         """)
-
-        # Create a grid layout for command buttons
-        self.commands_grid = QGridLayout()
-        
-        # Define commands with labels
-        commands = [
-            ("SSH Connect", "ssh sailbot@192.168.0.10"),
-            ("CAN1 Down", "sudo ip link set can1 down"),
-            ("CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"),
-            ("Remove SPI Module", "sudo rmmod spi_bcm2835aux"),
-            ("Load SPI Module", "sudo modprobe spi_bcm2835aux"),
-            ("Check CAN Status", "ip link show can1"),
-            ("View System Logs", "dmesg | tail"),
-            ("System Info", "uname -a")
-        ]
-        
-        # Create buttons for each command
-        self.command_buttons = []
-        for i, (label, command) in enumerate(commands):
-            btn = QPushButton(f"Copy: {label}")
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #4d94ff;
-                    color: white;
-                    border: none;
-                    padding: 8px 12px;
-                    border-radius: 4px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    min-height: 35px;
-                }
-                QPushButton:hover {
-                    background-color: #0066cc;
-                }
-                QPushButton:pressed {
-                    background-color: #003d7a;
-                }
-            """)
-            btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
-            self.command_buttons.append(btn)
-            
-            # Add to grid layout (2 columns)
-            row = i // 2
-            col = i % 2
-            self.commands_grid.addWidget(btn, row, col)
 
         # Style for emergency buttons (power controls)
         red_button_style = """
@@ -544,8 +501,6 @@ class CANWindow(QWidget):
         left_layout.addWidget(self.restart_btn)
         left_layout.addSpacing(15)  # Add spacing before SSH instructions
         left_layout.addWidget(self.ssh_instructions_label)
-        left_layout.addSpacing(5)  # Small spacing before command buttons
-        left_layout.addLayout(self.commands_grid)
 
         right_layout = QVBoxLayout()
         right_layout.setSpacing(0)  # Remove spacing between widgets
@@ -577,13 +532,6 @@ class CANWindow(QWidget):
         enabled = state == Qt.Checked
         self.power_off_btn.setEnabled(enabled)
         self.restart_btn.setEnabled(enabled)
-
-    def copy_to_clipboard(self, text):
-        """Copy text to system clipboard"""
-        clipboard = QApplication.clipboard()
-        clipboard.setText(text)
-        # Show a brief confirmation
-        self.output_display.append(f"[COPIED] {text}")
 
     def keyPressEvent(self, event):
         if not self.keyboard_checkbox.isChecked():
