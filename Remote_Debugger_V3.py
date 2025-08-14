@@ -56,6 +56,11 @@ def parse_0x204_frame(data_hex):
     actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
     actual_rudder_angle = (actual_rudder_raw / 1000.0) - 90
     
+    # Ignore angles outside reasonable range (-180° to +180°)
+    if actual_rudder_angle < -180.0 or actual_rudder_angle > 180.0:
+        print(f"DEBUG 0x204: WARNING - Angle {actual_rudder_angle}° outside valid range (-180° to +180°), ignoring")
+        return None
+    
     return {
         "actual_rudder_angle": actual_rudder_angle
     }
