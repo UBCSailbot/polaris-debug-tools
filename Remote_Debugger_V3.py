@@ -440,27 +440,6 @@ class CANWindow(QWidget):
         ssh_layout.setSpacing(2)
         ssh_layout.setContentsMargins(8, 8, 8, 8)
         
-        # Add instruction text
-        instruction_text = QLabel(
-            "SSH Terminal Instructions:\n"
-            "1. Open separate terminal/PowerShell\n"
-            "2. ssh sailbot@192.168.0.10\n"
-            "3. Password: sailbot\n"
-            "\nUseful Commands:"
-        )
-        instruction_text.setStyleSheet("""
-            QLabel {
-                color: blue;
-                font-size: 12px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-                margin: 0px;
-                padding: 0px;
-            }
-        """)
-        ssh_layout.addWidget(instruction_text)
-        
         # Define commands with shorter labels for inline display
         commands = [
             ("ssh sailbot@192.168.0.10", "SSH Connect"),
