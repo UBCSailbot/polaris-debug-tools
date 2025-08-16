@@ -49,46 +49,16 @@ def parse_0x206_frame(data_hex):
 
 def parse_0x204_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
-    
-    # Check if we have enough data for a valid rudder frame
     if len(raw_bytes) < 4:
-        print(f"DEBUG 0x204: Insufficient data length ({len(raw_bytes)} bytes), skipping frame")
         raise ValueError("Insufficient data length for 0x204 frame")
     
-    # Debug: Print raw data for troubleshooting
-    print(f"DEBUG 0x204: Raw hex: {data_hex}")
-    print(f"DEBUG 0x204: Raw bytes length: {len(raw_bytes)}")
-    
-    # Handle CAN-FD frame size variations (16-byte vs 4-byte frames)
-    # For rudder angle, we only need the first 4 bytes regardless of frame size
-    if len(raw_bytes) == 16:
-        # CAN-FD 16-byte frame - use first 4 bytes for rudder data
-        rudder_bytes = raw_bytes[0:4]
-        print(f"DEBUG 0x204: Processing 16-byte CAN-FD frame, using bytes 0-3")
-    elif len(raw_bytes) == 8:
-        # Standard CAN 8-byte frame - use first 4 bytes
-        rudder_bytes = raw_bytes[0:4]
-        print(f"DEBUG 0x204: Processing 8-byte CAN frame, using bytes 0-3")
-    elif len(raw_bytes) == 4:
-        # 4-byte frame - use all data
-        rudder_bytes = raw_bytes
-        print(f"DEBUG 0x204: Processing 4-byte frame, using all bytes")
-    else:
-        # Other frame sizes - try to use first 4 bytes if available
-        rudder_bytes = raw_bytes[0:4]
-        print(f"DEBUG 0x204: Processing {len(raw_bytes)}-byte frame, using first 4 bytes")
-    
     # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
-    actual_rudder_raw = int.from_bytes(rudder_bytes, 'little')
-    print(f"DEBUG 0x204: Raw integer value: {actual_rudder_raw}")
-    
+    actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
     actual_rudder_angle = (actual_rudder_raw / 1000.0) - 90
-    print(f"DEBUG 0x204: Calculated angle: {actual_rudder_angle}")
     
-    # Validate angle is within reasonable range (-45° to +45° for rudder)
-    if actual_rudder_angle < -45.0 or actual_rudder_angle > 45.0:
-        print(f"DEBUG 0x204: WARNING - Angle {actual_rudder_angle}° outside valid range (-45° to +45°), may be garbage data")
-        # Return None to indicate invalid data instead of garbage values
+    # Ignore angles outside reasonable range (-180° to +180°)
+    if actual_rudder_angle < -180.0 or actual_rudder_angle > 180.0:
+        print(f"DEBUG 0x204: WARNING - Angle {actual_rudder_angle}° outside valid range (-180° to +180°), ignoring")
         return None
     
     return {
@@ -322,13 +292,13 @@ class CANWindow(QWidget):
         # === Live Value Display ===
         value_style = """
             color: black;
-            font-size: 24px;
+            font-size: 14px;
             font-weight: bold;
-            padding: 12px;
+            padding: 6px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
             border-radius: 6px;
-            margin: 2px;
+            margin: 1px;
         """
         
         self.temp_values_label = QLabel("Temperature Values: --")
@@ -460,58 +430,66 @@ class CANWindow(QWidget):
         self.restart_btn.clicked.connect(self.send_restart_power)
 
         # SSH Instructions for CAN and system control
-        self.ssh_instructions_label = QLabel(
-            "SSH Terminal Instructions:\n"
-            "1. Open separate terminal/PowerShell\n"
-            "2. ssh sailbot@192.168.0.10\n"
-            "3. Password: sailbot\n"
-            "\nUse buttons below to copy commands:\n"
-            "\nDISCLAIMER: If CAN HAT doesn't work, try:\n"
-            "• sudo rmmod spi_bcm2835aux\n"
-            "• sudo modprobe spi_bcm2835aux"
-        )
-        self.ssh_instructions_label.setStyleSheet("""
-            QLabel {
-                color: blue;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 15px;
+        self.ssh_instructions_widget = QWidget()
+        self.ssh_instructions_widget.setStyleSheet("""
+            QWidget {
                 background-color: #e6f3ff;
                 border: 2px solid #4d94ff;
                 border-radius: 6px;
                 margin: 2px;
+                padding: 5px;
             }
         """)
-
-        # Create a grid layout for command buttons
-        self.commands_grid = QGridLayout()
         
-        # Define commands with labels
+        ssh_layout = QVBoxLayout(self.ssh_instructions_widget)
+        ssh_layout.setSpacing(2)
+        ssh_layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Define commands with shorter labels for inline display
         commands = [
-            ("SSH Connect", "ssh sailbot@192.168.0.10"),
-            ("CAN1 Down", "sudo ip link set can1 down"),
-            ("CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"),
-            ("Remove SPI Module", "sudo rmmod spi_bcm2835aux"),
-            ("Load SPI Module", "sudo modprobe spi_bcm2835aux"),
-            ("Check CAN Status", "ip link show can1"),
-            ("View System Logs", "dmesg | tail"),
-            ("System Info", "uname -a")
+            ("ssh sailbot@192.168.0.10", "SSH Connect"),
+            ("sudo ip link set can1 down", "CAN Down"),
+            ("sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on", "CAN Up"),
+            ("sudo rmmod spi_bcm2835aux", "Remove SPI"),
+            ("sudo modprobe spi_bcm2835aux", "Load SPI")
         ]
         
-        # Create buttons for each command
-        self.command_buttons = []
-        for i, (label, command) in enumerate(commands):
-            btn = QPushButton(f"Copy: {label}")
-            btn.setStyleSheet("""
+        # Create horizontal layouts for each command with inline copy button
+        self.command_copy_buttons = []
+        for command, label in commands:
+            cmd_layout = QHBoxLayout()
+            cmd_layout.setContentsMargins(0, 0, 0, 0)
+            cmd_layout.setSpacing(5)
+            
+            # Command text
+            cmd_label = QLabel(f"• {command}")
+            cmd_label.setStyleSheet("""
+                QLabel {
+                    color: blue;
+                    font-size: 11px;
+                    font-weight: bold;
+                    background: transparent;
+                    border: none;
+                    margin: 0px;
+                    padding: 0px;
+                }
+            """)
+            
+            # Small copy button
+            copy_btn = QPushButton(f"Copy")
+            copy_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #4d94ff;
                     color: white;
                     border: none;
-                    padding: 8px 12px;
-                    border-radius: 4px;
-                    font-size: 16px;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 10px;
                     font-weight: bold;
-                    min-height: 35px;
+                    min-height: 18px;
+                    max-height: 18px;
+                    min-width: 35px;
+                    max-width: 35px;
                 }
                 QPushButton:hover {
                     background-color: #0066cc;
@@ -520,13 +498,29 @@ class CANWindow(QWidget):
                     background-color: #003d7a;
                 }
             """)
-            btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
-            self.command_buttons.append(btn)
+            copy_btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
+            self.command_copy_buttons.append(copy_btn)
             
-            # Add to grid layout (2 columns)
-            row = i // 2
-            col = i % 2
-            self.commands_grid.addWidget(btn, row, col)
+            cmd_layout.addWidget(cmd_label)
+            cmd_layout.addStretch()
+            cmd_layout.addWidget(copy_btn)
+            
+            ssh_layout.addLayout(cmd_layout)
+        
+        # Add disclaimer
+        disclaimer_text = QLabel("\nDISCLAIMER: If CAN HAT doesn't work, try the SPI commands above")
+        disclaimer_text.setStyleSheet("""
+            QLabel {
+                color: blue;
+                font-size: 11px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+                margin: 0px;
+                padding: 0px;
+            }
+        """)
+        ssh_layout.addWidget(disclaimer_text)
 
         # Style for emergency buttons (power controls)
         red_button_style = """
@@ -572,22 +566,20 @@ class CANWindow(QWidget):
         left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
-        left_layout.addSpacing(10)  # Add small spacing
+        left_layout.addSpacing(8)  # Add small spacing
         left_layout.addWidget(self.emergency_checkbox)
-        left_layout.addSpacing(15)  # Add spacing before emergency buttons
+        left_layout.addSpacing(10)  # Add spacing before emergency buttons
         left_layout.addWidget(self.power_off_btn)
         left_layout.addWidget(self.restart_btn)
-        left_layout.addSpacing(15)  # Add spacing before SSH instructions
-        left_layout.addWidget(self.ssh_instructions_label)
-        left_layout.addSpacing(5)  # Small spacing before command buttons
-        left_layout.addLayout(self.commands_grid)
+        left_layout.addSpacing(10)  # Add spacing before SSH instructions
+        left_layout.addWidget(self.ssh_instructions_widget)
 
         right_layout = QVBoxLayout()
         right_layout.setSpacing(0)  # Remove spacing between widgets
         right_layout.addWidget(self.temp_values_label)
         right_layout.addWidget(self.volt_values_label)
         right_layout.addWidget(self.rudder_values_label)
-        right_layout.addSpacing(10)  # Add small spacing before plots
+        right_layout.addSpacing(5)  # Add small spacing before plots
         right_layout.addWidget(self.temp_canvas)
         right_layout.addWidget(self.volt_canvas)
         right_layout.addWidget(self.rudder_canvas)
@@ -635,10 +627,10 @@ class CANWindow(QWidget):
             self.rudder_angle = 0
             self.send_rudder(from_keyboard=True)
         elif key == Qt.Key_Q:
-            self.trimtab_angle = max(self.trimtab_angle - 3, -45)
+            self.trimtab_angle = max(self.trimtab_angle - 3, -90)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_E:
-            self.trimtab_angle = min(self.trimtab_angle + 3, 45)
+            self.trimtab_angle = min(self.trimtab_angle + 3, 90)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_W:
             self.trimtab_angle = 0
@@ -697,7 +689,11 @@ class CANWindow(QWidget):
         # Process any new CAN messages
         while not self.queue.empty():
             line = self.queue.get()
-            self.output_display.append(line)
+            
+            # Only display errors, not regular candump output to prevent slowdown
+            if line.startswith("[ERROR]") or "error" in line.lower() or "fail" in line.lower():
+                self.output_display.append(line)
+            # Don't display regular candump lines to improve performance
             
             # Send to separate logging process (non-blocking)
             try:
@@ -777,9 +773,7 @@ class CANWindow(QWidget):
                                 self.rudder_values_label.setText(
                                     f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
                                 )
-                            else:
-                                # Skip updating display for invalid data
-                                self.output_display.append("[INFO] Skipped invalid rudder angle data (outside -45° to +45° range)")
+                            # If parsed is None, skip updating (invalid angle was filtered out)
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
@@ -788,7 +782,7 @@ class CANWindow(QWidget):
         if len(self.time_history) > 0:
             # Update all plot data
             self.temp1_line.set_data(self.time_history, self.temp1_history)
-            # self.temp2_line.set_data(self.time_history, self.temp2_history)  # Commented out
+            # self.temp2_line.set_data(self.time_history, self.temp2_history)  # Commented out buck boost temp
             self.temp3_line.set_data(self.time_history, self.temp3_history)
             
             self.volt1_line.set_data(self.time_history, self.volt1_history)
