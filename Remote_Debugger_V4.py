@@ -699,10 +699,13 @@ class CANWindow(QWidget):
             angle = self.rudder_angle if from_keyboard else int(self.rudder_input.text())
             if not from_keyboard:
                 self.rudder_angle = angle
-            value = convert_to_hex((angle+90) * 1000, 8)
+            
+            # Invert the angle to correct for hardware inversion
+            inverted_angle = -angle
+            value = convert_to_hex((inverted_angle+90) * 1000, 8)
             msg = "cansend can1 001##1" + convert_to_little_endian(value) + "80"
             self.cansend_queue.put(msg)
-            self.output_display.append(f"[RUDDER SENT] {msg}")
+            self.output_display.append(f"[RUDDER SENT] {msg} (requested: {angle}°, sent: {inverted_angle}°)")
             self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
             
             # Update rudder values display
