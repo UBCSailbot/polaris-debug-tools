@@ -23,6 +23,47 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
+def extract_hex_data_from_candump(line):
+    """
+    Extract hex data from candump line, handling variable frame lengths.
+    Expected format: "can1  204   [8]  01 02 03 04 05 06 07 08"
+    """
+    try:
+        # Find the bracket with frame length
+        bracket_start = line.find('[')
+        bracket_end = line.find(']', bracket_start)
+        
+        if bracket_start == -1 or bracket_end == -1:
+            print(f"DEBUG: No brackets found in line: {line}")
+            return None
+            
+        # Extract everything after the closing bracket
+        hex_part = line[bracket_end + 1:].strip()
+        
+        # Split by whitespace and join (removes extra spaces)
+        hex_bytes = hex_part.split()
+        
+        # Validate that we have hex data
+        if not hex_bytes:
+            print(f"DEBUG: No hex data found after bracket in line: {line}")
+            return None
+            
+        # Validate each byte is valid hex
+        for byte_str in hex_bytes:
+            try:
+                int(byte_str, 16)
+            except ValueError:
+                print(f"DEBUG: Invalid hex byte '{byte_str}' in line: {line}")
+                return None
+        
+        hex_string = ''.join(hex_bytes)
+        print(f"DEBUG: Extracted hex data: {hex_string} (length: {len(hex_string)//2} bytes)")
+        return hex_string
+        
+    except Exception as e:
+        print(f"DEBUG: Error extracting hex data from line '{line}': {e}")
+        return None
+
 ### ----------  Utility Functions ---------- ###
 def convert_to_hex(decimal, num_digits):
     return format(decimal, "X").zfill(num_digits)
@@ -33,8 +74,20 @@ def convert_to_little_endian(hex_str):
 
 def parse_0x206_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
+    
+    # Debug output for troubleshooting
+    print(f"DEBUG 0x206: Raw hex: {data_hex}")
+    print(f"DEBUG 0x206: Raw bytes length: {len(raw_bytes)}")
+    
+    # 0x206 frame requires exactly 14 bytes for all voltage and temperature data
     if len(raw_bytes) < 14:
-        raise ValueError("Insufficient data length")
+        print(f"DEBUG 0x206: Insufficient data length ({len(raw_bytes)} bytes), need 14 bytes minimum")
+        return None  # Return None instead of raising exception
+    
+    # For frames longer than 14 bytes (CAN-FD), just use the first 14 bytes
+    if len(raw_bytes) > 14:
+        print(f"DEBUG 0x206: Frame has {len(raw_bytes)} bytes, using first 14 bytes")
+        raw_bytes = raw_bytes[:14]
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
@@ -709,46 +762,53 @@ class CANWindow(QWidget):
                     # Handle 0x206 frame (temperature and voltage data)
                     if frame_id == "206":
                         try:
-                            raw_data = line.split(']')[-1].strip().split()
-                            parsed = parse_0x206_frame(''.join(raw_data))
-                            self.temp_values_label.setText(
-                                f"Temperature Values: "
-                                f"Temp Battery Pack 2 (Port): {parsed['temp_1']:6.2f}°C   "
-                                f"Temp Buck Boost (PDB): {parsed['temp_2']:6.2f}°C   "
-                                f"Temp Battery Pack 1 (Starboard): {parsed['temp_3']:6.2f}°C"
-                            )
-                            self.volt_values_label.setText(
-                                f"Voltage Values:     "
-                                f"Volt 1: {parsed['volt_1']:5.2f}V   "
-                                f"Volt 2: {parsed['volt_2']:5.2f}V   "
-                                f"Volt 3: {parsed['volt_3']:5.2f}V   "
-                                f"Volt 4: {parsed['volt_4']:5.2f}V"
-                            )
-
-                            # Add new data point with current time
-                            self.time_history.append(current_time)
-                            self.temp1_history.append(parsed['temp_1'])
-                            self.temp2_history.append(parsed['temp_2'])
-                            self.temp3_history.append(parsed['temp_3'])
-                            self.volt1_history.append(parsed['volt_1'])
-                            self.volt2_history.append(parsed['volt_2'])
-                            self.volt3_history.append(parsed['volt_3'])
-                            self.volt4_history.append(parsed['volt_4'])
-                            self.set_rudder_history.append(self.rudder_angle)
+                            hex_data = extract_hex_data_from_candump(line)
+                            if hex_data is None:
+                                continue  # Skip this frame if hex extraction failed
+                                
+                            parsed = parse_0x206_frame(hex_data)
                             
-                            # Fill in missing actual rudder data if needed
-                            while len(self.actual_rudder_history) < len(self.time_history):
-                                # Use last known value or 0 if no data yet
-                                last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
-                                self.actual_rudder_history.append(last_rudder)
+                            # Check if parsing returned valid data
+                            if parsed is not None:
+                                self.temp_values_label.setText(
+                                    f"Temperature Values: "
+                                    f"Temp Battery Pack 2 (Port): {parsed['temp_1']:6.2f}°C   "
+                                    f"Temp Buck Boost (PDB): {parsed['temp_2']:6.2f}°C   "
+                                    f"Temp Battery Pack 1 (Starboard): {parsed['temp_3']:6.2f}°C"
+                                )
+                                self.volt_values_label.setText(
+                                    f"Voltage Values:     "
+                                    f"Volt 1: {parsed['volt_1']:5.2f}V   "
+                                    f"Volt 2: {parsed['volt_2']:5.2f}V   "
+                                    f"Volt 3: {parsed['volt_3']:5.2f}V   "
+                                    f"Volt 4: {parsed['volt_4']:5.2f}V"
+                                )
 
-                            # Log current values
-                            actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
-                            self._log_values(
-                                parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
-                                parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
-                                self.rudder_angle, actual_rudder
-                            )
+                                # Add new data point with current time
+                                self.time_history.append(current_time)
+                                self.temp1_history.append(parsed['temp_1'])
+                                self.temp2_history.append(parsed['temp_2'])
+                                self.temp3_history.append(parsed['temp_3'])
+                                self.volt1_history.append(parsed['volt_1'])
+                                self.volt2_history.append(parsed['volt_2'])
+                                self.volt3_history.append(parsed['volt_3'])
+                                self.volt4_history.append(parsed['volt_4'])
+                                self.set_rudder_history.append(self.rudder_angle)
+                                
+                                # Fill in missing actual rudder data if needed
+                                while len(self.actual_rudder_history) < len(self.time_history):
+                                    # Use last known value or 0 if no data yet
+                                    last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
+                                    self.actual_rudder_history.append(last_rudder)
+
+                                # Log current values
+                                actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+                                self._log_values(
+                                    parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
+                                    parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
+                                    self.rudder_angle, actual_rudder
+                                )
+                            # If parsed is None, skip updating (invalid frame was filtered out)
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
@@ -756,8 +816,11 @@ class CANWindow(QWidget):
                     # Handle 0x204 frame (actual rudder angle)
                     elif frame_id == "204":
                         try:
-                            raw_data = line.split(']')[-1].strip().split()
-                            parsed = parse_0x204_frame(''.join(raw_data))
+                            hex_data = extract_hex_data_from_candump(line)
+                            if hex_data is None:
+                                continue  # Skip this frame if hex extraction failed
+                                
+                            parsed = parse_0x204_frame(hex_data)
                             
                             # Check if parsing returned valid data
                             if parsed is not None:
