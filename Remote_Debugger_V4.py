@@ -34,7 +34,6 @@ def extract_hex_data_from_candump(line):
         bracket_end = line.find(']', bracket_start)
         
         if bracket_start == -1 or bracket_end == -1:
-            print(f"DEBUG: No brackets found in line: {line}")
             return None
             
         # Extract everything after the closing bracket
@@ -45,23 +44,21 @@ def extract_hex_data_from_candump(line):
         
         # Validate that we have hex data
         if not hex_bytes:
-            print(f"DEBUG: No hex data found after bracket in line: {line}")
             return None
             
-        # Validate each byte is valid hex
+        # Validate each byte is valid hex (quick check)
         for byte_str in hex_bytes:
+            if len(byte_str) != 2:  # Each hex byte should be exactly 2 characters
+                return None
             try:
                 int(byte_str, 16)
             except ValueError:
-                print(f"DEBUG: Invalid hex byte '{byte_str}' in line: {line}")
                 return None
         
         hex_string = ''.join(hex_bytes)
-        print(f"DEBUG: Extracted hex data: {hex_string} (length: {len(hex_string)//2} bytes)")
         return hex_string
         
     except Exception as e:
-        print(f"DEBUG: Error extracting hex data from line '{line}': {e}")
         return None
 
 ### ----------  Utility Functions ---------- ###
@@ -75,18 +72,12 @@ def convert_to_little_endian(hex_str):
 def parse_0x206_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     
-    # Debug output for troubleshooting
-    print(f"DEBUG 0x206: Raw hex: {data_hex}")
-    print(f"DEBUG 0x206: Raw bytes length: {len(raw_bytes)}")
-    
     # 0x206 frame requires exactly 14 bytes for all voltage and temperature data
     if len(raw_bytes) < 14:
-        print(f"DEBUG 0x206: Insufficient data length ({len(raw_bytes)} bytes), need 14 bytes minimum")
         return None  # Return None instead of raising exception
     
     # For frames longer than 14 bytes (CAN-FD), just use the first 14 bytes
     if len(raw_bytes) > 14:
-        print(f"DEBUG 0x206: Frame has {len(raw_bytes)} bytes, using first 14 bytes")
         raw_bytes = raw_bytes[:14]
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
@@ -103,7 +94,7 @@ def parse_0x206_frame(data_hex):
 def parse_0x204_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) < 4:
-        raise ValueError("Insufficient data length for 0x204 frame")
+        return None
     
     # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
     actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
@@ -111,9 +102,10 @@ def parse_0x204_frame(data_hex):
     
     # Ignore angles outside reasonable range (-180° to +180°)
     if actual_rudder_angle < -180.0 or actual_rudder_angle > 180.0:
-        print(f"DEBUG 0x204: WARNING - Angle {actual_rudder_angle}° outside valid range (-180° to +180°), ignoring")
+        print(f"DEBUG 0x204: Invalid angle {actual_rudder_angle}°, ignoring")
         return None
     
+    print(f"DEBUG 0x204: Valid angle {actual_rudder_angle}°")  # Simplified debug
     return {
         "actual_rudder_angle": actual_rudder_angle
     }
@@ -764,18 +756,19 @@ class CANWindow(QWidget):
                         try:
                             hex_data = extract_hex_data_from_candump(line)
                             if hex_data is None:
-                                continue  # Skip this frame if hex extraction failed
+                                print(f"DEBUG: Failed to extract hex data from 206 frame: {line}")
+                                # Don't continue, just skip this frame processing
+                            else:
+                                parsed = parse_0x206_frame(hex_data)
                                 
-                            parsed = parse_0x206_frame(hex_data)
-                            
-                            # Check if parsing returned valid data
-                            if parsed is not None:
-                                self.temp_values_label.setText(
-                                    f"Temperature Values: "
-                                    f"Temp Battery Pack 2 (Port): {parsed['temp_1']:6.2f}°C   "
-                                    f"Temp Buck Boost (PDB): {parsed['temp_2']:6.2f}°C   "
-                                    f"Temp Battery Pack 1 (Starboard): {parsed['temp_3']:6.2f}°C"
-                                )
+                                # Check if parsing returned valid data
+                                if parsed is not None:
+                                    self.temp_values_label.setText(
+                                        f"Temperature Values: "
+                                        f"Temp Battery Pack 2 (Port): {parsed['temp_1']:6.2f}°C   "
+                                        f"Temp Buck Boost (PDB): {parsed['temp_2']:6.2f}°C   "
+                                        f"Temp Battery Pack 1 (Starboard): {parsed['temp_3']:6.2f}°C"
+                                    )
                                 self.volt_values_label.setText(
                                     f"Voltage Values:     "
                                     f"Volt 1: {parsed['volt_1']:5.2f}V   "
@@ -818,25 +811,26 @@ class CANWindow(QWidget):
                         try:
                             hex_data = extract_hex_data_from_candump(line)
                             if hex_data is None:
-                                continue  # Skip this frame if hex extraction failed
+                                print(f"DEBUG: Failed to extract hex data from 204 frame: {line}")
+                                # Don't continue, just skip this frame processing
+                            else:
+                                parsed = parse_0x204_frame(hex_data)
                                 
-                            parsed = parse_0x204_frame(hex_data)
-                            
-                            # Check if parsing returned valid data
-                            if parsed is not None:
-                                # Update the most recent actual rudder value
-                                if self.actual_rudder_history:
-                                    self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
-                                else:
-                                    # If no history yet, add initial value
-                                    self.actual_rudder_history.append(parsed['actual_rudder_angle'])
-                                
-                                # Update rudder display
-                                actual_angle = parsed['actual_rudder_angle']
-                                self.rudder_values_label.setText(
-                                    f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
-                                )
-                            # If parsed is None, skip updating (invalid angle was filtered out)
+                                # Check if parsing returned valid data
+                                if parsed is not None:
+                                    # Update the most recent actual rudder value
+                                    if self.actual_rudder_history:
+                                        self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
+                                    else:
+                                        # If no history yet, add initial value
+                                        self.actual_rudder_history.append(parsed['actual_rudder_angle'])
+                                    
+                                    # Update rudder display
+                                    actual_angle = parsed['actual_rudder_angle']
+                                    self.rudder_values_label.setText(
+                                        f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
+                                    )
+                                # If parsed is None, skip updating (invalid angle was filtered out)
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
