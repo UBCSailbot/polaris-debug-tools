@@ -1,0 +1,18 @@
+TODO
+- Add functionality (parse CAN content) for ph sensor
+- Add functionality (parse CAN content) for temp sensor
+- Add functionality for salinity sensor
+- Add graph (visuals) for temp sensor
+- Add graph (visuals) for salinity sensor
+- Edit scrolling capability so that top values are always visible
+- make sure time for each graph is synced 
+
+
+Add later / Nice to have
+- Refactor the program with a function to automatically create a new plot with given info
+- Add variables for repeated settings; get rid of magic numbers (eg. add_subplot(111), figsize=(8, 4), )
+- Nice to have: add fix so each graph can plot independent of each other (enter blank if nothing there)
+
+DONE
+- Added vertical scrolling capability
+- Add graph (visuals) for ph sensor
