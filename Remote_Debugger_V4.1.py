@@ -8,7 +8,8 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QMessageBox, QTextEdit, QHBoxLayout, QCheckBox, QGridLayout
+    QMessageBox, QTextEdit, QHBoxLayout, QCheckBox, QGridLayout, QScrollArea,
+    QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QPixmap, QFont
@@ -23,44 +24,6 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
-def extract_hex_data_from_candump(line):
-    """
-    Extract hex data from candump line, handling variable frame lengths.
-    Expected format: "can1  204   [8]  01 02 03 04 05 06 07 08"
-    """
-    try:
-        # Find the bracket with frame length
-        bracket_start = line.find('[')
-        bracket_end = line.find(']', bracket_start)
-        
-        if bracket_start == -1 or bracket_end == -1:
-            return None
-            
-        # Extract everything after the closing bracket
-        hex_part = line[bracket_end + 1:].strip()
-        
-        # Split by whitespace and join (removes extra spaces)
-        hex_bytes = hex_part.split()
-        
-        # Validate that we have hex data
-        if not hex_bytes:
-            return None
-            
-        # Validate each byte is valid hex (quick check)
-        for byte_str in hex_bytes:
-            if len(byte_str) != 2:  # Each hex byte should be exactly 2 characters
-                return None
-            try:
-                int(byte_str, 16)
-            except ValueError:
-                return None
-        
-        hex_string = ''.join(hex_bytes)
-        return hex_string
-        
-    except Exception as e:
-        return None
-
 ### ----------  Utility Functions ---------- ###
 def convert_to_hex(decimal, num_digits):
     return format(decimal, "X").zfill(num_digits)
@@ -71,41 +34,29 @@ def convert_to_little_endian(hex_str):
 
 def parse_0x206_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
-    
-    # 0x206 frame requires exactly 14 bytes for all voltage and temperature data
     if len(raw_bytes) < 14:
-        return None  # Return None instead of raising exception
-    
-    # For frames longer than 14 bytes (CAN-FD), just use the first 14 bytes
-    if len(raw_bytes) > 14:
-        raw_bytes = raw_bytes[:14]
+        raise ValueError("Insufficient data length")
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
-        "volt_2": val(0, 2, 1000.0),
+        "volt_2": val(0, 2, 10000.0),
         "temp_1": val(2, 4, 100.0),
-        "volt_3": val(4, 6, 1000.0),
+        "volt_3": val(4, 6, 10000.0),
         "temp_2": val(6, 8, 100.0),
         "temp_3": val(8, 10, 100.0),
-        "volt_4": val(10, 12, 1000.0),
-        "volt_1": val(12, 14, 1000.0)
+        "volt_4": val(10, 12, 10000.0),
+        "volt_1": val(12, 14, 10000.0)
     }
 
 def parse_0x204_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) < 4:
-        return None
+        raise ValueError("Insufficient data length for 0x204 frame")
     
     # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
     actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
     actual_rudder_angle = (actual_rudder_raw / 1000.0) - 90
     
-    # Ignore angles outside reasonable range (-180° to +180°)
-    if actual_rudder_angle < -180.0 or actual_rudder_angle > 180.0:
-        print(f"DEBUG 0x204: Invalid angle {actual_rudder_angle}°, ignoring")
-        return None
-    
-    print(f"DEBUG 0x204: Valid angle {actual_rudder_angle}°")  # Simplified debug
     return {
         "actual_rudder_angle": actual_rudder_angle
     }
@@ -233,14 +184,8 @@ class CANWindow(QWidget):
         self.last_temp_update = time.time()  # Track last temperature update
 
         self.setWindowTitle("Remote Node GUI - POLARIS")
-        self.setGeometry(300, 300, 1200, 600)
+        self.setGeometry(150, 50, 1200, 600)
         self.setFocusPolicy(Qt.StrongFocus)
-
-        # Set global font style for all widgets
-        font = QFont()
-        font.setPointSize(12)
-        font.setBold(True)
-        self.setFont(font)
 
         self.time_start = time.time()
         self.time_history = []
@@ -320,10 +265,8 @@ class CANWindow(QWidget):
         self.logo_label.setPixmap(pixmap)
 
         self.temp_label = QLabel("RPI Temp: --")
-        self.temp_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        
         self.status_label = QLabel("DISCONNECTED")
-        self.status_label.setStyleSheet("color: red; font-size: 16px; font-weight: bold;")
+        self.status_label.setStyleSheet("color: red")
 
         top_bar_layout = QHBoxLayout()
         top_bar_layout.addStretch()
@@ -337,13 +280,14 @@ class CANWindow(QWidget):
         # === Live Value Display ===
         value_style = """
             color: black;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: bold;
-            padding: 6px;
+            font-family: 'Courier New', monospace;
+            padding: 8px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
             border-radius: 6px;
-            margin: 1px;
+            margin: 2px;
         """
         
         self.temp_values_label = QLabel("Temperature Values: --")
@@ -362,68 +306,76 @@ class CANWindow(QWidget):
         # === Temperature Plot ===
         self.temp_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.temp_canvas = FigureCanvas(self.temp_figure)
+        self.temp_canvas.setMinimumSize(300, 300)
         self.temp_ax = self.temp_figure.add_subplot(111)
-        self.temp_ax.set_title("Temperatures vs Time", fontsize=16, fontweight='bold')
-        self.temp_ax.set_xlabel("Time (s)", fontsize=14, fontweight='bold')
-        self.temp_ax.set_ylabel("Temp (°C)", fontsize=14, fontweight='bold')
-        self.temp_ax.tick_params(axis='both', which='major', labelsize=12)
+        self.temp_ax.set_title("Temperatures vs Time")
+        self.temp_ax.set_xlabel("Time (s)")
+        self.temp_ax.set_ylabel("Temp (°C)")
         self.temp_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.temp_ax.set_ylim(0, 100)
         self.temp_ax.grid(True, alpha=0.3)
+
+        # temp_sp = self.temp_canvas.sizePolicy()
+        # temp_sp.setHorizontalPolicy(QSizePolicy.Fixed)
+        # self.temp_canvas.setSizePolicy(temp_sp)
         
         # Initialize empty lines for temperature data
-        self.temp1_line, = self.temp_ax.plot([], [], 'r-', label='Temp Battery Pack 2 (Port)', linewidth=2)
-        # self.temp2_line, = self.temp_ax.plot([], [], 'g-', label='Temp Buck Boost (PDB)', linewidth=2)  # Commented out
-        self.temp3_line, = self.temp_ax.plot([], [], 'y-', label='Temp Battery Pack 1 (Starboard)', linewidth=2)
-        legend = self.temp_ax.legend()
-        legend.set_title("Temperature Sensors", prop={'size': 12, 'weight': 'bold'})
-        for text in legend.get_texts():
-            text.set_fontsize(11)
-            text.set_fontweight('bold')
+        self.temp1_line, = self.temp_ax.plot([], [], 'r-', label='Temp 1')
+        self.temp2_line, = self.temp_ax.plot([], [], 'g-', label='Temp 2')
+        self.temp3_line, = self.temp_ax.plot([], [], 'y-', label='Temp 3')
+        self.temp_ax.legend()
 
         # === Voltage Plot ===
         self.volt_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.volt_canvas = FigureCanvas(self.volt_figure)
+        self.volt_canvas.setMinimumSize(300, 300)
         self.volt_ax = self.volt_figure.add_subplot(111)
-        self.volt_ax.set_title("Cell Voltages vs Time", fontsize=16, fontweight='bold')
-        self.volt_ax.set_xlabel("Time (s)", fontsize=14, fontweight='bold')
-        self.volt_ax.set_ylabel("Voltage (V)", fontsize=14, fontweight='bold')
-        self.volt_ax.tick_params(axis='both', which='major', labelsize=12)
+        self.volt_ax.set_title("Cell Voltages vs Time")
+        self.volt_ax.set_xlabel("Time (s)")
+        self.volt_ax.set_ylabel("Voltage (V)")
         self.volt_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.volt_ax.set_ylim(0, 5)
         self.volt_ax.grid(True, alpha=0.3)
         
         # Initialize empty lines for voltage data
-        self.volt1_line, = self.volt_ax.plot([], [], 'b-', label='Volt 1', linewidth=2)
-        self.volt2_line, = self.volt_ax.plot([], [], 'c-', label='Volt 2', linewidth=2)
-        self.volt3_line, = self.volt_ax.plot([], [], 'm-', label='Volt 3', linewidth=2)
-        self.volt4_line, = self.volt_ax.plot([], [], 'orange', label='Volt 4', linewidth=2)
-        legend = self.volt_ax.legend()
-        legend.set_title("Voltage Channels", prop={'size': 12, 'weight': 'bold'})
-        for text in legend.get_texts():
-            text.set_fontsize(11)
-            text.set_fontweight('bold')
+        self.volt1_line, = self.volt_ax.plot([], [], 'b-', label='Volt 1')
+        self.volt2_line, = self.volt_ax.plot([], [], 'c-', label='Volt 2')
+        self.volt3_line, = self.volt_ax.plot([], [], 'm-', label='Volt 3')
+        self.volt4_line, = self.volt_ax.plot([], [], 'orange', label='Volt 4')
+        self.volt_ax.legend()
 
         # === Rudder Angle Plot ===
         self.rudder_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.rudder_canvas = FigureCanvas(self.rudder_figure)
+        self.rudder_canvas.setMinimumSize(300, 300)
         self.rudder_ax = self.rudder_figure.add_subplot(111)
-        self.rudder_ax.set_title("Rudder Angle Comparison vs Time", fontsize=16, fontweight='bold')
-        self.rudder_ax.set_xlabel("Time (s)", fontsize=14, fontweight='bold')
-        self.rudder_ax.set_ylabel("Angle (degrees)", fontsize=14, fontweight='bold')
-        self.rudder_ax.tick_params(axis='both', which='major', labelsize=12)
+        self.rudder_ax.set_title("Rudder Angle Comparison vs Time")
+        self.rudder_ax.set_xlabel("Time (s)")
+        self.rudder_ax.set_ylabel("Angle (degrees)")
         self.rudder_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.rudder_ax.set_ylim(-50, 50)  # Rudder range is typically -45 to +45 degrees
         self.rudder_ax.grid(True, alpha=0.3)
         
         # Initialize empty lines for rudder data
-        self.actual_rudder_line, = self.rudder_ax.plot([], [], 'r-', linewidth=3, label='Actual Rudder')
-        self.set_rudder_line, = self.rudder_ax.plot([], [], 'b--', linewidth=3, label='Set Rudder')
-        legend = self.rudder_ax.legend()
-        legend.set_title("Rudder Control", prop={'size': 12, 'weight': 'bold'})
-        for text in legend.get_texts():
-            text.set_fontsize(11)
-            text.set_fontweight('bold')
+        self.actual_rudder_line, = self.rudder_ax.plot([], [], 'r-', linewidth=2, label='Actual Rudder')
+        self.set_rudder_line, = self.rudder_ax.plot([], [], 'b--', linewidth=2, label='Set Rudder')
+        self.rudder_ax.legend()
+
+        # === pH Sensor Plot ===
+        self.ph_figure = Figure(figsize=(8, 4), tight_layout=False) # TODO: change to true later
+        self.ph_canvas = FigureCanvas(self.ph_figure)
+        self.ph_canvas.setMinimumSize(300, 300)
+        self.ph_ax = self.ph_figure.add_subplot(111)
+        self.ph_ax.set_title("pH vs Time")
+        self.ph_ax.set_xlabel("Time (s)")
+        self.ph_ax.set_ylabel("pH")
+        self.ph_ax.set_xlim(0, 60)
+        self.ph_ax.set_ylim(0, 14)
+        self.ph_ax.grid(True, alpha=0.3)
+
+        # Initialize empty lines for pH data
+        self.ph_line = self.ph_ax.plot([], 'r-', linewidth=2, label="Current pH")
+        self.ph_ax.legend()
 
         # Auto-scaling enabled for proper initial display
 
@@ -448,13 +400,6 @@ class CANWindow(QWidget):
         self.output_display = QTextEdit()
         self.output_display.setReadOnly(True)
         self.output_display.setMaximumHeight(200)  # Limit height for candump
-        self.output_display.setStyleSheet("""
-            QTextEdit {
-                font-weight: normal;
-                font-size: 14px;
-                font-family: 'Courier New', monospace;
-            }
-        """)
 
         # Separate terminal output display
         self.terminal_output_display = QTextEdit()
@@ -475,66 +420,52 @@ class CANWindow(QWidget):
         self.restart_btn.clicked.connect(self.send_restart_power)
 
         # SSH Instructions for CAN and system control
-        self.ssh_instructions_widget = QWidget()
-        self.ssh_instructions_widget.setStyleSheet("""
-            QWidget {
+        self.ssh_instructions_label = QLabel(
+            "SSH Terminal Instructions:\n"
+            "1. Open separate terminal/PowerShell\n"
+            "2. ssh sailbot@192.168.0.10\n"
+            "3. Password: sailbot\n"
+            "\nUse buttons below to copy commands:"
+        )
+        self.ssh_instructions_label.setStyleSheet("""
+            QLabel {
+                color: blue;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 8px;
                 background-color: #e6f3ff;
                 border: 2px solid #4d94ff;
                 border-radius: 6px;
                 margin: 2px;
-                padding: 5px;
             }
         """)
+
+        # Create a grid layout for command buttons
+        self.commands_grid = QGridLayout()
         
-        ssh_layout = QVBoxLayout(self.ssh_instructions_widget)
-        ssh_layout.setSpacing(2)
-        ssh_layout.setContentsMargins(8, 8, 8, 8)
-        
-        # Define commands with shorter labels for inline display
+        # Define commands with labels
         commands = [
-            ("ssh sailbot@192.168.0.10", "SSH Connect"),
-            ("sudo ip link set can1 down", "CAN Down"),
-            ("sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on", "CAN Up"),
-            ("sudo rmmod spi_bcm2835aux", "Remove SPI"),
-            ("sudo modprobe spi_bcm2835aux", "Load SPI")
+            ("SSH Connect", "ssh sailbot@192.168.0.10"),
+            ("CAN1 Down", "sudo ip link set can1 down"),
+            ("CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"),
+            ("Check CAN Status", "ip link show can1"),
+            ("View System Logs", "dmesg | tail"),
+            ("System Info", "uname -a")
         ]
         
-        # Create horizontal layouts for each command with inline copy button
-        self.command_copy_buttons = []
-        for command, label in commands:
-            cmd_layout = QHBoxLayout()
-            cmd_layout.setContentsMargins(0, 0, 0, 0)
-            cmd_layout.setSpacing(5)
-            
-            # Command text
-            cmd_label = QLabel(f"• {command}")
-            cmd_label.setStyleSheet("""
-                QLabel {
-                    color: blue;
-                    font-size: 11px;
-                    font-weight: bold;
-                    background: transparent;
-                    border: none;
-                    margin: 0px;
-                    padding: 0px;
-                }
-            """)
-            
-            # Small copy button
-            copy_btn = QPushButton(f"Copy")
-            copy_btn.setStyleSheet("""
+        # Create buttons for each command
+        self.command_buttons = []
+        for i, (label, command) in enumerate(commands):
+            btn = QPushButton(f"Copy: {label}")
+            btn.setStyleSheet("""
                 QPushButton {
                     background-color: #4d94ff;
                     color: white;
                     border: none;
-                    padding: 2px 6px;
+                    padding: 4px 8px;
                     border-radius: 3px;
                     font-size: 10px;
                     font-weight: bold;
-                    min-height: 18px;
-                    max-height: 18px;
-                    min-width: 35px;
-                    max-width: 35px;
                 }
                 QPushButton:hover {
                     background-color: #0066cc;
@@ -543,29 +474,13 @@ class CANWindow(QWidget):
                     background-color: #003d7a;
                 }
             """)
-            copy_btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
-            self.command_copy_buttons.append(copy_btn)
+            btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
+            self.command_buttons.append(btn)
             
-            cmd_layout.addWidget(cmd_label)
-            cmd_layout.addStretch()
-            cmd_layout.addWidget(copy_btn)
-            
-            ssh_layout.addLayout(cmd_layout)
-        
-        # Add disclaimer
-        disclaimer_text = QLabel("\nDISCLAIMER: If CAN HAT doesn't work, try the SPI commands above")
-        disclaimer_text.setStyleSheet("""
-            QLabel {
-                color: blue;
-                font-size: 11px;
-                font-weight: bold;
-                background: transparent;
-                border: none;
-                margin: 0px;
-                padding: 0px;
-            }
-        """)
-        ssh_layout.addWidget(disclaimer_text)
+            # Add to grid layout (2 columns)
+            row = i // 2
+            col = i % 2
+            self.commands_grid.addWidget(btn, row, col)
 
         # Style for emergency buttons (power controls)
         red_button_style = """
@@ -573,11 +488,9 @@ class CANWindow(QWidget):
                     background-color: red;
                     color: white;
                     border: none;
-                    padding: 8px 12px;
+                    padding: 6px 12px;
                     border-radius: 4px;
                     font-weight: bold;
-                    font-size: 16px;
-                    min-height: 35px;
                 }
                 QPushButton:hover:enabled {
                     background-color: yellow;
@@ -611,27 +524,43 @@ class CANWindow(QWidget):
         left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
-        left_layout.addSpacing(8)  # Add small spacing
+        left_layout.addSpacing(10)  # Add small spacing
         left_layout.addWidget(self.emergency_checkbox)
-        left_layout.addSpacing(10)  # Add spacing before emergency buttons
+        left_layout.addSpacing(15)  # Add spacing before emergency buttons
         left_layout.addWidget(self.power_off_btn)
         left_layout.addWidget(self.restart_btn)
-        left_layout.addSpacing(10)  # Add spacing before SSH instructions
-        left_layout.addWidget(self.ssh_instructions_widget)
+        left_layout.addSpacing(15)  # Add spacing before SSH instructions
+        left_layout.addWidget(self.ssh_instructions_label)
+        left_layout.addSpacing(5)  # Small spacing before command buttons
+        left_layout.addLayout(self.commands_grid)
 
         right_layout = QVBoxLayout()
         right_layout.setSpacing(0)  # Remove spacing between widgets
         right_layout.addWidget(self.temp_values_label)
         right_layout.addWidget(self.volt_values_label)
         right_layout.addWidget(self.rudder_values_label)
-        right_layout.addSpacing(5)  # Add small spacing before plots
+        right_layout.addSpacing(10)  # Add small spacing before plots
         right_layout.addWidget(self.temp_canvas)
         right_layout.addWidget(self.volt_canvas)
         right_layout.addWidget(self.rudder_canvas)
+        right_layout.addWidget(self.ph_canvas)
+
+        container_widget = QWidget()
+        container_widget.setLayout(right_layout)
+        container_sp = container_widget.sizePolicy()
+        container_sp.setHorizontalPolicy(QSizePolicy.Ignored)
+        container_widget.setSizePolicy(container_sp)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(container_widget)
+        # scroll_area.ensureWidgetVisible(container_widget)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # Doesn't resize content so that scrollbar isn't necessary
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) # Doesn't resize content so that scrollbar isn't necessary
 
         bottom_layout = QHBoxLayout()
         bottom_layout.addLayout(left_layout, 2)
-        bottom_layout.addLayout(right_layout, 3)
+        # bottom_layout.addLayout(right_layout, 3)
+        bottom_layout.addWidget(scroll_area)
 
         main_layout = QVBoxLayout()
         main_layout.addLayout(top_bar_layout)
@@ -672,10 +601,10 @@ class CANWindow(QWidget):
             self.rudder_angle = 0
             self.send_rudder(from_keyboard=True)
         elif key == Qt.Key_Q:
-            self.trimtab_angle = max(self.trimtab_angle - 3, -90)
+            self.trimtab_angle = max(self.trimtab_angle - 3, -45)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_E:
-            self.trimtab_angle = min(self.trimtab_angle + 3, 90)
+            self.trimtab_angle = min(self.trimtab_angle + 3, 45)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_W:
             self.trimtab_angle = 0
@@ -687,7 +616,7 @@ class CANWindow(QWidget):
             if not from_keyboard:
                 self.trimtab_angle = angle
             value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend can1 002##1" + convert_to_little_endian(value)
+            msg = "cansend can1 002##0" + convert_to_little_endian(value)
             self.cansend_queue.put(msg)
             self.output_display.append(f"[TRIMTAB SENT] {msg}")
             self.trimtab_display.setText(f"Current Trim Tab Angle:   {self.trimtab_angle} degrees")
@@ -699,13 +628,10 @@ class CANWindow(QWidget):
             angle = self.rudder_angle if from_keyboard else int(self.rudder_input.text())
             if not from_keyboard:
                 self.rudder_angle = angle
-            
-            # Invert the angle to correct for hardware inversion
-            inverted_angle = -angle
-            value = convert_to_hex((inverted_angle+90) * 1000, 8)
-            msg = "cansend can1 001##1" + convert_to_little_endian(value) + "80"
+            value = convert_to_hex((angle+90) * 1000, 8)
+            msg = "cansend can1 001##0" + convert_to_little_endian(value) + "80"
             self.cansend_queue.put(msg)
-            self.output_display.append(f"[RUDDER SENT] {msg} (requested: {angle}°, sent: {inverted_angle}°)")
+            self.output_display.append(f"[RUDDER SENT] {msg}")
             self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
             
             # Update rudder values display
@@ -721,12 +647,12 @@ class CANWindow(QWidget):
             self.show_error("Invalid angle input for Rudder")
 
     def send_power_off_indefinitely(self):
-        msg = "cansend can1 202##10A"
+        msg = "cansend can1 202##00A"
         self.cansend_queue.put(msg)
         self.output_display.append(f"[POWER OFF] {msg}")
 
     def send_restart_power(self):
-        msg = "cansend can1 202##114"
+        msg = "cansend can1 202##014"
         self.cansend_queue.put(msg)
         self.output_display.append(f"[RESTART POWER] {msg}")
 
@@ -737,11 +663,7 @@ class CANWindow(QWidget):
         # Process any new CAN messages
         while not self.queue.empty():
             line = self.queue.get()
-            
-            # Only display errors, not regular candump output to prevent slowdown
-            if line.startswith("[ERROR]") or "error" in line.lower() or "fail" in line.lower():
-                self.output_display.append(line)
-            # Don't display regular candump lines to improve performance
+            self.output_display.append(line)
             
             # Send to separate logging process (non-blocking)
             try:
@@ -757,54 +679,46 @@ class CANWindow(QWidget):
                     # Handle 0x206 frame (temperature and voltage data)
                     if frame_id == "206":
                         try:
-                            hex_data = extract_hex_data_from_candump(line)
-                            if hex_data is None:
-                                print(f"DEBUG: Failed to extract hex data from 206 frame: {line}")
-                                # Don't continue, just skip this frame processing
-                            else:
-                                parsed = parse_0x206_frame(hex_data)
-                                
-                                # Check if parsing returned valid data
-                                if parsed is not None:
-                                    self.temp_values_label.setText(
-                                        f"Temperature Values: "
-                                        f"Temp Battery Pack 2 (Port): {parsed['temp_1']:6.2f}°C   "
-                                        f"Temp Buck Boost (PDB): {parsed['temp_2']:6.2f}°C   "
-                                        f"Temp Battery Pack 1 (Starboard): {parsed['temp_3']:6.2f}°C"
-                                    )
-                                self.volt_values_label.setText(
-                                    f"Voltage Values:     "
-                                    f"Volt 1: {parsed['volt_1']:5.2f}V   "
-                                    f"Volt 2: {parsed['volt_2']:5.2f}V   "
-                                    f"Volt 3: {parsed['volt_3']:5.2f}V   "
-                                    f"Volt 4: {parsed['volt_4']:5.2f}V"
-                                )
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x206_frame(''.join(raw_data))
+                            self.temp_values_label.setText(
+                                f"Temperature Values: "
+                                f"Temp 1: {parsed['temp_1']:6.2f}°C   "
+                                f"Temp 2: {parsed['temp_2']:6.2f}°C   "
+                                f"Temp 3: {parsed['temp_3']:6.2f}°C"
+                            )
+                            self.volt_values_label.setText(
+                                f"Voltage Values:     "
+                                f"Volt 1: {parsed['volt_1']:5.2f}V   "
+                                f"Volt 2: {parsed['volt_2']:5.2f}V   "
+                                f"Volt 3: {parsed['volt_3']:5.2f}V   "
+                                f"Volt 4: {parsed['volt_4']:5.2f}V"
+                            )
 
-                                # Add new data point with current time
-                                self.time_history.append(current_time)
-                                self.temp1_history.append(parsed['temp_1'])
-                                self.temp2_history.append(parsed['temp_2'])
-                                self.temp3_history.append(parsed['temp_3'])
-                                self.volt1_history.append(parsed['volt_1'])
-                                self.volt2_history.append(parsed['volt_2'])
-                                self.volt3_history.append(parsed['volt_3'])
-                                self.volt4_history.append(parsed['volt_4'])
-                                self.set_rudder_history.append(self.rudder_angle)
-                                
-                                # Fill in missing actual rudder data if needed
-                                while len(self.actual_rudder_history) < len(self.time_history):
-                                    # Use last known value or 0 if no data yet
-                                    last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
-                                    self.actual_rudder_history.append(last_rudder)
+                            # Add new data point with current time
+                            self.time_history.append(current_time)
+                            self.temp1_history.append(parsed['temp_1'])
+                            self.temp2_history.append(parsed['temp_2'])
+                            self.temp3_history.append(parsed['temp_3'])
+                            self.volt1_history.append(parsed['volt_1'])
+                            self.volt2_history.append(parsed['volt_2'])
+                            self.volt3_history.append(parsed['volt_3'])
+                            self.volt4_history.append(parsed['volt_4'])
+                            self.set_rudder_history.append(self.rudder_angle)
+                            
+                            # Fill in missing actual rudder data if needed
+                            while len(self.actual_rudder_history) < len(self.time_history):
+                                # Use last known value or 0 if no data yet
+                                last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
+                                self.actual_rudder_history.append(last_rudder)
 
-                                # Log current values
-                                actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
-                                self._log_values(
-                                    parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
-                                    parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
-                                    self.rudder_angle, actual_rudder
-                                )
-                            # If parsed is None, skip updating (invalid frame was filtered out)
+                            # Log current values
+                            actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+                            self._log_values(
+                                parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
+                                parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
+                                self.rudder_angle, actual_rudder
+                            )
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
@@ -812,28 +726,21 @@ class CANWindow(QWidget):
                     # Handle 0x204 frame (actual rudder angle)
                     elif frame_id == "204":
                         try:
-                            hex_data = extract_hex_data_from_candump(line)
-                            if hex_data is None:
-                                print(f"DEBUG: Failed to extract hex data from 204 frame: {line}")
-                                # Don't continue, just skip this frame processing
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x204_frame(''.join(raw_data))
+                            
+                            # Update the most recent actual rudder value
+                            if self.actual_rudder_history:
+                                self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
                             else:
-                                parsed = parse_0x204_frame(hex_data)
-                                
-                                # Check if parsing returned valid data
-                                if parsed is not None:
-                                    # Update the most recent actual rudder value
-                                    if self.actual_rudder_history:
-                                        self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
-                                    else:
-                                        # If no history yet, add initial value
-                                        self.actual_rudder_history.append(parsed['actual_rudder_angle'])
-                                    
-                                    # Update rudder display
-                                    actual_angle = parsed['actual_rudder_angle']
-                                    self.rudder_values_label.setText(
-                                        f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
-                                    )
-                                # If parsed is None, skip updating (invalid angle was filtered out)
+                                # If no history yet, add initial value
+                                self.actual_rudder_history.append(parsed['actual_rudder_angle'])
+                            
+                            # Update rudder display
+                            actual_angle = parsed['actual_rudder_angle']
+                            self.rudder_values_label.setText(
+                                f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
+                            )
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
@@ -842,7 +749,7 @@ class CANWindow(QWidget):
         if len(self.time_history) > 0:
             # Update all plot data
             self.temp1_line.set_data(self.time_history, self.temp1_history)
-            # self.temp2_line.set_data(self.time_history, self.temp2_history)  # Commented out buck boost temp
+            self.temp2_line.set_data(self.time_history, self.temp2_history)
             self.temp3_line.set_data(self.time_history, self.temp3_history)
             
             self.volt1_line.set_data(self.time_history, self.volt1_history)
@@ -863,14 +770,14 @@ class CANWindow(QWidget):
             connected, value = self.temp_pipe.recv()
             self.temp_label.setText(f"RPI Temp: {value}" if connected else "RPI Temp: --")
             self.status_label.setText("CONNECTED" if connected else "DISCONNECTED")
-            self.status_label.setStyleSheet("color: green; font-size: 16px; font-weight: bold;" if connected else "color: red; font-size: 16px; font-weight: bold;")
+            self.status_label.setStyleSheet("color: green" if connected else "color: red")
             self.last_temp_update = time.time()
         else:
             # Check if we haven't received a temperature update in too long (connection lost)
             if time.time() - self.last_temp_update > 5.0:  # 5 second timeout
                 self.temp_label.setText("RPI Temp: --")
                 self.status_label.setText("DISCONNECTED")
-                self.status_label.setStyleSheet("color: red; font-size: 16px; font-weight: bold;")
+                self.status_label.setStyleSheet("color: red")
 
         # Handle CAN send responses
         while not self.cansend_response_queue.empty():
@@ -898,9 +805,9 @@ class CANWindow(QWidget):
             self.rudder_ax.autoscale_view()
 
         # === Auto Y adjustment (Temp) ===
-        if self.temp1_history and self.temp3_history:  # Removed temp2_history
-            temp_max = max(self.temp1_history + self.temp3_history)  # Removed temp2_history
-            temp_min = min(self.temp1_history + self.temp3_history)  # Removed temp2_history
+        if self.temp1_history and self.temp2_history and self.temp3_history:
+            temp_max = max(self.temp1_history + self.temp2_history + self.temp3_history)
+            temp_min = min(self.temp1_history + self.temp2_history + self.temp3_history)
             if temp_max > 75 or temp_min < 10:
                 self.temp_ax.set_ylim(min(temp_min - 2, 10), max(temp_max + 2, 75))
             else:
