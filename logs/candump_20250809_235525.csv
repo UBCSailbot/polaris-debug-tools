@@ -1,0 +1,2 @@
+Timestamp,Elapsed_Time_s,CAN_Message
+2025-08-09T23:55:25.670028,0.140,[ERROR] [WinError 10051] A socket operation was attempted to an unreachable network

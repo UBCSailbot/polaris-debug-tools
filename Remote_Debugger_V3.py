@@ -38,13 +38,13 @@ def parse_0x206_frame(data_hex):
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
-        "volt_2": val(0, 2, 10000.0),
+        "volt_2": val(0, 2, 1000.0),
         "temp_1": val(2, 4, 100.0),
-        "volt_3": val(4, 6, 10000.0),
+        "volt_3": val(4, 6, 1000.0),
         "temp_2": val(6, 8, 100.0),
         "temp_3": val(8, 10, 100.0),
-        "volt_4": val(10, 12, 10000.0),
-        "volt_1": val(12, 14, 10000.0)
+        "volt_4": val(10, 12, 1000.0),
+        "volt_1": val(12, 14, 1000.0)
     }
 
 def parse_0x204_frame(data_hex):
@@ -55,6 +55,11 @@ def parse_0x204_frame(data_hex):
     # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
     actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
     actual_rudder_angle = (actual_rudder_raw / 1000.0) - 90
+    
+    # Ignore angles outside reasonable range (-180° to +180°)
+    if actual_rudder_angle < -180.0 or actual_rudder_angle > 180.0:
+        print(f"DEBUG 0x204: WARNING - Angle {actual_rudder_angle}° outside valid range (-180° to +180°), ignoring")
+        return None
     
     return {
         "actual_rudder_angle": actual_rudder_angle
@@ -186,6 +191,12 @@ class CANWindow(QWidget):
         self.setGeometry(300, 300, 1200, 600)
         self.setFocusPolicy(Qt.StrongFocus)
 
+        # Set global font style for all widgets
+        font = QFont()
+        font.setPointSize(12)
+        font.setBold(True)
+        self.setFont(font)
+
         self.time_start = time.time()
         self.time_history = []
         self.temp1_history = []
@@ -264,8 +275,10 @@ class CANWindow(QWidget):
         self.logo_label.setPixmap(pixmap)
 
         self.temp_label = QLabel("RPI Temp: --")
+        self.temp_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        
         self.status_label = QLabel("DISCONNECTED")
-        self.status_label.setStyleSheet("color: red")
+        self.status_label.setStyleSheet("color: red; font-size: 16px; font-weight: bold;")
 
         top_bar_layout = QHBoxLayout()
         top_bar_layout.addStretch()
@@ -279,14 +292,13 @@ class CANWindow(QWidget):
         # === Live Value Display ===
         value_style = """
             color: black;
-            font-size: 18px;
+            font-size: 14px;
             font-weight: bold;
-            font-family: 'Courier New', monospace;
-            padding: 8px;
+            padding: 6px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
             border-radius: 6px;
-            margin: 2px;
+            margin: 1px;
         """
         
         self.temp_values_label = QLabel("Temperature Values: --")
@@ -306,52 +318,67 @@ class CANWindow(QWidget):
         self.temp_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.temp_canvas = FigureCanvas(self.temp_figure)
         self.temp_ax = self.temp_figure.add_subplot(111)
-        self.temp_ax.set_title("Temperatures vs Time")
-        self.temp_ax.set_xlabel("Time (s)")
-        self.temp_ax.set_ylabel("Temp (°C)")
+        self.temp_ax.set_title("Temperatures vs Time", fontsize=16, fontweight='bold')
+        self.temp_ax.set_xlabel("Time (s)", fontsize=14, fontweight='bold')
+        self.temp_ax.set_ylabel("Temp (°C)", fontsize=14, fontweight='bold')
+        self.temp_ax.tick_params(axis='both', which='major', labelsize=12)
         self.temp_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.temp_ax.set_ylim(0, 100)
         self.temp_ax.grid(True, alpha=0.3)
         
         # Initialize empty lines for temperature data
-        self.temp1_line, = self.temp_ax.plot([], [], 'r-', label='Temp 1')
-        self.temp2_line, = self.temp_ax.plot([], [], 'g-', label='Temp 2')
-        self.temp3_line, = self.temp_ax.plot([], [], 'y-', label='Temp 3')
-        self.temp_ax.legend()
+        self.temp1_line, = self.temp_ax.plot([], [], 'r-', label='Temp Battery Pack 2 (Port)', linewidth=2)
+        self.temp2_line, = self.temp_ax.plot([], [], 'g-', label='Temp Buck Boost (PDB)', linewidth=2)
+        self.temp3_line, = self.temp_ax.plot([], [], 'y-', label='Temp Battery Pack 1 (Starboard)', linewidth=2)
+        legend = self.temp_ax.legend()
+        legend.set_title("Temperature Sensors", prop={'size': 12, 'weight': 'bold'})
+        for text in legend.get_texts():
+            text.set_fontsize(11)
+            text.set_fontweight('bold')
 
         # === Voltage Plot ===
         self.volt_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.volt_canvas = FigureCanvas(self.volt_figure)
         self.volt_ax = self.volt_figure.add_subplot(111)
-        self.volt_ax.set_title("Cell Voltages vs Time")
-        self.volt_ax.set_xlabel("Time (s)")
-        self.volt_ax.set_ylabel("Voltage (V)")
+        self.volt_ax.set_title("Cell Voltages vs Time", fontsize=16, fontweight='bold')
+        self.volt_ax.set_xlabel("Time (s)", fontsize=14, fontweight='bold')
+        self.volt_ax.set_ylabel("Voltage (V)", fontsize=14, fontweight='bold')
+        self.volt_ax.tick_params(axis='both', which='major', labelsize=12)
         self.volt_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.volt_ax.set_ylim(0, 5)
         self.volt_ax.grid(True, alpha=0.3)
         
         # Initialize empty lines for voltage data
-        self.volt1_line, = self.volt_ax.plot([], [], 'b-', label='Volt 1')
-        self.volt2_line, = self.volt_ax.plot([], [], 'c-', label='Volt 2')
-        self.volt3_line, = self.volt_ax.plot([], [], 'm-', label='Volt 3')
-        self.volt4_line, = self.volt_ax.plot([], [], 'orange', label='Volt 4')
-        self.volt_ax.legend()
+        self.volt1_line, = self.volt_ax.plot([], [], 'b-', label='Volt 1', linewidth=2)
+        self.volt2_line, = self.volt_ax.plot([], [], 'c-', label='Volt 2', linewidth=2)
+        self.volt3_line, = self.volt_ax.plot([], [], 'm-', label='Volt 3', linewidth=2)
+        self.volt4_line, = self.volt_ax.plot([], [], 'orange', label='Volt 4', linewidth=2)
+        legend = self.volt_ax.legend()
+        legend.set_title("Voltage Channels", prop={'size': 12, 'weight': 'bold'})
+        for text in legend.get_texts():
+            text.set_fontsize(11)
+            text.set_fontweight('bold')
 
         # === Rudder Angle Plot ===
         self.rudder_figure = Figure(figsize=(8, 4), tight_layout=True)
         self.rudder_canvas = FigureCanvas(self.rudder_figure)
         self.rudder_ax = self.rudder_figure.add_subplot(111)
-        self.rudder_ax.set_title("Rudder Angle Comparison vs Time")
-        self.rudder_ax.set_xlabel("Time (s)")
-        self.rudder_ax.set_ylabel("Angle (degrees)")
+        self.rudder_ax.set_title("Rudder Angle Comparison vs Time", fontsize=16, fontweight='bold')
+        self.rudder_ax.set_xlabel("Time (s)", fontsize=14, fontweight='bold')
+        self.rudder_ax.set_ylabel("Angle (degrees)", fontsize=14, fontweight='bold')
+        self.rudder_ax.tick_params(axis='both', which='major', labelsize=12)
         self.rudder_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.rudder_ax.set_ylim(-50, 50)  # Rudder range is typically -45 to +45 degrees
         self.rudder_ax.grid(True, alpha=0.3)
         
         # Initialize empty lines for rudder data
-        self.actual_rudder_line, = self.rudder_ax.plot([], [], 'r-', linewidth=2, label='Actual Rudder')
-        self.set_rudder_line, = self.rudder_ax.plot([], [], 'b--', linewidth=2, label='Set Rudder')
-        self.rudder_ax.legend()
+        self.actual_rudder_line, = self.rudder_ax.plot([], [], 'r-', linewidth=3, label='Actual Rudder')
+        self.set_rudder_line, = self.rudder_ax.plot([], [], 'b--', linewidth=3, label='Set Rudder')
+        legend = self.rudder_ax.legend()
+        legend.set_title("Rudder Control", prop={'size': 12, 'weight': 'bold'})
+        for text in legend.get_texts():
+            text.set_fontsize(11)
+            text.set_fontweight('bold')
 
         # Auto-scaling enabled for proper initial display
 
@@ -376,6 +403,13 @@ class CANWindow(QWidget):
         self.output_display = QTextEdit()
         self.output_display.setReadOnly(True)
         self.output_display.setMaximumHeight(200)  # Limit height for candump
+        self.output_display.setStyleSheet("""
+            QTextEdit {
+                font-weight: normal;
+                font-size: 14px;
+                font-family: 'Courier New', monospace;
+            }
+        """)
 
         # Separate terminal output display
         self.terminal_output_display = QTextEdit()
@@ -396,52 +430,66 @@ class CANWindow(QWidget):
         self.restart_btn.clicked.connect(self.send_restart_power)
 
         # SSH Instructions for CAN and system control
-        self.ssh_instructions_label = QLabel(
-            "SSH Terminal Instructions:\n"
-            "1. Open separate terminal/PowerShell\n"
-            "2. ssh sailbot@192.168.0.10\n"
-            "3. Password: sailbot\n"
-            "\nUse buttons below to copy commands:"
-        )
-        self.ssh_instructions_label.setStyleSheet("""
-            QLabel {
-                color: blue;
-                font-size: 11px;
-                font-weight: bold;
-                padding: 8px;
+        self.ssh_instructions_widget = QWidget()
+        self.ssh_instructions_widget.setStyleSheet("""
+            QWidget {
                 background-color: #e6f3ff;
                 border: 2px solid #4d94ff;
                 border-radius: 6px;
                 margin: 2px;
+                padding: 5px;
             }
         """)
-
-        # Create a grid layout for command buttons
-        self.commands_grid = QGridLayout()
         
-        # Define commands with labels
+        ssh_layout = QVBoxLayout(self.ssh_instructions_widget)
+        ssh_layout.setSpacing(2)
+        ssh_layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Define commands with shorter labels for inline display
         commands = [
-            ("SSH Connect", "ssh sailbot@192.168.0.10"),
-            ("CAN1 Down", "sudo ip link set can1 down"),
-            ("CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"),
-            ("Check CAN Status", "ip link show can1"),
-            ("View System Logs", "dmesg | tail"),
-            ("System Info", "uname -a")
+            ("ssh sailbot@192.168.0.10", "SSH Connect"),
+            ("sudo ip link set can1 down", "CAN Down"),
+            ("sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on", "CAN Up"),
+            ("sudo rmmod spi_bcm2835aux", "Remove SPI"),
+            ("sudo modprobe spi_bcm2835aux", "Load SPI")
         ]
         
-        # Create buttons for each command
-        self.command_buttons = []
-        for i, (label, command) in enumerate(commands):
-            btn = QPushButton(f"Copy: {label}")
-            btn.setStyleSheet("""
+        # Create horizontal layouts for each command with inline copy button
+        self.command_copy_buttons = []
+        for command, label in commands:
+            cmd_layout = QHBoxLayout()
+            cmd_layout.setContentsMargins(0, 0, 0, 0)
+            cmd_layout.setSpacing(5)
+            
+            # Command text
+            cmd_label = QLabel(f"• {command}")
+            cmd_label.setStyleSheet("""
+                QLabel {
+                    color: blue;
+                    font-size: 11px;
+                    font-weight: bold;
+                    background: transparent;
+                    border: none;
+                    margin: 0px;
+                    padding: 0px;
+                }
+            """)
+            
+            # Small copy button
+            copy_btn = QPushButton(f"Copy")
+            copy_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #4d94ff;
                     color: white;
                     border: none;
-                    padding: 4px 8px;
+                    padding: 2px 6px;
                     border-radius: 3px;
                     font-size: 10px;
                     font-weight: bold;
+                    min-height: 18px;
+                    max-height: 18px;
+                    min-width: 35px;
+                    max-width: 35px;
                 }
                 QPushButton:hover {
                     background-color: #0066cc;
@@ -450,13 +498,29 @@ class CANWindow(QWidget):
                     background-color: #003d7a;
                 }
             """)
-            btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
-            self.command_buttons.append(btn)
+            copy_btn.clicked.connect(lambda checked, cmd=command: self.copy_to_clipboard(cmd))
+            self.command_copy_buttons.append(copy_btn)
             
-            # Add to grid layout (2 columns)
-            row = i // 2
-            col = i % 2
-            self.commands_grid.addWidget(btn, row, col)
+            cmd_layout.addWidget(cmd_label)
+            cmd_layout.addStretch()
+            cmd_layout.addWidget(copy_btn)
+            
+            ssh_layout.addLayout(cmd_layout)
+        
+        # Add disclaimer
+        disclaimer_text = QLabel("\nDISCLAIMER: If CAN HAT doesn't work, try the SPI commands above")
+        disclaimer_text.setStyleSheet("""
+            QLabel {
+                color: blue;
+                font-size: 11px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+                margin: 0px;
+                padding: 0px;
+            }
+        """)
+        ssh_layout.addWidget(disclaimer_text)
 
         # Style for emergency buttons (power controls)
         red_button_style = """
@@ -464,9 +528,11 @@ class CANWindow(QWidget):
                     background-color: red;
                     color: white;
                     border: none;
-                    padding: 6px 12px;
+                    padding: 8px 12px;
                     border-radius: 4px;
                     font-weight: bold;
+                    font-size: 16px;
+                    min-height: 35px;
                 }
                 QPushButton:hover:enabled {
                     background-color: yellow;
@@ -500,22 +566,20 @@ class CANWindow(QWidget):
         left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
-        left_layout.addSpacing(10)  # Add small spacing
+        left_layout.addSpacing(8)  # Add small spacing
         left_layout.addWidget(self.emergency_checkbox)
-        left_layout.addSpacing(15)  # Add spacing before emergency buttons
+        left_layout.addSpacing(10)  # Add spacing before emergency buttons
         left_layout.addWidget(self.power_off_btn)
         left_layout.addWidget(self.restart_btn)
-        left_layout.addSpacing(15)  # Add spacing before SSH instructions
-        left_layout.addWidget(self.ssh_instructions_label)
-        left_layout.addSpacing(5)  # Small spacing before command buttons
-        left_layout.addLayout(self.commands_grid)
+        left_layout.addSpacing(10)  # Add spacing before SSH instructions
+        left_layout.addWidget(self.ssh_instructions_widget)
 
         right_layout = QVBoxLayout()
         right_layout.setSpacing(0)  # Remove spacing between widgets
         right_layout.addWidget(self.temp_values_label)
         right_layout.addWidget(self.volt_values_label)
         right_layout.addWidget(self.rudder_values_label)
-        right_layout.addSpacing(10)  # Add small spacing before plots
+        right_layout.addSpacing(5)  # Add small spacing before plots
         right_layout.addWidget(self.temp_canvas)
         right_layout.addWidget(self.volt_canvas)
         right_layout.addWidget(self.rudder_canvas)
@@ -563,10 +627,10 @@ class CANWindow(QWidget):
             self.rudder_angle = 0
             self.send_rudder(from_keyboard=True)
         elif key == Qt.Key_Q:
-            self.trimtab_angle = max(self.trimtab_angle - 3, -45)
+            self.trimtab_angle = max(self.trimtab_angle - 3, -90)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_E:
-            self.trimtab_angle = min(self.trimtab_angle + 3, 45)
+            self.trimtab_angle = min(self.trimtab_angle + 3, 90)
             self.send_trim_tab(from_keyboard=True)
         elif key == Qt.Key_W:
             self.trimtab_angle = 0
@@ -578,7 +642,7 @@ class CANWindow(QWidget):
             if not from_keyboard:
                 self.trimtab_angle = angle
             value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend can1 002##0" + convert_to_little_endian(value)
+            msg = "cansend can1 002##1" + convert_to_little_endian(value)
             self.cansend_queue.put(msg)
             self.output_display.append(f"[TRIMTAB SENT] {msg}")
             self.trimtab_display.setText(f"Current Trim Tab Angle:   {self.trimtab_angle} degrees")
@@ -591,7 +655,7 @@ class CANWindow(QWidget):
             if not from_keyboard:
                 self.rudder_angle = angle
             value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend can1 001##0" + convert_to_little_endian(value) + "80"
+            msg = "cansend can1 001##1" + convert_to_little_endian(value) + "80"
             self.cansend_queue.put(msg)
             self.output_display.append(f"[RUDDER SENT] {msg}")
             self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
@@ -609,12 +673,12 @@ class CANWindow(QWidget):
             self.show_error("Invalid angle input for Rudder")
 
     def send_power_off_indefinitely(self):
-        msg = "cansend can1 202##00A"
+        msg = "cansend can1 202##10A"
         self.cansend_queue.put(msg)
         self.output_display.append(f"[POWER OFF] {msg}")
 
     def send_restart_power(self):
-        msg = "cansend can1 202##014"
+        msg = "cansend can1 202##114"
         self.cansend_queue.put(msg)
         self.output_display.append(f"[RESTART POWER] {msg}")
 
@@ -645,9 +709,9 @@ class CANWindow(QWidget):
                             parsed = parse_0x206_frame(''.join(raw_data))
                             self.temp_values_label.setText(
                                 f"Temperature Values: "
-                                f"Temp 1: {parsed['temp_1']:6.2f}°C   "
-                                f"Temp 2: {parsed['temp_2']:6.2f}°C   "
-                                f"Temp 3: {parsed['temp_3']:6.2f}°C"
+                                f"Temp Battery Pack 2 (Port): {parsed['temp_1']:6.2f}°C   "
+                                f"Temp Buck Boost (PDB): {parsed['temp_2']:6.2f}°C   "
+                                f"Temp Battery Pack 1 (Starboard): {parsed['temp_3']:6.2f}°C"
                             )
                             self.volt_values_label.setText(
                                 f"Voltage Values:     "
@@ -732,14 +796,14 @@ class CANWindow(QWidget):
             connected, value = self.temp_pipe.recv()
             self.temp_label.setText(f"RPI Temp: {value}" if connected else "RPI Temp: --")
             self.status_label.setText("CONNECTED" if connected else "DISCONNECTED")
-            self.status_label.setStyleSheet("color: green" if connected else "color: red")
+            self.status_label.setStyleSheet("color: green; font-size: 16px; font-weight: bold;" if connected else "color: red; font-size: 16px; font-weight: bold;")
             self.last_temp_update = time.time()
         else:
             # Check if we haven't received a temperature update in too long (connection lost)
             if time.time() - self.last_temp_update > 5.0:  # 5 second timeout
                 self.temp_label.setText("RPI Temp: --")
                 self.status_label.setText("DISCONNECTED")
-                self.status_label.setStyleSheet("color: red")
+                self.status_label.setStyleSheet("color: red; font-size: 16px; font-weight: bold;")
 
         # Handle CAN send responses
         while not self.cansend_response_queue.empty():
