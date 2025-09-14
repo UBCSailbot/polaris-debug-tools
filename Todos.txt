@@ -1,18 +1,32 @@
 TODO
 - Add functionality (parse CAN content) for ph sensor
+    - Note: I want to see actual candump contents
 - Add functionality (parse CAN content) for temp sensor
 - Add functionality for salinity sensor
-- Add graph (visuals) for temp sensor
-- Add graph (visuals) for salinity sensor
 - Edit scrolling capability so that top values are always visible
+- Refactoring! Details under Add later section
 - make sure time for each graph is synced 
+- Always documenting stuff!
+
+Questions/Need to know/figure out
+- How to set up mainframe to actually log values
+- Is all the data in little endian?
 
 
 Add later / Nice to have
 - Refactor the program with a function to automatically create a new plot with given info
+    - Note: log_values will have to be updated to take an array of parameters to log; same with init_logging
+    - Note: Will need to make a separate class for plots
+    - make a list of frames/plots, handle each one in turn
 - Add variables for repeated settings; get rid of magic numbers (eg. add_subplot(111), figsize=(8, 4), )
 - Nice to have: add fix so each graph can plot independent of each other (enter blank if nothing there)
+- Nice to have: make the gui more responsive for scrolling
+- Nice to have: make it so that graphs can get larger - if the screen expands, only the left side expands
+- Note that performance probably degrades over time if all data is kept on graph; edit it so that instead of graph 
+  shrinking, it just moves the x-axis - the rest is 
 
 DONE
 - Added vertical scrolling capability
 - Add graph (visuals) for ph sensor
+- Add graph (visuals) for temp sensor
+- Add graph (visuals) for salinity sensor
