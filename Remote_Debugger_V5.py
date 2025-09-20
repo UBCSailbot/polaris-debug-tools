@@ -61,6 +61,19 @@ def parse_0x204_frame(data_hex):
         "actual_rudder_angle": actual_rudder_angle
     }
 
+# pH data frame
+def parse_0x110_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) < 2:
+        raise ValueError("Insufficient data length for 0x110 frame")
+    
+    # pH is in format of pH * 1000
+    raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
+    actual = raw / 1000
+
+    return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings
+
+
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
     client = paramiko.SSHClient()
@@ -198,6 +211,7 @@ class CANWindow(QWidget):
         self.volt4_history = []
         self.actual_rudder_history = []
         self.set_rudder_history = []
+        self.pH_history = []
 
         # Initialize logging
         self._init_logging()
@@ -314,10 +328,6 @@ class CANWindow(QWidget):
         self.temp_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
         self.temp_ax.set_ylim(0, 100)
         self.temp_ax.grid(True, alpha=0.3)
-
-        # temp_sp = self.temp_canvas.sizePolicy()
-        # temp_sp.setHorizontalPolicy(QSizePolicy.Fixed)
-        # self.temp_canvas.setSizePolicy(temp_sp)
         
         # Initialize empty lines for temperature data
         self.temp1_line, = self.temp_ax.plot([], [], 'r-', label='Temp 1')
@@ -362,20 +372,20 @@ class CANWindow(QWidget):
         self.rudder_ax.legend()
 
         # === pH Sensor Plot ===
-        self.ph_figure = Figure(figsize=(8, 4), tight_layout=False) # TODO: change to true later
-        self.ph_canvas = FigureCanvas(self.ph_figure)
-        self.ph_canvas.setMinimumSize(300, 300)
-        self.ph_ax = self.ph_figure.add_subplot(111)
-        self.ph_ax.set_title("pH vs Time")
-        self.ph_ax.set_xlabel("Time (s)")
-        self.ph_ax.set_ylabel("pH")
-        self.ph_ax.set_xlim(0, 60)
-        self.ph_ax.set_ylim(0, 14)
-        self.ph_ax.grid(True, alpha=0.3)
+        self.pH_figure = Figure(figsize=(8, 4), tight_layout=True)
+        self.pH_canvas = FigureCanvas(self.pH_figure)
+        self.pH_canvas.setMinimumSize(300, 300)
+        self.pH_ax = self.pH_figure.add_subplot(111)
+        self.pH_ax.set_title("pH vs Time")
+        self.pH_ax.set_xlabel("Time (s)")
+        self.pH_ax.set_ylabel("pH")
+        self.pH_ax.set_xlim(0, 60)
+        self.pH_ax.set_ylim(0, 14)
+        self.pH_ax.grid(True, alpha=0.3)
 
         # Initialize empty lines for pH data
-        self.ph_line = self.ph_ax.plot([], 'r-', linewidth=2, label="Current pH")
-        self.ph_ax.legend()
+        self.pH_line = self.pH_ax.plot([], 'r-', linewidth=2, label="Current pH")
+        self.pH_ax.legend()
 
         # Auto-scaling enabled for proper initial display
 
@@ -543,7 +553,7 @@ class CANWindow(QWidget):
         right_layout.addWidget(self.temp_canvas)
         right_layout.addWidget(self.volt_canvas)
         right_layout.addWidget(self.rudder_canvas)
-        right_layout.addWidget(self.ph_canvas)
+        right_layout.addWidget(self.pH_canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_layout)
@@ -744,6 +754,17 @@ class CANWindow(QWidget):
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
+
+                    elif frame_id == "110":
+                        try: 
+                            # Parse frame data, update the most recent pH value
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x110_frame(''.join(raw_data))
+                            self.pH_history.append(parsed["pH"])
+                                                
+                        except Exception as e:
+                            self.output_display.append(f"[PARSE ERROR 0x110] {str(e)}")
+                        # TODO: Add variables for each CAN frame id
         
         # Always update plots every timer cycle (independent of CAN messages)
         if len(self.time_history) > 0:
@@ -759,6 +780,8 @@ class CANWindow(QWidget):
             
             self.actual_rudder_line.set_data(self.time_history, self.actual_rudder_history)
             self.set_rudder_line.set_data(self.time_history, self.set_rudder_history)
+
+            self.pH_line.set_data(self.time_history, self.pH_history)
             
             self._update_plot_ranges(current_time)
         else:
@@ -787,6 +810,7 @@ class CANWindow(QWidget):
             elif out:
                 self.output_display.append(f"[OUT] {out.strip()}")
 
+    # TODO: update plot ranges to also update pH graph
     def _update_plot_ranges(self, current_time):
         # === Auto-scale and scroll X axis ===
         scroll_window = 60
