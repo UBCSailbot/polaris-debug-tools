@@ -1,4 +1,6 @@
 TODO
+- Getting errors when running V6 - remove modified functionality, see if graphics alone are fine
+
 - Add functionality (parse CAN content) for ph sensor
     - Note: I want to see actual candump contents
 - Add functionality (parse CAN content) for temp sensor
@@ -30,3 +32,8 @@ DONE
 - Add graph (visuals) for ph sensor
 - Add graph (visuals) for temp sensor
 - Add graph (visuals) for salinity sensor
+
+
+Bug Tracker
+- Problem with receiving CAN frames with V6 
+    - sending any CAN frame causes GUI window to close, but console messages continue "Error logging..."
