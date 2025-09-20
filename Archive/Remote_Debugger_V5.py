@@ -70,6 +70,7 @@ def parse_0x110_frame(data_hex):
     # pH is in format of pH * 1000
     raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     actual = raw / 1000
+    print("pH: ")
 
     return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings
 
@@ -781,7 +782,15 @@ class CANWindow(QWidget):
             self.actual_rudder_line.set_data(self.time_history, self.actual_rudder_history)
             self.set_rudder_line.set_data(self.time_history, self.set_rudder_history)
 
+            # Fill in missing pH data if needed # pH Change
+            while len(self.pH_history) > len(self.time_history):
+                self.pH_history.pop(0)
+            while len(self.pH_history) < len(self.time_history):
+                last_val = self.pH_history[-1] if self.pH_history else 0
+                self.pH_history.append(last_val)
+
             self.pH_line.set_data(self.time_history, self.pH_history)
+            print(f"pH_history: {self.pH_history}") # Debug log statement - pH Change
             
             self._update_plot_ranges(current_time)
         else:
@@ -819,6 +828,7 @@ class CANWindow(QWidget):
             self.temp_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
         else:
             # For initial data points, auto-scale
             self.temp_ax.relim()
@@ -827,6 +837,8 @@ class CANWindow(QWidget):
             self.volt_ax.autoscale_view()
             self.rudder_ax.relim()
             self.rudder_ax.autoscale_view()
+            self.pH_ax.relim() # pH Change
+            self.pH_ax.autoscale_view() # pH Change
 
         # === Auto Y adjustment (Temp) ===
         if self.temp1_history and self.temp2_history and self.temp3_history:
@@ -855,6 +867,10 @@ class CANWindow(QWidget):
                 # Keep some margin around the data
                 margin = 5
                 self.rudder_ax.set_ylim(max(-50, rudder_min - margin), min(50, rudder_max + margin))
+
+        # === Auto Y adjustment (pH) === # pH Change
+        # TODO: pH range is only 0 to 14, but it may need auto-scaling adjustment
+        #       to allow us to see smaller changes in pH
 
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
