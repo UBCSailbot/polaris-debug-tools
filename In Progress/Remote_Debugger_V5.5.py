@@ -70,8 +70,7 @@ def parse_0x110_frame(data_hex):
     # pH is in format of pH * 1000
     raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     actual = raw / 1000
-    print("pH: ")
-
+    
     return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings
 
 
@@ -241,13 +240,13 @@ class CANWindow(QWidget):
             'Timestamp', 'Elapsed_Time_s', 
             'Temp1_C', 'Temp2_C', 'Temp3_C',
             'Volt1_V', 'Volt2_V', 'Volt3_V', 'Volt4_V',
-            'Set_Rudder_deg', 'Actual_Rudder_deg'
+            'Set_Rudder_deg', 'Actual_Rudder_deg', 'pH'
         ])
         self.values_csv_file.flush()  # Ensure header is written immediately
         
         print(f"Values logging initialized: {self.values_log_file}")
 
-    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder):
+    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder, pH):
         """Log current values to CSV file"""
         try:
             timestamp = datetime.now().isoformat()
@@ -256,7 +255,8 @@ class CANWindow(QWidget):
                 timestamp, f'{elapsed_time:.3f}',
                 f'{temp1:.2f}', f'{temp2:.2f}', f'{temp3:.2f}',
                 f'{volt1:.2f}', f'{volt2:.2f}', f'{volt3:.2f}', f'{volt4:.2f}',
-                f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else ''
+                f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else '',
+                f'{pH}'
             ])
             self.values_csv_file.flush()  # Flush immediately to prevent data loss
         except Exception as e:
@@ -670,12 +670,14 @@ class CANWindow(QWidget):
     def update_status(self):
         # Update time independently of CAN messages
         current_time = time.time() - self.time_start
+
+        new_msg_to_log = False
         
         # Process any new CAN messages
         while not self.queue.empty():
             line = self.queue.get()
             self.output_display.append(line)
-            
+  
             # Send to separate logging process (non-blocking)
             try:
                 self.can_log_queue.put_nowait(line)
@@ -683,6 +685,7 @@ class CANWindow(QWidget):
                 pass  # Queue full, skip logging this message to avoid blocking
 
             if line.startswith("can1"):
+                new_msg_to_log = True
                 parts = line.split()
                 if len(parts) > 2:
                     frame_id = parts[1].lower()
@@ -723,13 +726,13 @@ class CANWindow(QWidget):
                                 last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
                                 self.actual_rudder_history.append(last_rudder)
 
-                            # Log current values
-                            actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
-                            self._log_values(
-                                parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
-                                parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
-                                self.rudder_angle, actual_rudder
-                            )
+                            # # Log current values
+                            # actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+                            # self._log_values(
+                            #     parsed['temp_1'], parsed['temp_2'], parsed['temp_3'],
+                            #     parsed['volt_1'], parsed['volt_2'], parsed['volt_3'], parsed['volt_4'],
+                            #     self.rudder_angle, actual_rudder
+                            # )
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
@@ -783,6 +786,8 @@ class CANWindow(QWidget):
             self.set_rudder_line.set_data(self.time_history, self.set_rudder_history)
 
             # Fill in missing pH data if needed # pH Change
+            # Note that all histories (eg. pH_history) need to be the same length as time_history
+            #  to correctly graph - or else it will break the application
             while len(self.pH_history) > len(self.time_history):
                 self.pH_history.pop(0)
             while len(self.pH_history) < len(self.time_history):
@@ -790,12 +795,21 @@ class CANWindow(QWidget):
                 self.pH_history.append(last_val)
 
             self.pH_line.set_data(self.time_history, self.pH_history)
-            print(f"pH_history: {self.pH_history}") # Debug log statement - pH Change
-            
-            self._update_plot_ranges(current_time)
-        else:
-            # Even with no data, update the time axis to show progression
-            self._update_plot_ranges(current_time)
+            # print(f"pH_history: {self.pH_history}") # Debug log statement - pH Change
+
+            # TODO: Check if this works before adding pH parameter
+            # TODO: add pH parameter to log_values
+            # Log current values
+            if (new_msg_to_log):
+                actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+                self._log_values(
+                    self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
+                    self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
+                    self.volt4_history[-1], self.rudder_angle, actual_rudder, self.pH_history[-1]
+                )
+
+        self._update_plot_ranges(current_time)
+
 
         # Handle temperature updates with connection status tracking
         if self.temp_pipe.poll():
