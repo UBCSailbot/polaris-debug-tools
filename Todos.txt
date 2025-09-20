@@ -1,5 +1,6 @@
 TODO
-- Getting errors when running V6 - remove modified functionality, see if graphics alone are fine
+- Test Test_Script for sensors
+- Test V5 - if graphing functionality is working
 
 - Add functionality (parse CAN content) for ph sensor
     - Note: I want to see actual candump contents

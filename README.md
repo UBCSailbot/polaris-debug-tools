@@ -1,7 +1,11 @@
 # polaris-debug-tools
 Providing debug tools for testing of POLARIS's systems.
 
-Note: V3 is the most updated version; V4 is still in progress.
+Note: V4 is the most updated (working) version.
+- V4 - graph of pH sensor only
+- V5 - graph of pH sensor + graphing functionality
+- V5.5 - graph of pH sensor + graphing functionality + logging functionality
+
 
 Steps for setting up mainframe/CAN stuff (for testing)
 - Need: mainframe, 1 nucleo with CAN hat (use a CAN test board) to transmit CAN messages, bullet wifi modem, special ethernet cable for bullet - mainframe, CAN connector with wires thing (white = 12V power, black = ground, brown = CAN high, blue = CAN low), micro-USB cable, assorted alligator clips
