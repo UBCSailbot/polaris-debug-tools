@@ -36,10 +36,10 @@ def convert_to_little_endian(hex_str):
 # Use this function to CAN send a frame for any data sensor
 def send_sensor_command(client, frame_id, data):
     try:
-        # Convert data to CAN format (4-byte hex number in little endian)
+        # Convert data to CAN format (2-byte hex number in little endian)
         # Multiplied by 1000 by CAN Frame documentation
         can_data = int(data * 1000)
-        hex = convert_to_little_endian(convert_to_hex(can_data, 8))
+        hex = convert_to_little_endian(convert_to_hex(can_data, 4))
         can_msg = "cansend can1 " + frame_id + "##1" + hex
 
         # Execute the cansend command
