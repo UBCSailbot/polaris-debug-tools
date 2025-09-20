@@ -1,8 +1,25 @@
 TODO
 - Test Test_Script for sensors
+    - Right now, plotting starts only on pdb can frame send
+
 - Test V5 - if graphing functionality is working
     - If it works, update update_plot_ranges to work for pH graph as well & test
     - If that works, move to V5.5: logging functionality for pH
+
+Current problems:
+
+Answered problems:
+    - Am I sending the CAN message wrong?
+        - No, I don't think so - because when I sent an edited CAN frame with fewer data bytes,
+        I received an error message (Usage: cansend <device> <can_frame>)
+        - No error message for various CAN frame ids
+    - Is candump supposed to show all messages?
+        - Yes; according to confluence documentation:
+        "Command for echoing all CAN messages: candump can1"
+    - candump is not showing any message when I cansend a message on another ssh session of rpi
+        - Need to make sure loopback is on
+
+
 
 - Add functionality (parse CAN content) for ph sensor
     - Note: I want to see actual candump contents

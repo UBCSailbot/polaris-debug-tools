@@ -21,3 +21,8 @@ Steps for setting up mainframe/CAN stuff (for testing)
 
 note: add auto setup of can line (run ip up) to program
 note: add function to reset can line (down then up)
+
+Regular CAN up:
+"CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"
+CAN up command with loopback (use if using candump can1):
+"CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on loopback on"

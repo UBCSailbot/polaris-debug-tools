@@ -18,7 +18,7 @@ username = "sailbot"
 password = "sailbot"
 
 # Time between sent frames (in secs)
-delay = 5
+delay = 7
 
 # CAN Frame IDs
 temp_id = "100" # 0x10X
@@ -32,6 +32,35 @@ def convert_to_hex(decimal, num_digits):
 def convert_to_little_endian(hex_str):
     raw = bytes.fromhex(hex_str)
     return raw[::-1].hex()
+
+def send_pdb_command(client):
+    try:
+        # Send sample pdb command with data: 
+        # volt1: 3 volt2: 2.4 volt3: 0.8 volt4: 1.3 temp1: 1.5 temp2: 57.8 temp3: 126.32
+        # Convert data to CAN format (2-byte hex number in little endian)
+        # Multiplied by 1000 by CAN Frame documentation
+        # can_data = 0x5dc0 0096 1f40 e1c8 3158 7530
+        can_data = "c05d9600401fc8e13075c8325831"
+        can_msg = "cansend can1 206##1" + can_data
+
+        # Execute the cansend command
+        stdin, stdout, stderr = client.exec_command(can_msg)
+        
+        # Check for errors
+        error = stderr.read().decode().strip()
+        output = stdout.read().decode().strip()
+
+        if error:
+            print(f"ERROR sending command: {error}")
+            return False
+        else:
+            print(f"✓ Sample PDB msg sent: {can_msg}")
+            return True
+
+    except Exception as e:
+        print(f"Error sending cansend command: {e}")
+        return False
+    pass
 
 # Use this function to CAN send a frame for any data sensor
 def send_sensor_command(client, frame_id, data):
@@ -110,10 +139,17 @@ def main():
         
         cycle_count = 0
         start_time = time.time()
+
+        send_pdb_command(client)
+        time.sleep(delay)
+        # send_pdb_command(client)
         
         while True:
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
+
+            time.sleep(delay)
+            send_pdb_command(client)
             
             # Generate random pH between 0 and 14
             pH_data = round(random.uniform(0, 14))
@@ -131,7 +167,7 @@ def main():
             if not success:
                 print("Failed to send command, continuing...")
             
-            print(f"[{timestamp}] Waiting 30 seconds before next angle...")
+            print(f"[{timestamp}] Waiting {delay} seconds before next cansend...")
             time.sleep(delay)  # Wait 30 seconds before next angle
     
     except KeyboardInterrupt:

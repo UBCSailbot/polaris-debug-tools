@@ -384,7 +384,7 @@ class CANWindow(QWidget):
         self.pH_ax.grid(True, alpha=0.3)
 
         # Initialize empty lines for pH data
-        self.pH_line = self.pH_ax.plot([], 'r-', linewidth=2, label="Current pH")
+        self.pH_line, = self.pH_ax.plot([], [], 'r-', linewidth=2, label='Current pH')
         self.pH_ax.legend()
 
         # Auto-scaling enabled for proper initial display
@@ -860,6 +860,7 @@ class CANWindow(QWidget):
         self.temp_canvas.draw()
         self.volt_canvas.draw()
         self.rudder_canvas.draw()
+        self.pH_canvas.draw() # pH Change
 
 
     def show_error(self, msg):
