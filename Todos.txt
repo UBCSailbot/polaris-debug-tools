@@ -1,10 +1,13 @@
 TODO
 - Test Test_Script for sensors
-    - Right now, plotting starts only on pdb can frame send
+    - Right now, plotting starts only on pdb can frame send - this needs to be fixed
 
-- Test V5 - if graphing functionality is working
-    - If it works, update update_plot_ranges to work for pH graph as well & test
-    - If that works, move to V5.5: logging functionality for pH
+- Add similar graph functionality for temp (V6)
+- Add similar logging functionality for temp
+- Add similar graphics/functionality for salinity
+- Edit size of screen so it shows all temps and volts
+- Fix the problem where it plots only on pdb can frame send
+- Force scrollArea to fully show all graphs horizontally
 
 Current problems:
 
@@ -18,11 +21,13 @@ Answered problems:
         "Command for echoing all CAN messages: candump can1"
     - candump is not showing any message when I cansend a message on another ssh session of rpi
         - Need to make sure loopback is on
+    - How to set up mainframe to actually log values
+        - See readme
+    - Is all the data in little endian?
+        - Yes
 
 
 
-- Add functionality (parse CAN content) for ph sensor
-    - Note: I want to see actual candump contents
 - Add functionality (parse CAN content) for temp sensor
 - Add functionality for salinity sensor
 - Edit scrolling capability so that top values are always visible
@@ -31,8 +36,7 @@ Answered problems:
 - Always documenting stuff!
 
 Questions/Need to know/figure out
-- How to set up mainframe to actually log values
-- Is all the data in little endian?
+
 
 
 Add later / Nice to have
@@ -49,7 +53,14 @@ Add later / Nice to have
 
 DONE
 - Added vertical scrolling capability
-- Add graph (visuals) for ph sensor
+- Add graph (visuals) for ph sensor (V4.1)
+- Add functionality (parsing CAN content) & displaying on graph for ph sensor (V5)
+- Updated logging functionality so that a new log is created if and only if a new can message is received
+- Added logging functionality for pH (V5.5)
+- Added graphics for temp (V6)
+
+
+
 - Add graph (visuals) for temp sensor
 - Add graph (visuals) for salinity sensor
 

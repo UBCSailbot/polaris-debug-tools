@@ -197,7 +197,7 @@ class CANWindow(QWidget):
         self.last_temp_update = time.time()  # Track last temperature update
 
         self.setWindowTitle("Remote Node GUI - POLARIS")
-        self.setGeometry(150, 50, 1200, 600)
+        self.setGeometry(100, 30, 1200, 600)
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.time_start = time.time()
@@ -390,6 +390,22 @@ class CANWindow(QWidget):
         self.pH_line, = self.pH_ax.plot([], [], 'r-', linewidth=2, label='Current pH')
         self.pH_ax.legend()
 
+        # === Water Temp Sensor Plot ===
+        self.temp_sensor_figure = Figure(figsize=(8, 4), tight_layout=True) 
+        self.temp_sensor_canvas = FigureCanvas(self.temp_sensor_figure)
+        self.temp_sensor_canvas.setMinimumSize(300, 300)
+        self.temp_sensor_ax = self.temp_sensor_figure.add_subplot(111)
+        self.temp_sensor_ax.set_title("Water Temp vs Time")
+        self.temp_sensor_ax.set_xlabel("Time (s)")
+        self.temp_sensor_ax.set_ylabel("Temp (°C)")
+        self.temp_sensor_ax.set_xlim(0, 60)
+        self.temp_sensor_ax.set_ylim(-15, 40) # Temp range from -15 to 40 degrees; can change in the future
+        self.temp_sensor_ax.grid(True, alpha=0.3)
+
+        # Initialize empty lines for temp sensor data
+        self.temp_sensor_line = self.temp_sensor_ax.plot([], 'b-', linewidth=2, label="Water Temp")
+        self.temp_sensor_ax.legend()
+
         # Auto-scaling enabled for proper initial display
 
         # === Left Panel ===
@@ -413,6 +429,7 @@ class CANWindow(QWidget):
         self.output_display = QTextEdit()
         self.output_display.setReadOnly(True)
         self.output_display.setMaximumHeight(200)  # Limit height for candump
+        # self.output_display.setMaximumWidth(400)
 
         # Separate terminal output display
         self.terminal_output_display = QTextEdit()
@@ -557,12 +574,14 @@ class CANWindow(QWidget):
         right_layout.addWidget(self.volt_canvas)
         right_layout.addWidget(self.rudder_canvas)
         right_layout.addWidget(self.pH_canvas)
+        right_layout.addWidget(self.temp_sensor_canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_layout)
         container_sp = container_widget.sizePolicy()
         container_sp.setHorizontalPolicy(QSizePolicy.Ignored)
         container_widget.setSizePolicy(container_sp)
+        container_widget.setMinimumWidth(300)
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(container_widget)
@@ -893,6 +912,7 @@ class CANWindow(QWidget):
         self.volt_canvas.draw()
         self.rudder_canvas.draw()
         self.pH_canvas.draw() # pH Change
+        # self.temp_sensor_canvas.draw()
 
 
     def show_error(self, msg):
