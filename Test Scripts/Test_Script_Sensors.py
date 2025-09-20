@@ -18,7 +18,7 @@ username = "sailbot"
 password = "sailbot"
 
 # Time between sent frames (in secs)
-delay = 7
+delay = 10
 
 # CAN Frame IDs
 temp_id = "100" # 0x10X
@@ -40,7 +40,7 @@ def send_pdb_command(client):
         # Convert data to CAN format (2-byte hex number in little endian)
         # Multiplied by 1000 by CAN Frame documentation
         # can_data = 0x5dc0 0096 1f40 e1c8 3158 7530
-        can_data = "c05d9600401fc8e13075c8325831"
+        can_data = "c05d9600401fc9416075c8325831"
         can_msg = "cansend can1 206##1" + can_data
 
         # Execute the cansend command
@@ -140,16 +140,16 @@ def main():
         cycle_count = 0
         start_time = time.time()
 
-        send_pdb_command(client)
-        time.sleep(delay)
+        # send_pdb_command(client)
+        # time.sleep(delay)
         # send_pdb_command(client)
         
         while True:
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
 
-            time.sleep(delay)
             send_pdb_command(client)
+            time.sleep(delay)
             
             # Generate random pH between 0 and 14
             pH_data = round(random.uniform(0, 14))
