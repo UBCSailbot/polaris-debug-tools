@@ -24,13 +24,84 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
+# Hex Two's complement conversion dict
+hex_conversion = {
+    "0": "f",
+    "1": "e",
+    "2": "d",
+    "3": "c",
+    "4": "b",
+    "5": "a",
+    "6": "9",
+    "7": "8",
+    "8": "7",
+    "9": "6",
+    "a": "5",
+    "b": "4",
+    "c": "3",
+    "d": "2",
+    "e": "1",
+    "f": "0",
+}
+
+negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
+
 ### ----------  Utility Functions ---------- ###
-def convert_to_hex(decimal, num_digits):
-    return format(decimal, "X").zfill(num_digits)
+# def convert_to_hex(decimal, num_digits):
+#     return format(decimal, "X").zfill(num_digits)
+
+# def convert_to_little_endian(hex_str):
+#     raw = bytes.fromhex(hex_str)
+#     return raw[::-1].hex()
+
+def convert_to_hex(decimal, num_bytes):
+    # if (decimal < 0):
+    #     decimal = ~decimal + 1 # Two's complement for negative ints
+    #     print(f"After two's complement in convert_to_hex: {decimal}")
+
+    if (abs(decimal) > ((2 ** ((num_bytes * 8) - 1)) - 1)):
+        raise ValueError("Number is too large for given number of bytes")
+
+    hexed = format(decimal, "X").zfill(2 * num_bytes)
+    hex_list = list(hexed)
+    print(hex_list)
+    if (hex_list[0] == '-'):
+        if len(hex_list) == (2 * num_bytes):
+            hex_list[0] = "0"
+        else:
+            hex_list = hex_list[1:]
+        print(hex_list)
+        hexed = "".join(hex_list)
+        return twos_complement(hexed)
+
+    return format(decimal, "X").zfill(2 * num_bytes)
 
 def convert_to_little_endian(hex_str):
+    print(f"convert_to_little_endian: Given hex string: {hex_str}")
+    # hex_list = list(hex_str)
+    # if (hex_list[0] == '-'):
+    #     hex_list[0] = "0"
+    #     new_str = "".join(hex_list)
+    #     new_str = twos_complement(new_str)
+
     raw = bytes.fromhex(hex_str)
     return raw[::-1].hex()
+
+def convert_from_little_endian_str(hex_str):
+    raw = bytes.fromhex(hex_str)
+    big_endian = raw[::-1].hex()
+    if big_endian[0] in negative_hex_starting_digits:
+        return int(twos_complement(big_endian), 16) * -1
+    return int(big_endian, 16)
+
+def twos_complement(hex_str):
+    hex_list = list(hex_str)
+    for i in range(0, len(hex_list)):
+        hex_list[i] = hex_conversion[hex_list[i].lower()]
+
+    hex_list[-1] = hex(int(hex_list[-1], 16) + 1)
+    hex_list[-1] = hex_list[-1][2:]
+    return "".join(hex_list)
 
 def parse_0x206_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
@@ -61,18 +132,44 @@ def parse_0x204_frame(data_hex):
         "actual_rudder_angle": actual_rudder_angle
     }
 
+# Salinity data frame
+def parse_0x12X_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) < 4:
+        raise ValueError("Insufficient data length for 0x12X frame")
+    
+    # Conductivity in µS/cm * 1000
+    raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
+    actual = raw / (1000 * 1000)
+    
+    return {"sal": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
+
+
 # pH data frame
-def parse_0x110_frame(data_hex):
+def parse_0x11X_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) < 2:
-        raise ValueError("Insufficient data length for 0x110 frame")
+        raise ValueError("Insufficient data length for 0x11X frame")
     
     # pH is in format of pH * 1000
     raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     actual = raw / 1000
     
-    return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings
+    return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
 
+def parse_0x10X_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) < 2:
+        raise ValueError("Insufficient data length for 0x10X frame")
+    
+    # pH is in format of pH * 1000
+    # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
+    # actual = raw / 1000
+    raw = convert_from_little_endian_str(data_hex)
+    actual = raw / 1000.0
+    print(f"temp_sensor data: {actual}\n")
+    
+    return {"temp_sensor": actual}
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -213,7 +310,7 @@ class CANWindow(QWidget):
         self.set_rudder_history = []
         self.pH_history = []
         self.temp_sensor_history = []
-        self.salinity_history = []
+        self.sal_history = []
 
         # Initialize logging
         self._init_logging()
@@ -242,13 +339,14 @@ class CANWindow(QWidget):
             'Timestamp', 'Elapsed_Time_s', 
             'Temp1_C', 'Temp2_C', 'Temp3_C',
             'Volt1_V', 'Volt2_V', 'Volt3_V', 'Volt4_V',
-            'Set_Rudder_deg', 'Actual_Rudder_deg', 'pH'
+            'Set_Rudder_deg', 'Actual_Rudder_deg', 'pH',
+            'Water_Temp'
         ])
         self.values_csv_file.flush()  # Ensure header is written immediately
         
         print(f"Values logging initialized: {self.values_log_file}")
 
-    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder, pH):
+    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder, pH, temp_sensor):
         """Log current values to CSV file"""
         try:
             timestamp = datetime.now().isoformat()
@@ -258,7 +356,7 @@ class CANWindow(QWidget):
                 f'{temp1:.2f}', f'{temp2:.2f}', f'{temp3:.2f}',
                 f'{volt1:.2f}', f'{volt2:.2f}', f'{volt3:.2f}', f'{volt4:.2f}',
                 f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else '',
-                f'{pH}'
+                f'{pH}', f'{temp_sensor}'
             ])
             self.values_csv_file.flush()  # Flush immediately to prevent data loss
         except Exception as e:
@@ -403,8 +501,24 @@ class CANWindow(QWidget):
         self.temp_sensor_ax.grid(True, alpha=0.3)
 
         # Initialize empty lines for temp sensor data
-        self.temp_sensor_line = self.temp_sensor_ax.plot([], 'b-', linewidth=2, label="Water Temp")
+        self.temp_sensor_line, = self.temp_sensor_ax.plot([], [], 'b-', linewidth=2, label="Water Temp")
         self.temp_sensor_ax.legend()
+
+        # === Salinity Sensor Plot ===
+        self.sal_figure = Figure(figsize=(8, 4), tight_layout=True)
+        self.sal_canvas = FigureCanvas(self.sal_figure)
+        self.sal_canvas.setMinimumSize(300, 300)
+        self.sal_ax = self.sal_figure.add_subplot(111)
+        self.sal_ax.set_title("Salinity vs Time")
+        self.sal_ax.set_xlabel("Time (s)")
+        self.sal_ax.set_ylabel("Salinity (µS/cm * 1000)")
+        self.sal_ax.set_xlim(0, 60)
+        self.sal_ax.set_ylim(40, 55)
+        self.sal_ax.grid(True, alpha=0.3)
+
+        # Initialize empty lines for salinity data
+        self.sal_line, = self.sal_ax.plot([], [], 'g-', linewidth=2, label='Current Salinity')
+        self.sal_ax.legend()
 
         # Auto-scaling enabled for proper initial display
 
@@ -575,6 +689,7 @@ class CANWindow(QWidget):
         right_layout.addWidget(self.rudder_canvas)
         right_layout.addWidget(self.pH_canvas)
         right_layout.addWidget(self.temp_sensor_canvas)
+        right_layout.addWidget(self.sal_canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_layout)
@@ -780,16 +895,39 @@ class CANWindow(QWidget):
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
 
-                    elif frame_id == "110":
+                    # Handle temp_sensor frame
+                    elif frame_id[0:2] == "10":
+                        try:
+                            # Parse frame data, update the most recent temp_sensor value
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x10X_frame(''.join(raw_data))
+                            self.temp_sensor_history.append(parsed["temp_sensor"])
+                        except Exception as e:
+                            self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
+                       
+                    # Handle pH sensor frame
+                    elif frame_id[0:2] == "11":
                         try: 
                             # Parse frame data, update the most recent pH value
                             raw_data = line.split(']')[-1].strip().split()
-                            parsed = parse_0x110_frame(''.join(raw_data))
+                            parsed = parse_0x11X_frame(''.join(raw_data))
                             self.pH_history.append(parsed["pH"])
                                                 
                         except Exception as e:
-                            self.output_display.append(f"[PARSE ERROR 0x110] {str(e)}")
+                            self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
                         # TODO: Add variables for each CAN frame id
+                    
+                    # Handle salinity sensor frame
+                    elif frame_id[0:2] == "12":
+                        try: 
+                            # Parse frame data, update the most recent pH value
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x11X_frame(''.join(raw_data))
+                            self.sal_history.append(parsed["pH"])
+                                                
+                        except Exception as e:
+                            self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
+                            
         
         # Always update plots every timer cycle (independent of CAN messages)
         if len(self.time_history) > 0:
@@ -818,15 +956,27 @@ class CANWindow(QWidget):
             self.pH_line.set_data(self.time_history, self.pH_history)
             # print(f"pH_history: {self.pH_history}") # Debug log statement - pH Change
 
-            # TODO: Check if this works before adding pH parameter
-            # TODO: add pH parameter to log_values
+            # TODO: repeated code, improve this - abstract to a function
+            while len(self.temp_sensor_history) > len(self.time_history):
+                self.temp_sensor_history.pop(0)
+            while len(self.temp_sensor_history) < len(self.time_history):
+                last_val = self.temp_sensor_history[-1] if self.temp_sensor_history else 0
+                self.temp_sensor_history.append(last_val)
+
+            self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
+            print(f"temp_sensor_history = {self.temp_sensor_history}")
+            print(f"time_history = {self.time_history}")
+
+
+            # TODO: add temp_sensor parameter to log_values
             # Log current values
             if (new_msg_to_log):
                 actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
                 self._log_values(
                     self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
                     self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
-                    self.volt4_history[-1], self.rudder_angle, actual_rudder, self.pH_history[-1]
+                    self.volt4_history[-1], self.rudder_angle, actual_rudder, self.pH_history[-1],
+                    self.temp_sensor_history[-1]# , self.sal_history[-1]
                 )
 
         self._update_plot_ranges(current_time)
@@ -854,7 +1004,6 @@ class CANWindow(QWidget):
             elif out:
                 self.output_display.append(f"[OUT] {out.strip()}")
 
-    # TODO: update plot ranges to also update pH graph
     def _update_plot_ranges(self, current_time):
         # === Auto-scale and scroll X axis ===
         scroll_window = 60
@@ -864,6 +1013,7 @@ class CANWindow(QWidget):
             self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
+            self.temp_sensor_ax.set_xlim(max(0, current_time - scroll_window), current_time)
         else:
             # For initial data points, auto-scale
             self.temp_ax.relim()
@@ -874,6 +1024,8 @@ class CANWindow(QWidget):
             self.rudder_ax.autoscale_view()
             self.pH_ax.relim() # pH Change
             self.pH_ax.autoscale_view() # pH Change
+            self.temp_sensor_ax.relim()
+            self.temp_sensor_ax.relim()
 
         # === Auto Y adjustment (Temp) ===
         if self.temp1_history and self.temp2_history and self.temp3_history:
@@ -907,12 +1059,20 @@ class CANWindow(QWidget):
         # TODO: pH range is only 0 to 14, but it may need auto-scaling adjustment
         #       to allow us to see smaller changes in pH
 
+        # === Auto Y adjustment (temp sensor) === 
+        if (self.temp_sensor_history):
+            temp_max = max(self.temp_sensor_history)
+            temp_min = min(self.temp_sensor_history)
+            margin = 2
+            self.temp_sensor_ax.set_ylim(max(temp_min - margin, -15), min(140, temp_max + margin))
+
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
         self.volt_canvas.draw()
         self.rudder_canvas.draw()
         self.pH_canvas.draw() # pH Change
-        # self.temp_sensor_canvas.draw()
+        self.temp_sensor_canvas.draw()
+        self.sal_canvas.draw()
 
 
     def show_error(self, msg):
