@@ -1,10 +1,19 @@
 # polaris-debug-tools
 Providing debug tools for testing of POLARIS's systems.
 
-Note: V4 is the most updated (working) version.
-- V4 - graph of pH sensor only
-- V5 - graph of pH sensor + graphing functionality
-- V5.5 - graph of pH sensor + graphing functionality + logging functionality
+Note: V6 is the most updated (working) version.
+Version Descriptions:
+- V4.1 - V4 + graph of pH sensor only
+- V5 - V4 + graph of pH sensor + graphing functionality
+- V5.5 - V4 + graph of pH sensor + graphing functionality + logging functionality
+- V6 - V5.5 + temp sensor graphics/functionality + salinity sensor graphics/functionality
+
+
+Important usage notes
+- May need to put CAN line down and back up before CAN works properly
+- salinity is measured in big numbers - assuming range is between 40,000 and 55,000
+- temp is assumed to be between -15 and 140 degrees celsius
+- If Raspberry pi is returning the message "device or resource busy" when attempting to put up CAN1 line with loopback on, and you have confirmed no other application/session is using the pi, try "sudo reboot"
 
 
 Steps for setting up mainframe/CAN stuff (for testing)
@@ -22,6 +31,7 @@ Steps for setting up mainframe/CAN stuff (for testing)
 note: add auto setup of can line (run ip up) to program
 note: add function to reset can line (down then up)
 
+"Can1 down", "sudo ip link set can1 down"
 Regular CAN up:
 "CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"
 CAN up command with loopback (use if using candump can1):
