@@ -142,8 +142,7 @@ def parse_0x12X_frame(data_hex):
     raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     actual = raw / (1000 * 1000)
     
-    return {"sal": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
-
+    return {"sal": actual} 
 
 # pH data frame
 def parse_0x11X_frame(data_hex):
@@ -294,7 +293,7 @@ class CANWindow(QWidget):
         self.last_temp_update = time.time()  # Track last temperature update
 
         self.setWindowTitle("Remote Node GUI - POLARIS")
-        self.setGeometry(100, 30, 1200, 600)
+        self.setGeometry(50, 30, 1300, 600)
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.time_start = time.time()
@@ -340,13 +339,13 @@ class CANWindow(QWidget):
             'Temp1_C', 'Temp2_C', 'Temp3_C',
             'Volt1_V', 'Volt2_V', 'Volt3_V', 'Volt4_V',
             'Set_Rudder_deg', 'Actual_Rudder_deg', 'pH',
-            'Water_Temp'
+            'Water_Temp', 'Salinity'
         ])
         self.values_csv_file.flush()  # Ensure header is written immediately
         
         print(f"Values logging initialized: {self.values_log_file}")
 
-    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder, pH, temp_sensor):
+    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder, pH, temp_sensor, sal):
         """Log current values to CSV file"""
         try:
             timestamp = datetime.now().isoformat()
@@ -356,7 +355,7 @@ class CANWindow(QWidget):
                 f'{temp1:.2f}', f'{temp2:.2f}', f'{temp3:.2f}',
                 f'{volt1:.2f}', f'{volt2:.2f}', f'{volt3:.2f}', f'{volt4:.2f}',
                 f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else '',
-                f'{pH}', f'{temp_sensor}'
+                f'{pH}', f'{temp_sensor}', f'{sal}'
             ])
             self.values_csv_file.flush()  # Flush immediately to prevent data loss
         except Exception as e:
@@ -406,6 +405,7 @@ class CANWindow(QWidget):
         """
         
         self.temp_values_label = QLabel("Temperature Values: --")
+        self.temp_values_label.setMinimumWidth(300)
         self.temp_values_label.setAlignment(Qt.AlignLeft)
         self.temp_values_label.setStyleSheet(value_style)
         
@@ -413,7 +413,8 @@ class CANWindow(QWidget):
         self.volt_values_label.setAlignment(Qt.AlignLeft)
         self.volt_values_label.setStyleSheet(value_style)
         
-        self.rudder_values_label = QLabel("Rudder Angles:        Set:    0°       Actual:    --")
+        self.rudder_values_label = QLabel("Rudder Angles:   Set: 0°  Actual:  --")
+        self.rudder_values_label.setMinimumWidth(550)
         self.rudder_values_label.setAlignment(Qt.AlignLeft)
         self.rudder_values_label.setStyleSheet(value_style)
 
@@ -788,7 +789,7 @@ class CANWindow(QWidget):
             else:
                 current_actual = "    --"
             self.rudder_values_label.setText(
-                f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {current_actual}"
+                f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {current_actual}"
             )
         except ValueError:
             self.show_error("Invalid angle input for Rudder")
@@ -889,7 +890,7 @@ class CANWindow(QWidget):
                             # Update rudder display
                             actual_angle = parsed['actual_rudder_angle']
                             self.rudder_values_label.setText(
-                                f"Rudder Angles:      Set: {self.rudder_angle:4.0f}°       Actual: {actual_angle:6.1f}°"
+                                f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {actual_angle:6.1f}°"
                             )
 
                         except Exception as e:
@@ -920,10 +921,10 @@ class CANWindow(QWidget):
                     # Handle salinity sensor frame
                     elif frame_id[0:2] == "12":
                         try: 
-                            # Parse frame data, update the most recent pH value
+                            # Parse frame data, update the most recent salinity value
                             raw_data = line.split(']')[-1].strip().split()
-                            parsed = parse_0x11X_frame(''.join(raw_data))
-                            self.sal_history.append(parsed["pH"])
+                            parsed = parse_0x12X_frame(''.join(raw_data))
+                            self.sal_history.append(parsed["sal"])
                                                 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
@@ -964,11 +965,17 @@ class CANWindow(QWidget):
                 self.temp_sensor_history.append(last_val)
 
             self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
-            print(f"temp_sensor_history = {self.temp_sensor_history}")
+
+            while len(self.sal_history) > len(self.time_history):
+                self.sal_history.pop(0)
+            while len(self.sal_history) < len(self.time_history):
+                last_val = self.sal_history[-1] if self.sal_history else 0
+                self.sal_history.append(last_val)
+
+            self.sal_line.set_data(self.time_history, self.sal_history)
+            print(f"sal_history = {self.sal_history}")
             print(f"time_history = {self.time_history}")
 
-
-            # TODO: add temp_sensor parameter to log_values
             # Log current values
             if (new_msg_to_log):
                 actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
@@ -976,7 +983,7 @@ class CANWindow(QWidget):
                     self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
                     self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
                     self.volt4_history[-1], self.rudder_angle, actual_rudder, self.pH_history[-1],
-                    self.temp_sensor_history[-1]# , self.sal_history[-1]
+                    self.temp_sensor_history[-1], self.sal_history[-1]
                 )
 
         self._update_plot_ranges(current_time)
@@ -1014,6 +1021,7 @@ class CANWindow(QWidget):
             self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
             self.temp_sensor_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            self.sal_ax.set_xlim(max(0, current_time - scroll_window), current_time)
         else:
             # For initial data points, auto-scale
             self.temp_ax.relim()
@@ -1025,7 +1033,9 @@ class CANWindow(QWidget):
             self.pH_ax.relim() # pH Change
             self.pH_ax.autoscale_view() # pH Change
             self.temp_sensor_ax.relim()
-            self.temp_sensor_ax.relim()
+            self.temp_sensor_ax.autoscale_view()
+            self.sal_ax.relim()
+            self.sal_ax.autoscale_view()
 
         # === Auto Y adjustment (Temp) ===
         if self.temp1_history and self.temp2_history and self.temp3_history:
@@ -1063,8 +1073,15 @@ class CANWindow(QWidget):
         if (self.temp_sensor_history):
             temp_max = max(self.temp_sensor_history)
             temp_min = min(self.temp_sensor_history)
-            margin = 2
+            margin = 5
             self.temp_sensor_ax.set_ylim(max(temp_min - margin, -15), min(140, temp_max + margin))
+
+        # === Auto Y adjustment (sal sensor) ===
+        if (self.sal_history):
+            sal_max = max(self.sal_history)
+            sal_min = min(self.sal_history)
+            margin = 15
+            self.sal_ax.set_ylim(max(sal_max - margin, 30), min(sal_min + margin, 70))
 
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
