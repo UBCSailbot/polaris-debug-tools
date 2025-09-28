@@ -759,7 +759,7 @@ class CANWindow(QWidget):
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
 
-                    elif frame_id == "110":
+                    elif frame_id[0:2] == "11":
                         try: 
                             # Parse frame data, update the most recent pH value
                             raw_data = line.split(']')[-1].strip().split()
