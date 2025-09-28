@@ -3,6 +3,7 @@ TODO
     - Right now, plotting starts only on pdb can frame send - this needs to be fixed
 
 - Edit size of screen so it shows all temps and volts at the top of the screen
+    - implemented, but needs to be tested with mainframe
 - Test program with mixed commands for all sensors
 - Fix the problem where it plots only on pdb can frame send
 - Force scrollArea to fully show all graphs horizontally
