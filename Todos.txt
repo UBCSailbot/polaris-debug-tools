@@ -51,6 +51,7 @@ Add later / Nice to have
   shrinking, it just moves the x-axis - the rest is 
 - I would like to have a separate file which contain all the utility functions - if those are ever modified, 
   the modified versions carry over to original file - prevents inconsistencies
+  - If doing this, also simplify utility functions- doesn't need to be as complicated as it is right now I'm pretty sure
 
 DONE
 - Added vertical scrolling capability
@@ -67,3 +68,7 @@ DONE
 Bug Tracker
 - Problem with receiving CAN frames with V6 
     - sending any CAN frame causes GUI window to close, but console messages continue "Error logging..."
+
+For fixing the "only plots when pdb plots" problem:
+    - Literally only plots when pdb canframe is sent
+    - Also, only starts plotting after receiving two pdb canframes

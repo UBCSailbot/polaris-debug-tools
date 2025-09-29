@@ -234,16 +234,17 @@ def main():
         cycle_count = 0
         start_time = time.time()
 
-        # send_pdb_command(client)
-        # time.sleep(delay)
-        # send_pdb_command(client)
+        send_pdb_command(client)
+        time.sleep(delay)
+        send_pdb_command(client)
+        time.sleep(delay)
         
         while True:
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
 
-            send_pdb_command(client)
-            time.sleep(delay)
+            # send_pdb_command(client)
+            # time.sleep(delay)
             
             # Generate random pH between 0 and 14
             pH_data = round(random.uniform(0, 14))
@@ -260,28 +261,41 @@ def main():
             
             print(f"[{timestamp}] ", end="")
 
-            success = send_sensor_command(client, sal_id, sal_data)
-            if not success:
-                print("Failed to send command, continuing...")
+            # success = send_sensor_command(client, sal_id, sal_data)
+            # if not success:
+            #     print("Failed to send command, continuing...")
 
-            #  === For combining frames randomly ===
-            # rnd_cmd = random.randrange(2)
-            # if (rnd_cmd == 0): # send only pH frame
-            #     success = send_sensor_command(client, pH_id, pH_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
-            # elif (rnd_cmd == 1): # send only temp_sensor frame
-            #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
-            # else: # Send both frames, one after the other
-            #     success = send_sensor_command(client, pH_id, pH_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
+            # === For combining frames randomly ===
+            rnd_cmd = random.randrange(2)
+            if (rnd_cmd == 0): # send pH + temp_sensor frame
+                success = send_sensor_command(client, pH_id, pH_data)
+                if not success:
+                    print("Failed to send command, continuing...")
 
-            #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
+                success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+                if not success:
+                    print("Failed to send command, continuing...")
+
+            elif (rnd_cmd == 1): # send temp_sensor + salinity frame
+                success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+                if not success:
+                    print("Failed to send command, continuing...")
+                success = send_sensor_command(client, sal_id, sal_data)
+                if not success:
+                    print("Failed to send command, continuing...")
+
+            else: # Send salinity + ph + temp frame
+                success = send_sensor_command(client, sal_id, sal_data)
+                if not success:
+                    print("Failed to send command, continuing...")
+
+                success = send_sensor_command(client, pH_id, pH_data)
+                if not success:
+                    print("Failed to send command, continuing...")
+
+                success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+                if not success:
+                    print("Failed to send command, continuing...")
             
             print(f"[{timestamp}] Waiting {delay} seconds before next cansend...")
             time.sleep(delay)  # Wait 30 seconds before next angle

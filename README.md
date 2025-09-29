@@ -7,11 +7,12 @@ Version Descriptions:
 - V5 - V4 + graph of pH sensor + graphing functionality
 - V5.5 - V4 + graph of pH sensor + graphing functionality + logging functionality
 - V6 - V5.5 + temp sensor graphics/functionality + salinity sensor graphics/functionality
+- V7 - Fix "starts plotting only when pdb command is sent" problem
 
 
 Important usage notes
 - May need to put CAN line down and back up before CAN works properly
-- salinity is measured in big numbers - assuming range is between 40,000 and 55,000
+- salinity is measured in big numbers - assumes range is between 40,000 and 55,000, graphs values in units of µS/cm * 1000
 - temp is assumed to be between -15 and 140 degrees celsius
 - If Raspberry pi is returning the message "device or resource busy" when attempting to put up CAN1 line with loopback on, and you have confirmed no other application/session is using the pi, try "sudo reboot"
 
