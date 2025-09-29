@@ -69,35 +69,22 @@ negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
 #     return int.from_bytes(num_in_bytes)
 
 def convert_to_hex(decimal, num_bytes):
-    # if (decimal < 0):
-    #     decimal = ~decimal + 1 # Two's complement for negative ints
-    #     print(f"After two's complement in convert_to_hex: {decimal}")
-
     if (abs(decimal) > ((2 ** ((num_bytes * 8) - 1)) - 1)):
         raise ValueError("Number is too large for given number of bytes")
 
     hexed = format(decimal, "X").zfill(2 * num_bytes)
     hex_list = list(hexed)
-    print(hex_list)
     if (hex_list[0] == '-'):
         if len(hex_list) == (2 * num_bytes):
             hex_list[0] = "0"
         else:
             hex_list = hex_list[1:]
-        print(hex_list)
         hexed = "".join(hex_list)
         return twos_complement(hexed)
 
     return format(decimal, "X").zfill(2 * num_bytes)
 
 def convert_to_little_endian(hex_str):
-    print(f"convert_to_little_endian: Given hex string: {hex_str}")
-    # hex_list = list(hex_str)
-    # if (hex_list[0] == '-'):
-    #     hex_list[0] = "0"
-    #     new_str = "".join(hex_list)
-    #     new_str = twos_complement(new_str)
-
     raw = bytes.fromhex(hex_str)
     return raw[::-1].hex()
 
@@ -112,13 +99,7 @@ def twos_complement(hex_str):
     hex_list = list(hex_str)
     for i in range(0, len(hex_list)):
         hex_list[i] = hex_conversion[hex_list[i].lower()]
-
-    print(f"twos_complement before replace = {"".join(hex_list)}")
     final_string = hex(int("".join(hex_list), 16) + 1).replace("0x", "")
-    # hex_list[-1] = hex(int(hex_list[-1], 16) + 1)
-    # print(f"twos_complement hex_list after adding 1 = {"".join(hex_list)}")
-    # hex_list[-1] = hex_list[-1][2:]
-    print(f"twos_complement hex_list after full replace = {"".join(hex_list)}")
     return final_string
 
 def send_pdb_command(client):
@@ -155,11 +136,11 @@ def send_sensor_command(client, frame_id, data: float):
     try:
         # Convert data to CAN format (2-byte hex number in little endian)
         # Multiplied by 1000 by CAN Frame documentation
-        print(f"Data passed to send_sensor_command: {data}")
+        # print(f"Data passed to send_sensor_command: {data}")
         can_data = int(data * 1000)
-        print("data converted to int, * 1000: ", can_data)
+        # print("data converted to int, * 1000: ", can_data)
         hexed_data = convert_to_hex(can_data, 4)
-        print("data converted to hex: ", hexed_data)
+        # print("data converted to hex: ", hexed_data)
         hex_bytes = convert_to_little_endian(hexed_data)
         can_msg = "cansend can1 " + frame_id + "##1" + hex_bytes
 
@@ -234,23 +215,29 @@ def main():
         cycle_count = 0
         start_time = time.time()
 
-        send_pdb_command(client)
-        time.sleep(delay)
-        send_pdb_command(client)
-        time.sleep(delay)
+        current_pH = round(random.uniform(0, 14))
+        current_water_temp = round(random.uniform(-14, 140), 3)
+        current_sal = round(random.uniform(35000, 60000))
+
+        # send_pdb_command(client)
+        # time.sleep(delay)
+        # send_pdb_command(client)
+        # time.sleep(delay)
         
         while True:
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
 
-            # send_pdb_command(client)
-            # time.sleep(delay)
+            send_pdb_command(client)
+            time.sleep(delay)
             
             # Generate random pH between 0 and 14
-            pH_data = round(random.uniform(0, 14))
-            temp_sensor_data = round(random.uniform(-14, 140), 3)
+
+            # Note: these random data points don't really check for out of bounds stuff (eg. ph = 15), but it should be fine - just testing if graphing is smooth
+            pH_data = round(random.uniform(current_pH - 1.5, current_pH + 1.5))
+            temp_sensor_data = round(random.uniform(current_water_temp - 5.0, current_water_temp + 5.0), 3)
             # print(f"generated temp_sensor_data: {temp_sensor_data}")
-            sal_data = round(random.uniform(35000, 60000)) # Expect data points between 35,000-60,000 µS/cm
+            sal_data = round(random.uniform(current_sal - 5, current_sal + 5)) # Expect data points between 35,000-60,000 µS/cm
             
             current_time = time.time()
             timestamp = datetime.now().strftime('%H:%M:%S')
@@ -265,37 +252,49 @@ def main():
             # if not success:
             #     print("Failed to send command, continuing...")
 
+            success = send_sensor_command(client, sal_id, sal_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
+            success = send_sensor_command(client, pH_id, pH_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
+            success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
             # === For combining frames randomly ===
-            rnd_cmd = random.randrange(2)
-            if (rnd_cmd == 0): # send pH + temp_sensor frame
-                success = send_sensor_command(client, pH_id, pH_data)
-                if not success:
-                    print("Failed to send command, continuing...")
+            # rnd_cmd = random.randrange(2)
+            # if (rnd_cmd == 0): # send pH + temp_sensor frame
+            #     success = send_sensor_command(client, pH_id, pH_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
 
-                success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-                if not success:
-                    print("Failed to send command, continuing...")
+            #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
 
-            elif (rnd_cmd == 1): # send temp_sensor + salinity frame
-                success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-                if not success:
-                    print("Failed to send command, continuing...")
-                success = send_sensor_command(client, sal_id, sal_data)
-                if not success:
-                    print("Failed to send command, continuing...")
+            # elif (rnd_cmd == 1): # send temp_sensor + salinity frame
+            #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
+            #     success = send_sensor_command(client, sal_id, sal_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
 
-            else: # Send salinity + ph + temp frame
-                success = send_sensor_command(client, sal_id, sal_data)
-                if not success:
-                    print("Failed to send command, continuing...")
+            # else: # Send salinity + ph + temp frame
+            #     success = send_sensor_command(client, sal_id, sal_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
 
-                success = send_sensor_command(client, pH_id, pH_data)
-                if not success:
-                    print("Failed to send command, continuing...")
+            #     success = send_sensor_command(client, pH_id, pH_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
 
-                success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-                if not success:
-                    print("Failed to send command, continuing...")
+            #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            #     if not success:
+            #         print("Failed to send command, continuing...")
             
             print(f"[{timestamp}] Waiting {delay} seconds before next cansend...")
             time.sleep(delay)  # Wait 30 seconds before next angle
