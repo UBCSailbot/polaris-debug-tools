@@ -1,12 +1,13 @@
 TODO
-- Test Test_Script for sensors
-    - Right now, plotting starts only on pdb can frame send - this needs to be fixed
-
+- Fix Problem: There is some sort of overlap? data is being parsed incorrectly 
+    and placed into incorrect histories (eg. temp data being put in self.pH_history)
+    - Is this because the cansend commands are being sent too close together? -> not good, I assume in actuality there will be a ton of commands all at once
+    - Possible solution: create a queue... take from queue - is that already being implemented?
 - Edit size of screen so it shows all temps and volts at the top of the screen
     - implemented, but needs to be tested with mainframe
 - Test program with mixed commands for all sensors
-- Fix the problem where it plots only on pdb can frame send
 - Force scrollArea to fully show all graphs horizontally
+- Test with actual data + actual sensors (ie integration)
 
 Current problems:
 
@@ -63,6 +64,10 @@ DONE
 - Add similar graph functionality for temp (V6)
 - Add similar logging functionality for temp (V6)
 - Add similar graphics/functionality for salinity (V6)
+- Fix the problem where it plots only on pdb can frame send (V7)
+- Created new update_history function to replace all my while loops
+
+
 
 
 Bug Tracker
