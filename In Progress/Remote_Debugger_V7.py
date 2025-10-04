@@ -133,7 +133,10 @@ def parse_0x12X_frame(data_hex):
     # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / (1000 * 1000)
-    
+
+    if (actual < 1 and actual != 0):
+        print(f"[ERROR]: sal data parsed as {actual}")    
+        raise ValueError()
     return {"sal": actual} 
 
 # pH data frame
@@ -146,21 +149,24 @@ def parse_0x11X_frame(data_hex):
     # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / 1000
+
+    if (actual < 1 and actual != 0):
+        print(f"[ERROR]: pH data parsed as {actual}")  
+        raise ValueError()  
     
     return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
 
+# temp data frame
 def parse_0x10X_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) < 2:
         raise ValueError("Insufficient data length for 0x10X frame")
     
-    # pH is in format of pH * 1000
+    # temp is in format of temp * 1000
     # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     # actual = raw / 1000
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / 1000.0
-    print(f"temp_sensor data: {actual}\n")
-    
     return {"temp_sensor": actual}
 
 ### ----------  Background CAN Dump Process ---------- ###
@@ -411,10 +417,11 @@ class CANWindow(QWidget):
         self.temp_values_label.setStyleSheet(value_style)
         
         self.volt_values_label = QLabel("Voltage Values: --")
+        self.volt_values_label.setMinimumWidth(900)
         self.volt_values_label.setAlignment(Qt.AlignLeft)
         self.volt_values_label.setStyleSheet(value_style)
         
-        self.rudder_values_label = QLabel("Rudder Angles:   Set: 0°  Actual:  --")
+        self.rudder_values_label = QLabel("Rudder Angles: Set: 0°  Actual:  --")
         self.rudder_values_label.setMinimumWidth(550)
         self.rudder_values_label.setAlignment(Qt.AlignLeft)
         self.rudder_values_label.setStyleSheet(value_style)
@@ -835,13 +842,13 @@ class CANWindow(QWidget):
                             raw_data = line.split(']')[-1].strip().split()
                             parsed = parse_0x206_frame(''.join(raw_data))
                             self.temp_values_label.setText(
-                                f"Temperature Values: "
+                                # f"Bat: "
                                 f"Temp 1: {parsed['temp_1']:6.2f}°C  "
                                 f"Temp 2: {parsed['temp_2']:6.2f}°C  "
                                 f"Temp 3: {parsed['temp_3']:6.2f}°C"
                             )
                             self.volt_values_label.setText(
-                                f"Voltage Values:     "
+                                # f"Voltage Values:     "
                                 f"Volt 1: {parsed['volt_1']:5.2f}V  "
                                 f"Volt 2: {parsed['volt_2']:5.2f}V  "
                                 f"Volt 3: {parsed['volt_3']:5.2f}V  "
@@ -1091,7 +1098,7 @@ class CANWindow(QWidget):
             sal_max = max(self.sal_history)
             sal_min = min(self.sal_history)
             margin = 10
-            self.sal_ax.set_ylim(max(sal_min - margin, 30), min(sal_max + margin, 70))
+            self.sal_ax.set_ylim(max(sal_min - margin, 20), min(sal_max + margin, 90))
 
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
