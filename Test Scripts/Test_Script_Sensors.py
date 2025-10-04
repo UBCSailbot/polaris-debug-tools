@@ -18,7 +18,7 @@ username = "sailbot"
 password = "sailbot"
 
 # Time between sent frames (in secs)
-delay = 6
+delay = 1
 
 # CAN Frame IDs
 temp_sensor_id = "100" # 0x10X
@@ -46,6 +46,11 @@ hex_conversion = {
 }
 
 negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
+
+slope = 0.1
+data_min = 0.25
+data_max = 0.75
+slope_data = 0.26
 
 ### ----------  Utility Functions ---------- ###
 # def convert_to_hex(decimal, num_bytes):
@@ -102,6 +107,20 @@ def twos_complement(hex_str):
     final_string = hex(int("".join(hex_list), 16) + 1).replace("0x", "")
     return final_string
 
+def generate_slope_data():
+    print("generate_slope_data() called")
+    global slope
+    global slope_data
+    if ((slope_data < data_min) or (slope_data > data_max)):
+        slope *= -1
+
+    slope_data += slope
+    print(f"slope_data: {slope_data}")
+    print(f"slope: {slope}")
+
+    # return slope_data
+    
+
 def send_pdb_command(client):
     try:
         # Send sample pdb command with data: 
@@ -156,7 +175,7 @@ def send_sensor_command(client, frame_id, data: float):
             return False
         else:
             sent = convert_from_little_endian_str(hex_bytes) / 1000
-            print(f"✓ Data sent: {sent} - CAN message: {can_msg}")
+            print(f"✓ Sent: {sent} - CAN message: {can_msg}")
             return True
         
     except Exception as e:
@@ -215,9 +234,9 @@ def main():
         cycle_count = 0
         start_time = time.time()
 
-        current_pH = round(random.uniform(0, 14))
-        current_water_temp = round(random.uniform(-14, 140), 3)
-        current_sal = round(random.uniform(35000, 60000))
+        # current_pH = round(slope_data * 14)
+        # current_water_temp = round(slope_data * 130, 3)
+        # current_sal = round(slope_data * 80000)
 
         # send_pdb_command(client)
         # time.sleep(delay)
@@ -234,11 +253,17 @@ def main():
             # Generate random pH between 0 and 14
 
             # Note: these random data points don't really check for out of bounds stuff (eg. ph = 15), but it should be fine - just testing if graphing is smooth
-            pH_data = round(random.uniform(current_pH - 1.5, current_pH + 1.5))
-            temp_sensor_data = round(random.uniform(current_water_temp - 5.0, current_water_temp + 5.0), 3)
-            # print(f"generated temp_sensor_data: {temp_sensor_data}")
-            sal_data = round(random.uniform(current_sal - 5, current_sal + 5)) # Expect data points between 35,000-60,000 µS/cm
-            
+            # pH_data = round(random.uniform(current_pH - 1.5, current_pH + 1.5))
+            # temp_sensor_data = round(random.uniform(current_water_temp - 5.0, current_water_temp + 5.0), 3)
+            # sal_data = round(random.uniform(current_sal - 5000, current_sal + 5000)) # Expect data points between 35,000-60,000 µS/cm
+            # print(f"generated sal_data: {sal_data}")
+
+            generate_slope_data()
+            print("generate_slope_data() ended")
+            pH_data = round(slope_data * 14)
+            temp_sensor_data = round(slope_data * 130, 3)
+            sal_data = round(slope_data * 100000)
+
             current_time = time.time()
             timestamp = datetime.now().strftime('%H:%M:%S')
             
