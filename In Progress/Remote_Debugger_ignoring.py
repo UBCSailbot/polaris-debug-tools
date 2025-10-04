@@ -1,5 +1,3 @@
-# V7 + ignores absurd data values
-
 import sys
 import paramiko
 import multiprocessing
@@ -125,7 +123,7 @@ def parse_0x204_frame(data_hex):
         "actual_rudder_angle": actual_rudder_angle
     }
 
-# Salinity data frame
+# Salinity data frame: set range of actual to be 0-120
 def parse_0x12X_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) < 4:
@@ -136,7 +134,7 @@ def parse_0x12X_frame(data_hex):
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / (1000 * 1000)
 
-    if (actual < 1 and actual != 0):
+    if (actual < 1 and actual != 0 or actual > 120):
         print(f"[ERROR]: sal data parsed as {actual}")    
         raise ValueError()
     return {"sal": actual} 
@@ -158,7 +156,7 @@ def parse_0x11X_frame(data_hex):
     
     return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
 
-# temp data frame
+# temp data frame: range is between -30, 180
 def parse_0x10X_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) < 2:
@@ -169,6 +167,11 @@ def parse_0x10X_frame(data_hex):
     # actual = raw / 1000
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / 1000.0
+
+    if (actual < -30 or actual > 180):
+        print(f"[ERROR]: pH data parsed as {actual}")  
+        raise ValueError() 
+    
     return {"temp_sensor": actual}
 
 ### ----------  Background CAN Dump Process ---------- ###
@@ -419,7 +422,7 @@ class CANWindow(QWidget):
         self.temp_values_label.setStyleSheet(value_style)
         
         self.volt_values_label = QLabel("Voltage Values: --")
-        self.volt_values_label.setMinimumWidth(900)
+        self.volt_values_label.setMinimumWidth(700)
         self.volt_values_label.setAlignment(Qt.AlignLeft)
         self.volt_values_label.setStyleSheet(value_style)
         
@@ -690,22 +693,36 @@ class CANWindow(QWidget):
         left_layout.addLayout(self.commands_grid)
 
         right_layout = QVBoxLayout()
+        right_labels_layout = QVBoxLayout()
         right_layout.setSpacing(0)  # Remove spacing between widgets
-        right_layout.addWidget(self.temp_values_label)
-        right_layout.addWidget(self.volt_values_label)
-        right_layout.addWidget(self.rudder_values_label)
+        # right_layout.addWidget(self.temp_values_label)
+        # right_layout.addWidget(self.volt_values_label)
+        # right_layout.addWidget(self.rudder_values_label)
+        right_labels_layout.addWidget(self.temp_values_label)
+        right_labels_layout.addWidget(self.volt_values_label)
+        right_labels_layout.addWidget(self.rudder_values_label)
+        right_layout.addLayout(right_labels_layout)
         right_layout.addSpacing(10)  # Add small spacing before plots
-        right_layout.addWidget(self.temp_canvas)
-        right_layout.addWidget(self.volt_canvas)
-        right_layout.addWidget(self.rudder_canvas)
-        right_layout.addWidget(self.pH_canvas)
-        right_layout.addWidget(self.temp_sensor_canvas)
-        right_layout.addWidget(self.sal_canvas)
+        right_graphs_layout = QVBoxLayout()
+        # right_layout.addWidget(self.temp_canvas)
+        # right_layout.addWidget(self.volt_canvas)
+        # right_layout.addWidget(self.rudder_canvas)
+        # right_layout.addWidget(self.pH_canvas)
+        # right_layout.addWidget(self.temp_sensor_canvas)
+        # right_layout.addWidget(self.sal_canvas)
+        right_graphs_layout.addWidget(self.temp_canvas)
+        right_graphs_layout.addWidget(self.volt_canvas)
+        right_graphs_layout.addWidget(self.rudder_canvas)
+        right_graphs_layout.addWidget(self.pH_canvas)
+        right_graphs_layout.addWidget(self.temp_sensor_canvas)
+        right_graphs_layout.addWidget(self.sal_canvas)
+        # right_layout.addLayout(right_graphs_layout)
 
         container_widget = QWidget()
-        container_widget.setLayout(right_layout)
+        container_widget.setLayout(right_graphs_layout)
         container_sp = container_widget.sizePolicy()
-        container_sp.setHorizontalPolicy(QSizePolicy.Ignored)
+        # container_sp.setHorizontalPolicy(QSizePolicy.Ignored)
+        container_sp.setHorizontalPolicy(QSizePolicy.Minimum)
         container_widget.setSizePolicy(container_sp)
         container_widget.setMinimumWidth(300)
         scroll_area = QScrollArea()
@@ -714,11 +731,14 @@ class CANWindow(QWidget):
         # scroll_area.ensureWidgetVisible(container_widget)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # Doesn't resize content so that scrollbar isn't necessary
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) # Doesn't resize content so that scrollbar isn't necessary
+        right_layout.addWidget(scroll_area)
 
         bottom_layout = QHBoxLayout()
         bottom_layout.addLayout(left_layout, 2)
         # bottom_layout.addLayout(right_layout, 3)
-        bottom_layout.addWidget(scroll_area)
+        # bottom_layout.addLayout(right_labels_layout)
+        # bottom_layout.addWidget(scroll_area)
+        bottom_layout.addLayout(right_layout)
 
         main_layout = QVBoxLayout()
         main_layout.addLayout(top_bar_layout)
@@ -797,7 +817,7 @@ class CANWindow(QWidget):
             if self.actual_rudder_history:
                 current_actual = f"{self.actual_rudder_history[-1]:6.1f}°"
             else:
-                current_actual = "    --"
+                current_actual = "--"
             self.rudder_values_label.setText(
                 f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {current_actual}"
             )
@@ -929,18 +949,6 @@ class CANWindow(QWidget):
         # Always update plots every timer cycle (independent of CAN messages)
         if len(self.time_history) > 0:
             # Update all plot data
-
-            # Fill in missing actual rudder data if needed
-            # while len(self.actual_rudder_history) > len(self.time_history):
-            #     self.actual_rudder_history.pop(0)
-            # while len(self.actual_rudder_history) < len(self.time_history):
-            #     # Use last known value or 0 if no data yet
-            #     last_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else 0
-            #     self.actual_rudder_history.append(last_rudder)
-
-            # self.actual_rudder_line.set_data(self.time_history, self.actual_rudder_history)
-            # self.set_rudder_line.set_data(self.time_history, self.set_rudder_history)
-
             self.update_history(self.temp1_history)
             self.update_history(self.temp2_history)
             self.update_history(self.temp3_history)
@@ -952,7 +960,7 @@ class CANWindow(QWidget):
             self.update_history(self.temp_sensor_history)
             self.update_history(self.sal_history)
 
-
+            # Fill in missing data if needed/pop old data if too many data points
             self.temp1_line.set_data(self.time_history, self.temp1_history)
             self.temp2_line.set_data(self.time_history, self.temp2_history)
             self.temp3_line.set_data(self.time_history, self.temp3_history)
@@ -964,31 +972,6 @@ class CANWindow(QWidget):
             self.pH_line.set_data(self.time_history, self.pH_history)
             self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
             self.sal_line.set_data(self.time_history, self.sal_history)
-
-            # # Fill in missing pH data if needed # pH Change
-            # # Note that all histories (eg. pH_history) need to be the same length as time_history
-            # #  to correctly graph - or else it will break the application
-            # while len(self.pH_history) > len(self.time_history):
-            #     self.pH_history.pop(0)
-            # while len(self.pH_history) < len(self.time_history):
-            #     last_val = self.pH_history[-1] if self.pH_history else 0
-            #     self.pH_history.append(last_val)
-
-            # # print(f"pH_history: {self.pH_history}") # Debug log statement - pH Change
-
-            # # TODO: repeated code, improve this - abstract to a function
-            # while len(self.temp_sensor_history) > len(self.time_history):
-            #     self.temp_sensor_history.pop(0)
-            # while len(self.temp_sensor_history) < len(self.time_history):
-            #     last_val = self.temp_sensor_history[-1] if self.temp_sensor_history else 0
-            #     self.temp_sensor_history.append(last_val)
-
-
-            # while len(self.sal_history) > len(self.time_history):
-            #     self.sal_history.pop(0)
-            # while len(self.sal_history) < len(self.time_history):
-            #     last_val = self.sal_history[-1] if self.sal_history else 0
-            #     self.sal_history.append(last_val)
 
             print(f"sal_history = {self.sal_history}")
             print(f"pH_history = {self.pH_history}")
