@@ -48,9 +48,9 @@ hex_conversion = {
 negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
 
 slope = 0.1
-data_min = 0.25
-data_max = 0.75
-slope_data = 0.26
+data_min = 0.2
+data_max = 0.8
+slope_data = data_min
 
 ### ----------  Utility Functions ---------- ###
 # def convert_to_hex(decimal, num_bytes):
@@ -108,15 +108,12 @@ def twos_complement(hex_str):
     return final_string
 
 def generate_slope_data():
-    print("generate_slope_data() called")
     global slope
     global slope_data
     if ((slope_data < data_min) or (slope_data > data_max)):
         slope *= -1
 
     slope_data += slope
-    print(f"slope_data: {slope_data}")
-    print(f"slope: {slope}")
 
     # return slope_data
     
@@ -246,9 +243,6 @@ def main():
         while True:
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
-
-            send_pdb_command(client)
-            time.sleep(delay)
             
             # Generate random pH between 0 and 14
 
@@ -259,9 +253,8 @@ def main():
             # print(f"generated sal_data: {sal_data}")
 
             generate_slope_data()
-            print("generate_slope_data() ended")
-            pH_data = round(slope_data * 14)
-            temp_sensor_data = round(slope_data * 130, 3)
+            pH_data = round(slope_data * 10)
+            temp_sensor_data = round(slope_data * 100, 3)
             sal_data = round(slope_data * 100000)
 
             current_time = time.time()
@@ -271,12 +264,14 @@ def main():
             total_elapsed = current_time - start_time
             print(f"[{timestamp}] Total elapsed time: {total_elapsed:.1f}s")
             
-            print(f"[{timestamp}] ", end="")
+            # print(f"[{timestamp}] ", end="")
 
             # success = send_sensor_command(client, sal_id, sal_data)
             # if not success:
             #     print("Failed to send command, continuing...")
 
+            send_pdb_command(client)
+            # time.sleep(delay)
             success = send_sensor_command(client, sal_id, sal_data)
             if not success:
                 print("Failed to send command, continuing...")
@@ -292,7 +287,7 @@ def main():
             # === For combining frames randomly ===
             # rnd_cmd = random.randrange(2)
             # if (rnd_cmd == 0): # send pH + temp_sensor frame
-            #     success = send_sensor_command(client, pH_id, pH_data)
+            #     success = (client, pH_id, pH_data)
             #     if not success:
             #         print("Failed to send command, continuing...")
 
