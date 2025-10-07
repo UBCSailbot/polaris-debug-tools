@@ -137,8 +137,10 @@ def parse_0x12X_frame(data_hex):
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / (1000 * 1000)
 
-    if (actual < 1 and actual != 0):
+    if (actual < 1 and actual != 0 or actual > 100):
         print(f"[ERROR]: sal data parsed as {actual}")    
+        print(f"data_hex = {data_hex}")
+        print(f"raw = {raw}")
         raise ValueError()
     return {"sal": actual} 
 
@@ -153,8 +155,10 @@ def parse_0x11X_frame(data_hex):
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / 1000
 
-    if (actual < 1 and actual != 0):
+    if (actual < 1 and actual != 0 or actual > 14):
         print(f"[ERROR]: pH data parsed as {actual}")  
+        print(f"data_hex = {data_hex}")
+        print(f"raw = {raw}")
         raise ValueError()  
     
     return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
@@ -170,6 +174,13 @@ def parse_0x10X_frame(data_hex):
     # actual = raw / 1000
     raw = convert_from_little_endian_str(data_hex)
     actual = raw / 1000.0
+
+    if (actual < -30 and actual != 0 or actual > 150):
+        print(f"[ERROR]: temp_sensor data parsed as {actual}")  
+        print(f"data_hex = {data_hex}")
+        print(f"raw = {raw}")
+        raise ValueError()  
+    
     return {"temp_sensor": actual}
 
 ### ----------  Background CAN Dump Process ---------- ###
@@ -179,12 +190,19 @@ def candump_process(queue: multiprocessing.Queue):
     try:
         client.connect(hostname, username=username, password=password)
         transport = client.get_transport()
+        # session = transport.open_session()
+        # session.exec_command("bash sailbot_workspace/scripts/canup.sh -l")
         session = transport.open_session()
         session.exec_command("candump can1")
         while True:
             if session.recv_ready():
                 line = session.recv(1024).decode()
-                queue.put(line.strip())
+                # print(f"line.strip() = {line.strip()}")
+                # print(f"line.split(newline) = {line.split("\n")}")
+                lines = line.split("\n")
+                for l in lines:
+                    if (l != ""): queue.put(l.strip())
+                # queue.put(line.strip())
             time.sleep(0.1)
     except Exception as e:
         queue.put(f"[ERROR] {str(e)}")
@@ -919,6 +937,8 @@ class CANWindow(QWidget):
                             self.temp_sensor_history.append(parsed["temp_sensor"])
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
+                            print(f"line parsed: {line}\n--- end of line ---")
+                            print(f"raw_data = {raw_data}")
                        
                     # Handle pH sensor frame
                     elif frame_id[0:2] == "11":
@@ -930,6 +950,8 @@ class CANWindow(QWidget):
                                                 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
+                            print(f"line parsed: {line}\n--- end of line ---")
+                            print(f"raw_data = {raw_data}")
                         # TODO: Add variables for each CAN frame id
                     
                     # Handle salinity sensor frame
@@ -942,6 +964,10 @@ class CANWindow(QWidget):
                                                 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
+                            print(f"line parsed: {line}\n--- end of line ---")
+                            print(f"parts = {parts}")
+                            print(f"frame_id = {frame_id}")
+                            print(f"raw_data = {raw_data}")
                             
         
         # Always update plots every timer cycle (independent of CAN messages)
@@ -971,10 +997,10 @@ class CANWindow(QWidget):
             self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
             self.sal_line.set_data(self.time_history, self.sal_history)
 
-            print(f"sal_history = {self.sal_history}")
-            print(f"pH_history = {self.pH_history}")
-            print(f"temp_sensor_history = {self.temp_sensor_history}")
-            print(f"time_history = {self.time_history}")
+            # print(f"sal_history = {self.sal_history}")
+            # print(f"pH_history = {self.pH_history}")
+            # print(f"temp_sensor_history = {self.temp_sensor_history}")
+            # print(f"time_history = {self.time_history}")
 
             # Log current values
             if (new_msg_to_log):
@@ -1081,7 +1107,7 @@ class CANWindow(QWidget):
             sal_max = max(self.sal_history)
             sal_min = min(self.sal_history)
             margin = 10
-            self.sal_ax.set_ylim(max(sal_min - margin, 20), min(sal_max + margin, 90))
+            self.sal_ax.set_ylim(max(sal_min - margin, 5), min(sal_max + margin, 95))
 
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
