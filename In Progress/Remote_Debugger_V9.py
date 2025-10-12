@@ -151,13 +151,18 @@ def parse_0x12X_frame(data_hex):
     # Conductivity in µS/cm * 1000
     # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
     raw = convert_from_little_endian_str(data_hex)
-    actual = raw / (1000 * 1000)
+    actual = raw / (1000)
 
-    if (actual < 1 and actual != 0 or actual > 100):
+    if (actual < 1 and actual != 0 or actual > 550000):
         print(f"[ERROR]: sal data parsed as {actual}")    
         print(f"data_hex = {data_hex}")
         print(f"raw = {raw}")
         raise ValueError()
+    
+    if (actual < 100): actual = round(actual, 2)
+    elif (actual < 1000): actual = round(actual, 1)
+    elif (actual < 10000): actual = round(actual)
+    elif (actual < 100000): actual = round(actual, -1)
     return {"sal": actual} 
 
 # pH data frame
@@ -177,7 +182,7 @@ def parse_0x11X_frame(data_hex):
         print(f"raw = {raw}")
         raise ValueError()  
     
-    return {"pH": actual} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
+    return {"pH": round(actual, 2)} # TODO: create variables to store all the names to ensure consistency - not literal strings - do that in parse fns for 100, 110, 120
 
 # temp data frame
 def parse_0x10X_frame(data_hex):
@@ -191,13 +196,13 @@ def parse_0x10X_frame(data_hex):
     raw = convert_from_little_endian_str(data_hex)
     actual = (raw / 1000.0) - 273.15
 
-    if (actual < -30 and actual != 0 or actual > 150):
+    if (actual < -130 and actual != 0 or actual > 1350):
         print(f"[ERROR]: temp_sensor data parsed as {actual}")  
         print(f"data_hex = {data_hex}")
         print(f"raw = {raw}")
         raise ValueError()  
     
-    return {"temp_sensor": actual}
+    return {"temp_sensor": round(actual, 3)}
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -558,9 +563,9 @@ class CANWindow(QWidget):
         self.sal_ax = self.sal_figure.add_subplot(111)
         self.sal_ax.set_title("Salinity vs Time")
         self.sal_ax.set_xlabel("Time (s)")
-        self.sal_ax.set_ylabel("Salinity (µS/cm * 1000)")
+        self.sal_ax.set_ylabel("Salinity (µS/cm)")
         self.sal_ax.set_xlim(0, 60)
-        self.sal_ax.set_ylim(40, 55)
+        self.sal_ax.set_ylim(40000, 550000)
         self.sal_ax.grid(True, alpha=0.3)
 
         # Initialize empty lines for salinity data
@@ -990,6 +995,9 @@ class CANWindow(QWidget):
                             print(f"frame_id = {frame_id}")
                             print(f"raw_data = {raw_data}")
 
+                # # limits the number of data points to prevent program crash from too much memory use over time
+                # if (len(self.time_history) > 361): self.time_history.pop(0)
+
                 # Update all histories - Fill in missing data if needed/pop old data if too many data points
                 self.update_history(self.temp1_history)
                 self.update_history(self.temp2_history)
@@ -1013,7 +1021,7 @@ class CANWindow(QWidget):
                         self.temp_sensor_history[-1], self.sal_history[-1]
                     )
 
-                # print(f"sal_history = {self.sal_history}")
+                print(f"sal_history = {self.sal_history}")
                 print(f"pH_history = {self.pH_history}")
                 print(f"temp_sensor_history = {self.temp_sensor_history}")
                 # print(f"time_history = {self.time_history}")
@@ -1127,14 +1135,14 @@ class CANWindow(QWidget):
             temp_max = max(self.temp_sensor_history)
             temp_min = min(self.temp_sensor_history)
             margin = 5
-            self.temp_sensor_ax.set_ylim(max(temp_min - margin, -15), min(140, temp_max + margin))
+            self.temp_sensor_ax.set_ylim(max(temp_min - margin, -130), min(1275, temp_max + margin))
 
         # === Auto Y adjustment (sal sensor) ===
         if (self.sal_history):
             sal_max = max(self.sal_history)
             sal_min = min(self.sal_history)
             margin = 10
-            self.sal_ax.set_ylim(max(sal_min - margin, 5), min(sal_max + margin, 95))
+            self.sal_ax.set_ylim(max(sal_min - margin, 0), min(sal_max + margin, 500000))
 
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
