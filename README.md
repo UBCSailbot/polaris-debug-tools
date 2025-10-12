@@ -1,13 +1,17 @@
 # polaris-debug-tools
 Providing debug tools for testing of POLARIS's systems.
 
-Note: V6 is the most updated (working) version.
+Note: V9 is the most updated (working) version.
 Version Descriptions:
 - V4.1 - V4 + graph of pH sensor only
 - V5 - V4 + graph of pH sensor + graphing functionality
 - V5.5 - V4 + graph of pH sensor + graphing functionality + logging functionality
 - V6 - V5.5 + temp sensor graphics/functionality + salinity sensor graphics/functionality
-- V7 - Fix "starts plotting only when pdb command is sent" problem
+- V7 - Fixed "starts plotting only when pdb command is sent" problem
+- ignoring - V7 + ignoring absurd data from possible issues with parsing
+- V8 - Fix data issues - logging data incorrectly, appears to be parsing incorrectly
+- V8_tabs - Improves UI to more easily view graphs
+- V9 - Changed parsing for temperature, Revert UI
 
 
 Important usage notes
