@@ -169,7 +169,7 @@ def parse_0x12X_frame(data_hex):
 def parse_0x11X_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) != 2:
-        raise ValueError("Incorrect data length (num bytes): ID 0x11X")
+        raise ValueError(f"Incorrect data length (num bytes): ID 0x11X\nExpecting: 2 bytes, Received: {len(raw_bytes)}")
     
     # pH is in format of pH * 1000
     # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
@@ -889,11 +889,9 @@ class CANWindow(QWidget):
             try:
                 self.can_log_queue.put_nowait(line)
             except:
-                print(f"line was not logged!")
                 pass  # Queue full, skip logging this message to avoid blocking
 
             if line.startswith("can1"):
-                print(f"line was graphed!")
                 new_msg_to_log = True
                 parts = line.split()
                 if len(parts) > 2:
@@ -1012,7 +1010,6 @@ class CANWindow(QWidget):
 
                 # Log current values
                 if (new_msg_to_log and (len(self.time_history) > 0)):
-                    print("Message logged!")
                     actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
                     self._log_values(
                         self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
@@ -1021,9 +1018,12 @@ class CANWindow(QWidget):
                         self.temp_sensor_history[-1], self.sal_history[-1]
                     )
 
-                print(f"sal_history = {self.sal_history}")
-                print(f"pH_history = {self.pH_history}")
-                print(f"temp_sensor_history = {self.temp_sensor_history}")
+                # print(f"sal_history = {self.sal_history}")
+                # print(f"pH_history = {self.pH_history}")
+                # print(f"temp_sensor_history = {self.temp_sensor_history}")
+                print(f"salinity = {self.sal_history[-1]}")
+                print(f"pH = {self.pH_history[-1]}")
+                print(f"water_temp = {self.temp_sensor_history[-1]}")
                 # print(f"time_history = {self.time_history}")
                             
         
