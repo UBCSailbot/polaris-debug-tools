@@ -12,6 +12,11 @@ Version Descriptions:
 - V8 - Fix data issues - logging data incorrectly, appears to be parsing incorrectly
 - V8_tabs - Improves UI to more easily view graphs
 - V9 - Changed parsing for temperature, Revert UI
+- V10 - refactoring to more easily add stuff
+- V11 - V10 + added visuals for data sensor values
+- V12 - V11 + new DRV/PWR data and graph visuals/functionality
+
+47400 sal max
 
 
 Important usage notes

@@ -279,16 +279,17 @@ def can_logging_process(queue: multiprocessing.Queue, log_queue: multiprocessing
             while True:
                 try:
                     # Get message from queue with timeout
-                    message = log_queue.get(timeout=1.0)
-                    if message == "__EXIT__":
-                        break
-                    
-                    # Log the message
-                    timestamp = datetime.now().isoformat()
-                    elapsed_time = time.time() - start_time
-                    writer.writerow([timestamp, f'{elapsed_time:.3f}', message])
-                    csv_file.flush()
-                    
+                    if not log_queue.empty():
+                        message = log_queue.get(timeout=1.0)
+                        if message == "__EXIT__":
+                            break
+                        # Log the message
+                        timestamp = datetime.now().isoformat()
+                        elapsed_time = time.time() - start_time
+                        writer.writerow([timestamp, f'{elapsed_time:.3f}', message])
+                        csv_file.flush()
+                # except queue.empty as empty:
+                #     print(f"CAN logging queue empty")
                 except Exception as e:
                     print(f"Error in CAN logging: {e}")
                     continue
@@ -861,13 +862,17 @@ class CANWindow(QWidget):
             line = self.queue.get()
             self.output_display.append(line)
   
+            print(f"line parsed = {line}")
+
             # Send to separate logging process (non-blocking)
             try:
                 self.can_log_queue.put_nowait(line)
             except:
+                print(f"line was not logged!")
                 pass  # Queue full, skip logging this message to avoid blocking
 
             if line.startswith("can1"):
+                print(f"line was graphed!")
                 new_msg_to_log = True
                 parts = line.split()
                 if len(parts) > 2:
@@ -1004,6 +1009,7 @@ class CANWindow(QWidget):
 
             # Log current values
             if (new_msg_to_log):
+                print("Message logged!")
                 actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
                 self._log_values(
                     self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],

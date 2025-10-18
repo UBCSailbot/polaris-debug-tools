@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtGui import QPixmap, QFont, QIcon
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -314,6 +314,7 @@ class CANWindow(QWidget):
         self.last_temp_update = time.time()  # Track last temperature update
 
         self.setWindowTitle("Remote Node GUI - POLARIS")
+        self.setWindowIcon(QIcon('logo.png'))
         self.setGeometry(30, 30, 1500, 650)
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -402,10 +403,10 @@ class CANWindow(QWidget):
 
     def init_ui(self):
         # === Top Bar ===
-        self.logo_label = QLabel()
-        pixmap = QPixmap("logo.png")
-        pixmap = pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.logo_label.setPixmap(pixmap)
+        # self.logo_label = QLabel()
+        # pixmap = QPixmap("logo.png")
+        # pixmap = pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        # self.logo_label.setPixmap(pixmap)
 
         self.temp_label = QLabel("RPI Temp: --")
         self.status_label = QLabel("DISCONNECTED")
@@ -413,8 +414,8 @@ class CANWindow(QWidget):
 
         top_bar_layout = QHBoxLayout()
         top_bar_layout.addStretch()
-        top_bar_layout.addWidget(self.logo_label)
-        top_bar_layout.addSpacing(10)
+        # top_bar_layout.addWidget(self.logo_label)
+        # top_bar_layout.addSpacing(10)
         top_bar_layout.addWidget(self.temp_label)
         top_bar_layout.addSpacing(10)
         top_bar_layout.addWidget(self.status_label)
@@ -426,10 +427,10 @@ class CANWindow(QWidget):
             font-size: 16px;
             font-weight: bold;
             font-family: 'Courier New', monospace;
-            padding: 6px;
+            padding: 4px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
-            border-radius: 6px;
+            border-radius: 4px;
             margin: 2px;
         """
         

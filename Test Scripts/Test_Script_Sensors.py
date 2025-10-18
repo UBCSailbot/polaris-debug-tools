@@ -73,20 +73,24 @@ slope_data = data_min
 # def convert_from_bytes(num_in_bytes):
 #     return int.from_bytes(num_in_bytes)
 
+# def convert_to_hex(decimal, num_bytes):
+#     if (abs(decimal) > ((2 ** ((num_bytes * 8) - 1)) - 1)):
+#         raise ValueError("Number is too large for given number of bytes")
+
+#     hexed = format(decimal, "X").zfill(2 * num_bytes)
+#     hex_list = list(hexed)
+#     if (hex_list[0] == '-'):
+#         if len(hex_list) == (2 * num_bytes):
+#             hex_list[0] = "0"
+#         else:
+#             hex_list = hex_list[1:]
+#         hexed = "".join(hex_list)
+#         return twos_complement(hexed)
+
+#     return format(decimal, "X").zfill(2 * num_bytes)
+
+# Works only for positive numbers
 def convert_to_hex(decimal, num_bytes):
-    if (abs(decimal) > ((2 ** ((num_bytes * 8) - 1)) - 1)):
-        raise ValueError("Number is too large for given number of bytes")
-
-    hexed = format(decimal, "X").zfill(2 * num_bytes)
-    hex_list = list(hexed)
-    if (hex_list[0] == '-'):
-        if len(hex_list) == (2 * num_bytes):
-            hex_list[0] = "0"
-        else:
-            hex_list = hex_list[1:]
-        hexed = "".join(hex_list)
-        return twos_complement(hexed)
-
     return format(decimal, "X").zfill(2 * num_bytes)
 
 def convert_to_little_endian(hex_str):
@@ -96,16 +100,17 @@ def convert_to_little_endian(hex_str):
 def convert_from_little_endian_str(hex_str):
     raw = bytes.fromhex(hex_str)
     big_endian = raw[::-1].hex()
-    if big_endian[0] in negative_hex_starting_digits:
-        return int(twos_complement(big_endian), 16) * -1
+    # for twos complement
+    # if big_endian[0] in negative_hex_starting_digits:
+    #     return int(twos_complement(big_endian), 16) * -1
     return int(big_endian, 16)
 
-def twos_complement(hex_str):
-    hex_list = list(hex_str)
-    for i in range(0, len(hex_list)):
-        hex_list[i] = hex_conversion[hex_list[i].lower()]
-    final_string = hex(int("".join(hex_list), 16) + 1).replace("0x", "")
-    return final_string
+# def twos_complement(hex_str):
+#     hex_list = list(hex_str)
+#     for i in range(0, len(hex_list)):
+#         hex_list[i] = hex_conversion[hex_list[i].lower()]
+#     final_string = hex(int("".join(hex_list), 16) + 1).replace("0x", "")
+#     return final_string
 
 def generate_slope_data():
     global slope
@@ -149,15 +154,24 @@ def send_pdb_command(client):
 
 # Use this function to CAN send a frame for any data sensor
 def send_sensor_command(client, frame_id, data: float):
+    global pH_id
+    global temp_sensor_id
+    global sal_id
     try:
         # Convert data to CAN format (2-byte hex number in little endian)
         # Multiplied by 1000 by CAN Frame documentation
         # print(f"Data passed to send_sensor_command: {data}")
         can_data = int(data * 1000)
         # print("data converted to int, * 1000: ", can_data)
-        hexed_data = convert_to_hex(can_data, 4)
+        numBytes = 0
+        if (frame_id == pH_id): numBytes = 2
+        elif (frame_id == temp_sensor_id): numBytes = 3
+        elif (frame_id == sal_id): numBytes = 4
+        else: print(f"[ERROR] send_sensor_command(): frame_id not recognized")
+        hexed_data = convert_to_hex(can_data, numBytes)
         # print("data converted to hex: ", hexed_data)
         hex_bytes = convert_to_little_endian(hexed_data)
+        print("hex_bytes: ", hex_bytes)
         can_msg = "cansend can1 " + frame_id + "##1" + hex_bytes
 
         # Execute the cansend command
@@ -253,9 +267,10 @@ def main():
             # print(f"generated sal_data: {sal_data}")
 
             generate_slope_data()
-            pH_data = round(slope_data * 10)
-            temp_sensor_data = round(slope_data * 100, 3)
-            sal_data = round(slope_data * 100000)
+            pH_data = round(slope_data * 15)
+            temp_sensor_data = round((slope_data * 1100) + 273.15, 3)
+            sal_data = round(slope_data * 575000, 3)
+        
 
             current_time = time.time()
             timestamp = datetime.now().strftime('%H:%M:%S')
@@ -270,47 +285,52 @@ def main():
             # if not success:
             #     print("Failed to send command, continuing...")
 
-            send_pdb_command(client)
+            # send_pdb_command(client)
             # time.sleep(delay)
-            success = send_sensor_command(client, sal_id, sal_data)
-            if not success:
-                print("Failed to send command, continuing...")
 
+
+            print(f"generated pH_data = {pH_data}")
             success = send_sensor_command(client, pH_id, pH_data)
             if not success:
                 print("Failed to send command, continuing...")
 
+            print(f"generated temp_sensor_data = {temp_sensor_data}")
             success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
             if not success:
                 print("Failed to send command, continuing...")
 
-            # === For combining frames randomly ===
-            # rnd_cmd = random.randrange(2)
+            print(f"generated sal_data = {sal_data}")
+            success = send_sensor_command(client, sal_id, sal_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
+            # # === For combining frames randomly ===
+            # rnd_cmd = random.randrange(3)
             # if (rnd_cmd == 0): # send pH + temp_sensor frame
-            #     success = (client, pH_id, pH_data)
+            #     success = send_sensor_command(client, pH_id, pH_data)
             #     if not success:
             #         print("Failed to send command, continuing...")
 
-            #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
+            #     # success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            #     # if not success:
+            #     #     print("Failed to send command, continuing...")
 
             # elif (rnd_cmd == 1): # send temp_sensor + salinity frame
             #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
             #     if not success:
             #         print("Failed to send command, continuing...")
-            #     success = send_sensor_command(client, sal_id, sal_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
+            #     # success = send_sensor_command(client, sal_id, sal_data)
+            #     # if not success:
+            #     #     print("Failed to send command, continuing...")
 
             # else: # Send salinity + ph + temp frame
             #     success = send_sensor_command(client, sal_id, sal_data)
             #     if not success:
             #         print("Failed to send command, continuing...")
 
-            #     success = send_sensor_command(client, pH_id, pH_data)
-            #     if not success:
-            #         print("Failed to send command, continuing...")
+                # success = send_sensor_command(client, pH_id, pH_data)
+                # if not success:
+                #     print("Failed to send command, continuing...")
 
             #     success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
             #     if not success:
