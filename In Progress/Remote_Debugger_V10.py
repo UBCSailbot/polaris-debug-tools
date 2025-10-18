@@ -978,8 +978,7 @@ class CANWindow(QWidget):
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
                             print(f"line parsed: {line}\n--- end of line ---")
-                            print(f"raw_data = {raw_data}")
-                        # TODO: Add variables for each CAN frame id
+                            # TODO: Add variables for each CAN frame id
                     
                     # Handle salinity sensor frame
                     elif frame_id[0:2] == "12":

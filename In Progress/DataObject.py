@@ -63,16 +63,16 @@ class DataObject:
 
     # Return a tuple with the time:value of the most current data point collected
     def get_current(self):
-        return self.current, self.data[self.current] # returns the time, value of most recently logged datapoint
+        return self.current, self.data[self.current] if not None else 0 # returns the time, value of most recently logged datapoint
     
     # add a datapoint to self.data (history equivalent)
     def add_datapoint(self, time, data):
         self.data[time] = data
         self.current = time
         values = []
-        for key in self.data.keys:
+        for key in self.data.keys():
             values.append(self.data[key])
-        self.line.set_data(self.data.keys, values)
+        self.line.set_data(list(self.data.keys()), values)
         return
 
 
