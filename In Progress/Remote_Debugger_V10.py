@@ -774,7 +774,7 @@ class CANWindow(QWidget):
         right_layout.addWidget(scroll_area)
 
         bottom_layout = QHBoxLayout()
-        bottom_layout.addLayout(left_layout, 1)
+        bottom_layout.addLayout(left_layout)
         bottom_layout.addLayout(right_layout, 1)
 
         main_layout = QVBoxLayout()
@@ -1017,7 +1017,7 @@ class CANWindow(QWidget):
                     self._log_values(
                         self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
                         self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
-                        self.volt4_history[-1], self.rudder_angle, actual_rudder, pH_obj.get_current(), # self.pH_history[-1],
+                        self.volt4_history[-1], self.rudder_angle, actual_rudder, pH_obj.get_current()[1], # self.pH_history[-1],
                         self.temp_sensor_history[-1], self.sal_history[-1]
                     )
 
