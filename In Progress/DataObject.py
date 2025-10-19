@@ -23,30 +23,18 @@ from datetime import datetime
 #             values.append(self.data[key])
 #         self.line.set_data(self.data.keys, values)
 
+graph_margin = 10
 
 # data is a dictionary with values = data logged, keys = time logged
 class GraphObject: # struct which keeps together objects needed for a graph
-    def __init__(self, figure: plt.Figure, canvas: FigureCanvas, ax: plt.Axes): # data = history?
+    def __init__(self, figure: plt.Figure, canvas: FigureCanvas, ax: plt.Axes, minn, maxn): # data = history?
         self.figure = figure
         self.canvas = canvas
         self.ax = ax
-        self.lines = [] # list of line objects - each line contains its own data so to speak
-        # for line in lines:
-        #     line_obj = LineObject(line)
-        #     self.lines.append(line_obj)
-        # self.ax.legend()
+        self.maxn = maxn # max data value expected
+        self.minn = minn # min data value expected
         return
 
-    # def add_line(self, line):
-    #     # TODO
-    #     self.ax.legend()
-    #     return
-
-    # modify ylim based on the datapoints in the graph
-    # just don't call it for pH
-    # this replaces Auto Y adjustment
-    def adjust_ylim():
-        pass
 
 class DataObject:
     def __init__(self, name, units, parsing_fn, graph: GraphObject = None, line: plt.Line2D = None, label: QLabel = None):
@@ -60,21 +48,35 @@ class DataObject:
         self.current = None # key of most recent data entry datapoint
 
         return 
+    
+    # modify ylim based on the datapoints in the graph
+    # just don't call it for pH
+    # this replaces Auto Y adjustment
+    def adjust_ylim(self):
+        values = self.data.values()
+        if (values):
+            maxn = max(values)
+            minn = min(values)
+            self.graph.ax.set_ylim(max(minn - graph_margin, self.graph.minn), min(maxn + graph_margin, self.graph.maxn))
 
     # Return a tuple with the time:value of the most current data point collected
     def get_current(self):
-        return self.current, self.data[self.current] if not None else 0 # returns the time, value of most recently logged datapoint
+        val = self.data.get(self.current) if (self.current is not None) else 0
+        return self.current, val # returns the time, value of most recently logged datapoint
     
     # add a datapoint to self.data (history equivalent)
     def add_datapoint(self, time, data):
         self.data[time] = data
         self.current = time
+        self.update_line_data()
+        return
+    
+    def update_line_data(self):
         values = []
         for key in self.data.keys():
             values.append(self.data[key])
         self.line.set_data(list(self.data.keys()), values)
         return
-
 
     def parse_frame(self, current_time, data_line):
         # calls the specific parsing_fn that belongs to this object
@@ -88,8 +90,12 @@ class DataObject:
     # remove those points - make sure to log those points before calling update_data
     # so this function should be called by log_data
     # also not sure of which parameters are necessary
-    def update_data(self, current_time, graph_window):
-        # TODO
+    def update_data(self, current_time, scroll_window):
+        keys = list(self.data.keys())
+        for key in keys:
+            if (key < (current_time - scroll_window - 5)): # if value is outside graph plus some margin of time
+                del self.data[key]
+        self.update_line_data()
         return
 
     
