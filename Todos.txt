@@ -6,8 +6,15 @@ TODO
         - creating a struct for sensors that collects together a frame id with a parsing function, graph/data items (figure, canvas, ax, label - one or more of these can be null), history
             - each has an independent setText function to set for label
             - each has function to append to history
+            - later, need to change the logging method- likely will put last value logged unless its been too long, in which case will put "--"
+                - log values should still be in Remote_Debugger program, not internal function
+            - I want to update the format of all parse_0xXXX_frame functions - return a value, not a dict
         - make a separate file with all data objects
-        - NOTE: make the setup, but ONLY TEST WITH 1 OBJECT - don't change all yet
+        - IN PROGRESS RN: make the setup, but ONLY TEST WITH 1 OBJECT - don't change all yet
+            - figure out why the gui got so frickin big
+            - Create label for pH using the new DataObject structure and put it on the GUI
+        - AFTER creating class/struct: create a list with each data object - can iterate over the list to do stuff like update history, log values, set_data, autoscale, draw
+        - problems: how do I deal with graphs that have multiple lines, multiple histories?.
 
 - TODO: Try using Qt5 graphs instead of matplotlib - look up to check if that might make graphs smoother, performance better
 - TODO: Figure out how to do a version where I limit the size of the list-histories
@@ -25,16 +32,9 @@ TODO
 - I'm thinking in the future I might have a separate log file for each thing/can message/data sensor?
 
 Current problems:
-- Problem with logs - not parsing correctly I think, particularly temperature/pH which seems to be "slowing" down the logging of other graphs
-    - or maybe temp/ph are the only ones actually parsing correctly, since I'm expecting 2 per line
-        - So now the logging is working exactly as I told it to - it's adding a new log every time a CAN message is received
-            - However... is this what we want? - if no message received, I'm currently having it so that the previous value is added to log
-                - this also maintains the graph by keeping the value the same as the last value received
-                - might want to look up matplotlib and figure out a way to have a partially empty graph - ie no value received
-- Problem with graphs
-    - the first sent command - shows as a line, the other graphs show as steps - always the first one, even when commands are rearranged
+- Can I update lines (plt.Line2D) outside of accessing them within the graph object?
 
-    - 
+    
 - When can1 is set to loopback off, Test_Script_Sensors.py returns "Error sending command: write: no buffer space available"
     - Don't think this is a big problem - I'm thinking it's because loopback (RPi sending to itself)
 
@@ -120,6 +120,8 @@ DONE
 - Updated graphs to be able to take in data over the whole range of the sensor data
     - Modify salinity graph to display data in µS/cm, instead of µS/cm * 1000
 - Fix CAN parsing problem- data is sometimes being parsed incorrectly
+- Created new class DataObject to better structure program
+- added functionality to delete points outside of graph window (points are still logged, trims list length held in memory)
 
 
 

@@ -1,7 +1,8 @@
 # polaris-debug-tools
 Providing debug tools for testing of POLARIS's systems.
 
-Note: V9 is the most updated (working) version.
+Note: V10 is the most updated (working) version.
+      V9 is the most updated version tested with physical sensors.
 Version Descriptions:
 - V4.1 - V4 + graph of pH sensor only
 - V5 - V4 + graph of pH sensor + graphing functionality
@@ -13,7 +14,7 @@ Version Descriptions:
 - V8_tabs - Improves UI to more easily view graphs
 - V9 - Changed parsing for temperature, Revert UI
 - V10 - refactoring to more easily add stuff
-- V11 - V10 + added visuals for data sensor values
+- V11 - V10 + added visuals for existing data sensor values (pH, water temp, salinity)
 - V12 - V11 + new DRV/PWR data and graph visuals/functionality
 
 47400 sal max
