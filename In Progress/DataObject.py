@@ -28,11 +28,16 @@ graph_margin = 10
 # data is a dictionary with values = data logged, keys = time logged
 class GraphObject: # struct which keeps together objects needed for a graph
     def __init__(self, figure: plt.Figure, canvas: FigureCanvas, ax: plt.Axes, minn, maxn): # data = history?
+        '''
+        Initialization for GraphObject\n
+        minn : minimum data value expected over graph lifetime\n
+        maxn : maximum data value expected over graph lifetime
+        '''
         self.figure = figure
         self.canvas = canvas
         self.ax = ax
-        self.maxn = maxn # max data value expected
         self.minn = minn # min data value expected
+        self.maxn = maxn # max data value expected
         return
 
 
@@ -79,11 +84,15 @@ class DataObject:
         self.line.set_data(list(self.data.keys()), values)
         return
 
-    def parse_frame(self, current_time, data_line):
+    def parse_frame(self, current_time, data_line, parsed_dict=None):
         # calls the specific parsing_fn that belongs to this object
         # calls add_datapoint to add data
-        raw_data = data_line.split(']')[-1].strip().split()
-        data = self.parsing_fn(''.join(raw_data))
+        if (parsed_dict is not None): # for can frames which contain multiple data values
+            data = self.parsing_fn(parsed_dict)
+        else: # for can frames which hold only a single value
+            raw_data = data_line.split(']')[-1].strip().split()
+            data = self.parsing_fn(''.join(raw_data))
+
         self.add_datapoint(current_time, data)
         return
 
@@ -102,7 +111,7 @@ class DataObject:
     def update_label(self):
         if (self.label is not None):
             self.label.setText(
-                f"{self.name}: {self.get_current()[1]}{self.units}"
+                f"{self.name}: {self.get_current()[1]} {self.units}"
             )
         return
 
