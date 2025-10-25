@@ -2,7 +2,8 @@
 Providing debug tools for testing of POLARIS's systems.
 
 Note: V10 is the most updated (working) version.
-      V9 is the most updated version tested with physical sensors.
+      V10 is the most updated version tested with physical sensors.
+      V9 was also tested (more rigorously) with physical sensors.
 Version Descriptions:
 - V4.1 - V4 + graph of pH sensor only
 - V5 - V4 + graph of pH sensor + graphing functionality
@@ -13,11 +14,10 @@ Version Descriptions:
 - V8 - Fix data issues - logging data incorrectly, appears to be parsing incorrectly
 - V8_tabs - Improves UI to more easily view graphs
 - V9 - Changed parsing for temperature, Revert UI
-- V10 - refactoring to more easily add stuff
-- V11 - V10 + added visuals for existing data sensor values (pH, water temp, salinity)
-- V12 - V11 + new DRV/PWR data and graph visuals/functionality
+- V10 - refactoring to more easily add stuff (depends on DataObject.py) + added visuals for existing data sensor values (pH, water temp, salinity)
+- V11 - V10 + refactored previously existing temps/volts
+- V12 - add new DRV/PWR data and graph visuals/functionality
 
-47400 sal max
 
 
 Important usage notes

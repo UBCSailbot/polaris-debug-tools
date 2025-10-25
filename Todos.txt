@@ -1,11 +1,18 @@
 TODO
 - refactoring
-    - abstrct repeated graphs/values into objects/classes
-        - For logging method, put last value logged unless its been too long, in which case will put "--"
-                - log values should still be in Remote_Debugger program, not internal function
-        - make a separate utility file
-            - containing all utility functions
-            - containing all data objects?
+    - refactor existing temps/volts graphs/labels
+        - Test that my nice new PDB debug test script works
+        - Use test script with V10, then use it with V11 and compare outputs (log output headers should be slightly diff: Temp1_C vs Temp1, Volt1_V vs Volt1)
+            - note that if lines are not appearing on graph, it might be due to lack of ax.legend()
+    - finally refactor actual rudder angle/set rudder angle
+    - For logging method, put last value logged unless its been too long, in which case will put "--"
+            - log values should still be in Remote_Debugger program, not internal function
+- Add new DRV/PWR values
+- refactoring
+    - make a separate utility file
+        - containing all utility functions
+        - containing all data objects?
+        - make DataObject.py be the utility file?
         
 - TODO: Try using Qt5 graphs instead of matplotlib - look up to check if that might make graphs smoother, performance better
 - TODO: Try to make GUI nicer - so you can see more graphs and stuff at once
@@ -16,6 +23,8 @@ TODO
     - Nice to have: create graph and label internally - move functions into utility file (DataObject.py?)
     - I wonder if I could create multiple DataObjects with the same graph, but different lines/labels to produce graphs with multiple lines
         - could use this to later create different labels for each of the temps/volts
+        - I do prefer to access pdb_temp_graph and pdb_volt_graph directly since the different temps/volts share the same graph
+        - honestly why don't I set their graph objects to be None, and just use pdb_temp_graph and pdb_volt_graph?
 
 - Later - add wind sensor - direction/heading + wind sensor speed (in knots)
 
