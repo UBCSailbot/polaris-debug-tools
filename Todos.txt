@@ -1,22 +1,12 @@
 TODO
 - refactoring
-    - first abstract repeated code into functions
-        - repeated ".legend()" is annoying; how do I abstract it? Must come after line plotting
-    - then abstract repeated graphs/values into objects/classes
-        - creating a struct for sensors that collects together a frame id with a parsing function, graph/data items (figure, canvas, ax, label - one or more of these can be null), history
-            - each has an independent setText function to set for label
-            - each has function to append to history
-            - later, need to change the logging method- likely will put last value logged unless its been too long, in which case will put "--"
+    - abstrct repeated graphs/values into objects/classes
+        - For logging method, put last value logged unless its been too long, in which case will put "--"
                 - log values should still be in Remote_Debugger program, not internal function
-            - I want to update the format of all parse_0xXXX_frame functions - return a value, not a dict
-        - make a separate file with all data objects
-        - IN PROGRESS RN: make the setup, but ONLY TEST WITH 1 OBJECT - don't change all yet
-            - add salinity obj
-
-        - AFTER creating class/struct: create a list with each data object - can iterate over the list to do stuff like update history, log values, set_data, autoscale, draw
-        - problems: how do I deal with graphs that have multiple lines, multiple histories?
-            - For now, don't need to integrate them into DataObject; for now just do data sensors
-
+        - make a separate utility file
+            - containing all utility functions
+            - containing all data objects?
+        
 - TODO: Try using Qt5 graphs instead of matplotlib - look up to check if that might make graphs smoother, performance better
 - TODO: Try to make GUI nicer - so you can see more graphs and stuff at once
 - TODO: Set up a timeout so after a failed connection attempt, it will try to connect to the RPi again after a set time period
@@ -25,6 +15,7 @@ TODO
     since they can be accessed through obj
     - Nice to have: create graph and label internally - move functions into utility file (DataObject.py?)
     - I wonder if I could create multiple DataObjects with the same graph, but different lines/labels to produce graphs with multiple lines
+        - could use this to later create different labels for each of the temps/volts
 
 - Later - add wind sensor - direction/heading + wind sensor speed (in knots)
 
@@ -117,6 +108,7 @@ DONE
 - do logging with new DataObject structure
 - move big CONNECTED label to left layout
 - Make it so that candump and values files created by the same instance have the same timestamp
+- implement salinity sensor functionality with new DataObject class
 
 Bug Tracker
 - Problem with receiving CAN frames with V6 
