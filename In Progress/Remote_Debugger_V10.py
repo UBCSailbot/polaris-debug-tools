@@ -27,20 +27,21 @@ password = "sailbot"
 
 timestamp = 0 # datetime.now().strftime('%Y%m%d_%H%M%S')
 
-value_label_min_width = 200
+value_label_min_width = 50
 
 value_style = """
             color: black;
-            font-size: 18px;
+            font-size: 15px;
             font-weight: bold;
             font-family: 'Courier New', monospace;
-            padding: 8px;
+            padding: 6px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
-            border-radius: 6px;
+            border-radius: 5px;
             margin: 2px;
         """
 
+linewidth = 2
 graph_xlabel = "Time (s)" # all graphs read in seconds
 graph_min_width = 275
 graph_min_height = 275
@@ -69,8 +70,12 @@ def create_label(title, min_width=value_label_min_width):
     label.setStyleSheet(value_style)
     return label
 
-# Used for creating graphs - does not create lines
 def create_graph(title, ylabel, ymin, ymax):
+    '''
+    Used for creating graphs - does not create lines\n
+    ymin : initial minimum graph y-value\n
+    ymax : initial maximum graph y-value
+    '''
     figure = Figure(figsize=(8, 4), tight_layout=True)
     canvas = FigureCanvas(figure)
     canvas.setMinimumSize(graph_min_width, graph_min_height)
@@ -79,7 +84,7 @@ def create_graph(title, ylabel, ymin, ymax):
     ax.set_xlabel(graph_xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim(0, 60) # Initial X range is 0-60 secs
-    ax.set_ylim(ymin, ymax)
+    ax.set_ylim(ymin, ymax) # Initial ymin and ymax
     ax.grid(True, alpha=0.3)
     return (figure, canvas, ax)
 
@@ -113,6 +118,34 @@ def parse_0x204_frame(data_hex):
     return {
         "actual_rudder_angle": actual_rudder_angle
     }
+
+# Salinity parsing function
+def sal_parsing_fn(data_hex):
+    '''
+    Parses data for salinity 0x12X frame\n
+    In particular, this function also calculates rounding since 
+    accurate rounding depends on the magnitude of the value recorded
+    '''
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) != 4:
+        raise ValueError("Incorrect data length (num bytes): ID 0x12X")
+    
+    # Conductivity in µS/cm * 1000
+    # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
+    raw = convert_from_little_endian_str(data_hex)
+    actual = raw / (1000)
+
+    if (actual < 1 and actual != 0 or actual > 550000):
+        print(f"[ERROR]: sal data parsed as {actual}")    
+        print(f"data_hex = {data_hex}")
+        print(f"raw = {raw}")
+        raise ValueError()
+    
+    if (actual < 100): actual = round(actual, 2)
+    elif (actual < 1000): actual = round(actual, 1)
+    elif (actual < 10000): actual = round(actual)
+    elif (actual < 100000): actual = round(actual, -1)
+    return actual
 
 # Salinity data frame
 def parse_0x12X_frame(data_hex):
@@ -215,18 +248,24 @@ def temp_sensor_parsing_fn(data_hex):
 
 ### ---------- Objects ---------- ###
 pH_figure, pH_canvas, pH_ax = create_graph("pH vs Time", "pH", 0, 15)
-pH_line, = pH_ax.plot([], [], 'r-', linewidth=2, label='Current pH')
+pH_line, = pH_ax.plot([], [], 'r-', linewidth=linewidth, label='Current pH')
 pH_graph_obj = GraphObject(pH_figure, pH_canvas, pH_ax, 0, 14)
 pH_label = create_label("pH: ---- ")
 pH_obj = DataObject("pH", 1, "", pH_parsing_fn, pH_graph_obj, pH_line, pH_label)
 
 temp_sensor_figure, temp_sensor_canvas, temp_sensor_ax = create_graph("Water Temp vs Time", "Temp (°C)", 0, 100)
-temp_sensor_line, = temp_sensor_ax.plot([], [], 'b-', linewidth=2, label="Water Temp")
+temp_sensor_line, = temp_sensor_ax.plot([], [], 'b-', linewidth=linewidth, label="Water Temp")
 temp_sensor_graph_obj = GraphObject(temp_sensor_figure, temp_sensor_canvas, temp_sensor_ax, 0, 1400)
 temp_sensor_label = create_label("Water temp: ----   ")
 temp_sensor_obj = DataObject("Water_Temp", 3, "°C", temp_sensor_parsing_fn, temp_sensor_graph_obj, temp_sensor_line, temp_sensor_label)
 
-data_objs = [pH_obj, temp_sensor_obj]
+sal_figure, sal_canvas, sal_ax = create_graph("Salinity vs Time", "Salinity (µS/cm)", 0, 100000)
+sal_line, = sal_ax.plot([], [], 'g-', linewidth=linewidth, label="Salinity")
+sal_graph_obj = GraphObject(sal_figure, sal_canvas, sal_ax, 0, 550000)
+sal_label = create_label("Salinity: ----    ")
+sal_obj = DataObject("Salinity", 3, "µS/cm", sal_parsing_fn, sal_graph_obj, sal_line, sal_label)
+
+data_objs = [pH_obj, temp_sensor_obj, sal_obj]
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -373,8 +412,8 @@ class CANWindow(QWidget):
         self.volt4_history = []
         self.actual_rudder_history = []
         self.set_rudder_history = []
-        self.pH_history = [] # replaced by pH.data
-        self.temp_sensor_history = []
+        # self.pH_history = [] # replaced by pH.data
+        # self.temp_sensor_history = []
         self.sal_history = []
 
         # Initialize logging
@@ -410,7 +449,7 @@ class CANWindow(QWidget):
         ]
         for obj in data_objs:
             values_header.append(obj.name)
-        values_header.append('Salinity')
+        # values_header.append('Salinity')
 
         self.values_writer.writerow(values_header)
         self.values_csv_file.flush()  # Ensure header is written immediately
@@ -437,8 +476,8 @@ class CANWindow(QWidget):
                 # f'{pH}', f'{temp_sensor}'# , f'{sal}'
             ]
             for obj in data_objs:
-                values.append(str(obj.get_current()))
-            values.append(str(sal))
+                values.append(str(obj.get_current()[1]))
+            # values.append(str(sal))
             self.values_writer.writerow(values)
             self.values_csv_file.flush()  # Flush immediately to prevent data loss
         except Exception as e:
@@ -594,8 +633,8 @@ class CANWindow(QWidget):
         # self.temp_sensor_ax.grid(True, alpha=0.3)
 
         # Initialize empty lines for temp sensor data
-        self.temp_sensor_line, = self.temp_sensor_ax.plot([], [], 'b-', linewidth=2, label="Water Temp")
-        self.temp_sensor_ax.legend()
+        # self.temp_sensor_line, = self.temp_sensor_ax.plot([], [], 'b-', linewidth=2, label="Water Temp")
+        # self.temp_sensor_ax.legend()
 
         # === Salinity Sensor Plot ===
         self.sal_figure, self.sal_canvas, self.sal_ax = create_graph("Salinity vs Time", "Salinity (µS/cm)", 0, 100000)
@@ -637,7 +676,7 @@ class CANWindow(QWidget):
         self.output_display = QTextEdit()
         self.output_display.setReadOnly(True)
         self.output_display.setMaximumHeight(200)  # Limit height for candump
-        # self.output_display.setMaximumWidth(400)
+        self.output_display.setMinimumWidth(350)
 
         # Separate terminal output display
         self.terminal_output_display = QTextEdit()
@@ -744,6 +783,7 @@ class CANWindow(QWidget):
         self.restart_btn.setStyleSheet(red_button_style)
 
         left_layout = QVBoxLayout()
+        left_layout.addLayout(top_bar_layout)
         left_layout.addWidget(self.keyboard_checkbox)
         left_layout.addSpacing(20)  # Add small spacing
         left_layout.addWidget(self.instructions1_display)
@@ -797,7 +837,7 @@ class CANWindow(QWidget):
         for obj in data_objs:
             right_graphs_layout.addWidget(obj.graph.canvas)
 
-        right_graphs_layout.addWidget(self.sal_canvas)
+        # right_graphs_layout.addWidget(self.sal_canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_graphs_layout)
@@ -818,11 +858,11 @@ class CANWindow(QWidget):
         bottom_layout.addLayout(left_layout)
         bottom_layout.addLayout(right_layout, 1)
 
-        main_layout = QVBoxLayout()
-        main_layout.addLayout(top_bar_layout)
-        main_layout.addLayout(bottom_layout)
+        # main_layout = QVBoxLayout()
+        # main_layout.addLayout(top_bar_layout)
+        # main_layout.addLayout(bottom_layout)
 
-        self.setLayout(main_layout)
+        self.setLayout(bottom_layout)
 
     def toggle_keyboard_mode(self, checked):
         self.rudder_input.setDisabled(checked)
@@ -1029,9 +1069,11 @@ class CANWindow(QWidget):
                     elif frame_id[0:2] == "12":
                         try: 
                             # Parse frame data, update the most recent salinity value
-                            raw_data = line.split(']')[-1].strip().split()
-                            parsed = parse_0x12X_frame(''.join(raw_data))
-                            self.sal_history.append(parsed["sal"])
+                            # raw_data = line.split(']')[-1].strip().split()
+                            # parsed = parse_0x12X_frame(''.join(raw_data))
+                            # self.sal_history.append(parsed["sal"])
+                            sal_obj.parse_frame(current_time, line)
+                            sal_obj.update_label()
                                                 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
@@ -1051,8 +1093,8 @@ class CANWindow(QWidget):
                 self.update_history(self.volt2_history)
                 self.update_history(self.volt3_history)
                 self.update_history(self.volt4_history)
-                self.update_history(self.pH_history)
-                self.update_history(self.temp_sensor_history)
+                # self.update_history(self.pH_history)
+                # self.update_history(self.temp_sensor_history)
                 self.update_history(self.sal_history)
 
                 # Log current values
@@ -1062,7 +1104,7 @@ class CANWindow(QWidget):
                         self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
                         self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
                         self.volt4_history[-1], self.rudder_angle, actual_rudder, pH_obj.get_current()[1], # self.pH_history[-1],
-                        temp_sensor_obj.get_current()[1], self.sal_history[-1]
+                        temp_sensor_obj.get_current()[1], sal_obj.get_current() # self.sal_history[-1]
                     )
                     # pH_obj.update_data(current_time, scroll_window)
                     # trim values no longer being graphed
@@ -1072,11 +1114,12 @@ class CANWindow(QWidget):
                 # print(f"sal_history = {self.sal_history}")
                 # print(f"pH_history = {self.pH_history}")
                 # print(f"temp_sensor_history = {self.temp_sensor_history}")
-                print(f"salinity = {self.sal_history[-1]}")
+                # print(f"salinity = {self.sal_history[-1]}")
                 # print(f"pH = {self.pH_history[-1]}")
-                print(f"pH_obj.current = {pH_obj.get_current()}")
-                print(f"water_temp = {temp_sensor_obj.get_current()}")
-                print(f"pH_obj.data.keys() = {pH_obj.data.keys()}")
+                # print(f"pH_obj.current = {pH_obj.get_current()}")
+                # print(f"water_temp = {temp_sensor_obj.get_current()}")
+                # print(f"pH_obj.data.keys() = {pH_obj.data.keys()}")
+                print(f"sal = {sal_obj.get_current()}")
                 # print(f"time_history = {self.time_history}")
                             
         
@@ -1092,7 +1135,7 @@ class CANWindow(QWidget):
             self.volt3_line.set_data(self.time_history, self.volt3_history)
             self.volt4_line.set_data(self.time_history, self.volt4_history)
             # self.pH_line.set_data(self.time_history, self.pH_history)
-            self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
+            # self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
             self.sal_line.set_data(self.time_history, self.sal_history)
 
             # print(f"sal_history = {self.sal_history}")
@@ -1133,11 +1176,13 @@ class CANWindow(QWidget):
             self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             # self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
-            pH_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            # pH_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
             # self.temp_sensor_ax.set_xlim(max(0, current_time - scroll_window), current_time)
-            temp_sensor_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            # temp_sensor_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
 
-            self.sal_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            # self.sal_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            for obj in data_objs:
+                obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
 
         else:
             # For initial data points, auto-scale
@@ -1149,17 +1194,19 @@ class CANWindow(QWidget):
             self.rudder_ax.autoscale_view()
             # self.pH_ax.relim() # pH Change
             # self.pH_ax.autoscale_view() # pH Change
-            pH_obj.graph.ax.relim()
-            pH_obj.graph.ax.autoscale_view()
+            # pH_obj.graph.ax.relim()
+            # pH_obj.graph.ax.autoscale_view()
 
             # self.temp_sensor_ax.relim()
             # self.temp_sensor_ax.autoscale_view()
-            temp_sensor_obj.graph.ax.relim()
-            temp_sensor_obj.graph.ax.autoscale_view()
-            self.sal_ax.relim()
-            self.sal_ax.autoscale_view()
+            # temp_sensor_obj.graph.ax.relim()
+            # temp_sensor_obj.graph.ax.autoscale_view()
+            # self.sal_ax.relim()
+            # self.sal_ax.autoscale_view()
 
-
+            for obj in data_objs:
+                obj.graph.ax.relim()
+                obj.graph.ax.autoscale_view()
 
         # === Auto Y adjustment (Temp) ===
         if self.temp1_history and self.temp2_history and self.temp3_history:
@@ -1202,22 +1249,26 @@ class CANWindow(QWidget):
         temp_sensor_obj.adjust_ylim()
 
         # === Auto Y adjustment (sal sensor) ===
-        if (self.sal_history):
-            sal_max = max(self.sal_history)
-            sal_min = min(self.sal_history)
-            margin = 10
-            self.sal_ax.set_ylim(max(sal_min - margin, 0), min(sal_max + margin, 500000))
+        # if (self.sal_history):
+        #     sal_max = max(self.sal_history)
+        #     sal_min = min(self.sal_history)
+        #     margin = 10
+        #     self.sal_ax.set_ylim(max(sal_min - margin, 0), min(sal_max + margin, 500000))
+        sal_obj.adjust_ylim()
 
         # Update the canvas to reflect changes
         self.temp_canvas.draw()
         self.volt_canvas.draw()
         self.rudder_canvas.draw()
         # self.pH_canvas.draw() # pH Change
-        pH_obj.graph.canvas.draw()
+        # pH_obj.graph.canvas.draw()
         # self.temp_sensor_canvas.draw()
-        temp_sensor_obj.graph.canvas.draw()
+        # temp_sensor_obj.graph.canvas.draw()
+        
+        for obj in data_objs:
+            obj.graph.canvas.draw()
 
-        self.sal_canvas.draw()
+        # self.sal_canvas.draw()
 
 
     def show_error(self, msg):
