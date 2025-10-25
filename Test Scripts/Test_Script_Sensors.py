@@ -1,7 +1,6 @@
 """
 Simple CAN Frame send Test Script for Sensors (pH, Temp, Salinity)
 Automatically SSHes into rpi and sends a CAN Frame simulating pH sensor every delay secs
-(TODO: modify to be all sensors) (TODO: time between messages make it shorter)
 Outputs support messages through terminal
 
 Use Ctrl+C to stop the test
@@ -268,7 +267,7 @@ def main():
 
             generate_slope_data()
             pH_data = round(slope_data * 15)
-            temp_sensor_data = round((slope_data * 1100) + 273.15, 3)
+            temp_sensor_data = round((slope_data * 1100.0) + 273.15, 3)
             sal_data = round(slope_data * 575000, 3)
         
 

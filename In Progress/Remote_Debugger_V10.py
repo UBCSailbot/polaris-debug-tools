@@ -119,6 +119,29 @@ def parse_0x204_frame(data_hex):
         "actual_rudder_angle": actual_rudder_angle
     }
 
+# Salinity data frame
+def parse_0x12X_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) != 4:
+        raise ValueError("Incorrect data length (num bytes): ID 0x12X")
+    
+    # Conductivity in µS/cm * 1000
+    # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
+    raw = convert_from_little_endian_str(data_hex)
+    actual = raw / (1000)
+
+    if (actual < 1 and actual != 0 or actual > 550000):
+        print(f"[ERROR]: sal data parsed as {actual}")    
+        print(f"data_hex = {data_hex}")
+        print(f"raw = {raw}")
+        raise ValueError()
+    
+    if (actual < 100): actual = round(actual, 2)
+    elif (actual < 1000): actual = round(actual, 1)
+    elif (actual < 10000): actual = round(actual)
+    elif (actual < 100000): actual = round(actual, -1)
+    return {"sal": actual} 
+
 # Salinity parsing function
 def sal_parsing_fn(data_hex):
     '''
@@ -146,29 +169,6 @@ def sal_parsing_fn(data_hex):
     elif (actual < 10000): actual = round(actual)
     elif (actual < 100000): actual = round(actual, -1)
     return actual
-
-# Salinity data frame
-def parse_0x12X_frame(data_hex):
-    raw_bytes = bytes.fromhex(data_hex)
-    if len(raw_bytes) != 4:
-        raise ValueError("Incorrect data length (num bytes): ID 0x12X")
-    
-    # Conductivity in µS/cm * 1000
-    # raw = int.from_bytes(raw_bytes, "little") # is raw_bytes[0:2] really necessary?
-    raw = convert_from_little_endian_str(data_hex)
-    actual = raw / (1000)
-
-    if (actual < 1 and actual != 0 or actual > 550000):
-        print(f"[ERROR]: sal data parsed as {actual}")    
-        print(f"data_hex = {data_hex}")
-        print(f"raw = {raw}")
-        raise ValueError()
-    
-    if (actual < 100): actual = round(actual, 2)
-    elif (actual < 1000): actual = round(actual, 1)
-    elif (actual < 10000): actual = round(actual)
-    elif (actual < 100000): actual = round(actual, -1)
-    return {"sal": actual} 
 
 # pH data frame
 def parse_0x11X_frame(data_hex):
@@ -414,7 +414,7 @@ class CANWindow(QWidget):
         self.set_rudder_history = []
         # self.pH_history = [] # replaced by pH.data
         # self.temp_sensor_history = []
-        self.sal_history = []
+        # self.sal_history = []
 
         # Initialize logging
         self._init_logging()
@@ -464,7 +464,7 @@ class CANWindow(QWidget):
             last_val = history[-1] if history else 0
             history.append(last_val)
 
-    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder, pH, temp_sensor, sal):
+    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder):
         """Log current values to CSV file"""
         try:
             timestamp = datetime.now().isoformat()
@@ -1093,9 +1093,6 @@ class CANWindow(QWidget):
                 self.update_history(self.volt2_history)
                 self.update_history(self.volt3_history)
                 self.update_history(self.volt4_history)
-                # self.update_history(self.pH_history)
-                # self.update_history(self.temp_sensor_history)
-                self.update_history(self.sal_history)
 
                 # Log current values
                 if (new_msg_to_log and (len(self.time_history) > 0)):
@@ -1103,10 +1100,9 @@ class CANWindow(QWidget):
                     self._log_values(
                         self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
                         self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
-                        self.volt4_history[-1], self.rudder_angle, actual_rudder, pH_obj.get_current()[1], # self.pH_history[-1],
-                        temp_sensor_obj.get_current()[1], sal_obj.get_current() # self.sal_history[-1]
+                        self.volt4_history[-1], self.rudder_angle, actual_rudder
                     )
-                    # pH_obj.update_data(current_time, scroll_window)
+
                     # trim values no longer being graphed
                     for obj in data_objs:
                         obj.update_data(current_time, scroll_window)
@@ -1136,7 +1132,7 @@ class CANWindow(QWidget):
             self.volt4_line.set_data(self.time_history, self.volt4_history)
             # self.pH_line.set_data(self.time_history, self.pH_history)
             # self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
-            self.sal_line.set_data(self.time_history, self.sal_history)
+            # self.sal_line.set_data(self.time_history, self.sal_history)
 
             # print(f"sal_history = {self.sal_history}")
             # print(f"pH_history = {self.pH_history}")
