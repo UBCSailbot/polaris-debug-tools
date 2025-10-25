@@ -25,6 +25,8 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
+timestamp = 0 # datetime.now().strftime('%Y%m%d_%H%M%S')
+
 value_label_min_width = 200
 
 value_style = """
@@ -216,13 +218,13 @@ pH_figure, pH_canvas, pH_ax = create_graph("pH vs Time", "pH", 0, 15)
 pH_line, = pH_ax.plot([], [], 'r-', linewidth=2, label='Current pH')
 pH_graph_obj = GraphObject(pH_figure, pH_canvas, pH_ax, 0, 14)
 pH_label = create_label("pH: ---- ")
-pH_obj = DataObject("pH", "", pH_parsing_fn, pH_graph_obj, pH_line, pH_label)
+pH_obj = DataObject("pH", 1, "", pH_parsing_fn, pH_graph_obj, pH_line, pH_label)
 
 temp_sensor_figure, temp_sensor_canvas, temp_sensor_ax = create_graph("Water Temp vs Time", "Temp (°C)", 0, 100)
 temp_sensor_line, = temp_sensor_ax.plot([], [], 'b-', linewidth=2, label="Water Temp")
 temp_sensor_graph_obj = GraphObject(temp_sensor_figure, temp_sensor_canvas, temp_sensor_ax, 0, 1400)
 temp_sensor_label = create_label("Water temp: ----   ")
-temp_sensor_obj = DataObject("Water_Temp", "°C", temp_sensor_parsing_fn, temp_sensor_graph_obj, temp_sensor_line, temp_sensor_label)
+temp_sensor_obj = DataObject("Water_Temp", 3, "°C", temp_sensor_parsing_fn, temp_sensor_graph_obj, temp_sensor_line, temp_sensor_label)
 
 data_objs = [pH_obj, temp_sensor_obj]
 
@@ -300,7 +302,7 @@ def cansend_worker(cmd_queue: multiprocessing.Queue, response_queue: multiproces
         client.close()
 
 ### ---------- Background CAN Logging Process ---------- ###
-def can_logging_process(queue: multiprocessing.Queue, log_queue: multiprocessing.Queue):
+def can_logging_process(queue: multiprocessing.Queue, log_queue: multiprocessing.Queue, timestamp):
     """Dedicated process for logging CAN messages without blocking graphics"""
     try:
         # Create logs directory if it doesn't exist
@@ -308,7 +310,7 @@ def can_logging_process(queue: multiprocessing.Queue, log_queue: multiprocessing
             os.makedirs('logs')
         
         # Create timestamped filename
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         candump_log_file = os.path.join('logs', f'candump_{timestamp}.csv')
         
         with open(candump_log_file, 'w', newline='') as csv_file:
@@ -357,7 +359,7 @@ class CANWindow(QWidget):
         self.last_temp_update = time.time()  # Track last temperature update
 
         self.setWindowTitle("Remote Node GUI - POLARIS")
-        self.setGeometry(50, 30, 1000, 500)
+        self.setGeometry(50, 30, 1000, 450)
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.time_start = time.time()
@@ -392,19 +394,25 @@ class CANWindow(QWidget):
             os.makedirs('logs')
         
         # Create timestamped filenames
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
         # Values log file (CAN dump logging is now handled by separate process)
         self.values_log_file = os.path.join('logs', f'values_{timestamp}.csv')
         self.values_csv_file = open(self.values_log_file, 'w', newline='')
         self.values_writer = csv.writer(self.values_csv_file)
-        self.values_writer.writerow([
+
+        # Header names
+        values_header = [
             'Timestamp', 'Elapsed_Time_s', 
             'Temp1_C', 'Temp2_C', 'Temp3_C',
             'Volt1_V', 'Volt2_V', 'Volt3_V', 'Volt4_V',
-            'Set_Rudder_deg', 'Actual_Rudder_deg', pH_obj.name, # 'pH',
-            temp_sensor_obj.name, 'Salinity'
-        ])
+            'Set_Rudder_deg', 'Actual_Rudder_deg'
+        ]
+        for obj in data_objs:
+            values_header.append(obj.name)
+        values_header.append('Salinity')
+
+        self.values_writer.writerow(values_header)
         self.values_csv_file.flush()  # Ensure header is written immediately
         
         print(f"Values logging initialized: {self.values_log_file}")
@@ -422,13 +430,16 @@ class CANWindow(QWidget):
         try:
             timestamp = datetime.now().isoformat()
             elapsed_time = time.time() - self.time_start
-            self.values_writer.writerow([
-                timestamp, f'{elapsed_time:.3f}',
+            values = [timestamp, f'{elapsed_time:.3f}',
                 f'{temp1:.2f}', f'{temp2:.2f}', f'{temp3:.2f}',
                 f'{volt1:.2f}', f'{volt2:.2f}', f'{volt3:.2f}', f'{volt4:.2f}',
                 f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else '',
-                f'{pH}', f'{temp_sensor}', f'{sal}'
-            ])
+                # f'{pH}', f'{temp_sensor}'# , f'{sal}'
+            ]
+            for obj in data_objs:
+                values.append(str(obj.get_current()))
+            values.append(str(sal))
+            self.values_writer.writerow(values)
             self.values_csv_file.flush()  # Flush immediately to prevent data loss
         except Exception as e:
             print(f"Error logging values: {e}")
@@ -768,6 +779,11 @@ class CANWindow(QWidget):
         right_labels_layout.addWidget(self.temp_values_label)
         right_labels_layout.addWidget(self.volt_values_label)
         right_labels_layout.addWidget(self.rudder_values_label)
+        data_labels_layout = QHBoxLayout() # Horizontal layout for labels
+        # TODO: modify for loop to add labels for all items
+        for obj in data_objs:
+            data_labels_layout.addWidget(obj.label)
+        right_labels_layout.addLayout(data_labels_layout)
 
         right_layout.addLayout(right_labels_layout)
         # right_layout.addSpacing(10)  # Add small spacing before plots
@@ -777,11 +793,10 @@ class CANWindow(QWidget):
         right_graphs_layout.addWidget(self.volt_canvas)
         right_graphs_layout.addWidget(self.rudder_canvas)
         # right_graphs_layout.addWidget(self.pH_canvas)
-        # right_graphs_layout.addWidget(pH_obj)
-        # right now this should only add self.pH_canvas
+        # right_graphs_layout.addWidget(self.temp_sensor_canvas)
         for obj in data_objs:
             right_graphs_layout.addWidget(obj.graph.canvas)
-        # right_graphs_layout.addWidget(self.temp_sensor_canvas)
+
         right_graphs_layout.addWidget(self.sal_canvas)
 
         container_widget = QWidget()
@@ -988,6 +1003,7 @@ class CANWindow(QWidget):
                             # self.temp_sensor_history.append(parsed["temp_sensor"])
 
                             temp_sensor_obj.parse_frame(current_time, line)
+                            temp_sensor_obj.update_label()
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
                             print(f"line parsed: {line}\n--- end of line ---")
@@ -1002,6 +1018,7 @@ class CANWindow(QWidget):
                             # self.pH_history.append(parsed["pH"]) # replaced by add_datapoint called by internal function parse_frame
                                             
                             pH_obj.parse_frame(current_time, line)
+                            pH_obj.update_label()
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
@@ -1214,11 +1231,12 @@ if __name__ == "__main__":
     cmd_queue = multiprocessing.Queue()
     response_queue = multiprocessing.Queue()
     can_log_queue = multiprocessing.Queue()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     candump_proc = multiprocessing.Process(target=candump_process, args=(queue,))
     temp_proc = multiprocessing.Process(target=temperature_reader, args=(child_conn,))
     cansend_proc = multiprocessing.Process(target=cansend_worker, args=(cmd_queue, response_queue))
-    can_logging_proc = multiprocessing.Process(target=can_logging_process, args=(queue, can_log_queue))
+    can_logging_proc = multiprocessing.Process(target=can_logging_process, args=(queue, can_log_queue, timestamp))
 
     candump_proc.start()
     temp_proc.start()

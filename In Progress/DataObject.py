@@ -37,8 +37,9 @@ class GraphObject: # struct which keeps together objects needed for a graph
 
 
 class DataObject:
-    def __init__(self, name, units, parsing_fn, graph: GraphObject = None, line: plt.Line2D = None, label: QLabel = None):
+    def __init__(self, name, round, units, parsing_fn, graph: GraphObject = None, line: plt.Line2D = None, label: QLabel = None):
         self.name = name
+        self.round = round # number of dp to round to
         self.units = units
         self.parsing_fn = parsing_fn
         self.graph = graph
@@ -62,7 +63,7 @@ class DataObject:
     # Return a tuple with the time:value of the most current data point collected
     def get_current(self):
         val = self.data.get(self.current) if (self.current is not None) else 0
-        return self.current, val # returns the time, value of most recently logged datapoint
+        return self.current, round(val, self.round) # returns the time, value of most recently logged datapoint
     
     # add a datapoint to self.data (history equivalent)
     def add_datapoint(self, time, data):
@@ -96,6 +97,13 @@ class DataObject:
             if (key < (current_time - scroll_window - 5)): # if value is outside graph plus some margin of time
                 del self.data[key]
         self.update_line_data()
+        return
+    
+    def update_label(self):
+        if (self.label is not None):
+            self.label.setText(
+                f"{self.name}: {self.get_current()[1]}{self.units}"
+            )
         return
 
     
