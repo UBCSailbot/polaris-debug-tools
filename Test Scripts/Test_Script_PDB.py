@@ -1,0 +1,285 @@
+"""
+Simple CAN Frame send Test Script for Temperature/Voltage data
+Automatically SSHes into rpi and sends a CAN Frame simulating PDB every delay secs
+Outputs support messages through terminal
+
+Use Ctrl+C to stop the test
+"""
+
+import paramiko
+import time
+import random
+from datetime import datetime
+
+# SSH Credentials
+hostname = "192.168.0.10"
+username = "sailbot"
+password = "sailbot"
+
+# Time between sent frames (in secs)
+delay = 1
+
+# CAN Frame IDs
+temp_sensor_id = "100" # 0x10X
+pH_id = "110" # 0x11X
+sal_id = "120" # 0x12X
+
+# Hex Two's complement conversion dict
+hex_conversion = {
+    "0": "f",
+    "1": "e",
+    "2": "d",
+    "3": "c",
+    "4": "b",
+    "5": "a",
+    "6": "9",
+    "7": "8",
+    "8": "7",
+    "9": "6",
+    "a": "5",
+    "b": "4",
+    "c": "3",
+    "d": "2",
+    "e": "1",
+    "f": "0",
+}
+
+negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
+
+slope = 0.1
+data_min = 0.2
+data_max = 0.8
+slope_data = data_min
+
+### ----------  Utility Functions ---------- ###
+# Works only for positive numbers
+def convert_to_hex(decimal, num_bytes):
+    return format(decimal, "X").zfill(2 * num_bytes)
+
+def convert_to_little_endian(hex_str):
+    raw = bytes.fromhex(hex_str)
+    return raw[::-1].hex()
+
+def convert_from_little_endian_str(hex_str):
+    raw = bytes.fromhex(hex_str)
+    big_endian = raw[::-1].hex()
+    return int(big_endian, 16)
+
+def generate_slope_data():
+    global slope
+    global slope_data
+    if ((slope_data < data_min) or (slope_data > data_max)):
+        slope *= -1
+
+    slope_data += slope
+
+    # return slope_data
+    
+
+def send_pdb_command(client):
+    try:
+        # Send sample pdb command with data: 
+        # volt1: 3 volt2: 2.4 volt3: 0.8 volt4: 1.3 temp1: 1.5 temp2: 57.8 temp3: 126.32
+        # Convert data to CAN format (each is a 2-byte hex number in little endian)
+        # Multiplied by 1000 by CAN Frame documentation
+        # can_data = 0x5dc0 0096 1f40 e1c8 3158 7530
+                    # pH_data = round(slope_data * 15)
+
+        # designed so that volt1 < volt2 < volt3 < volt4 and temp1 < temp2 < temp3 for easy debugging
+        volt1 = convert_to_little_endian(convert_to_hex(round((slope_data - 0.1) * 3.8) * 1000))
+        volt2 = convert_to_little_endian(convert_to_hex(round((slope_data) * 3.8) * 1000))
+        volt3 = convert_to_little_endian(convert_to_hex(round((slope_data + 0.1) * 4) * 1000))
+        volt4 = convert_to_little_endian(convert_to_hex(round((slope_data + 0.2) * 3.8) * 1000))
+        temp1 = convert_to_little_endian(convert_to_hex(round((slope_data - 0.15)* 127.0)* 1000))
+        temp2 = convert_to_little_endian(convert_to_hex(round((slope_data) * 127.0)* 1000))
+        temp3 = convert_to_little_endian(convert_to_hex(round((slope_data + 0.15) * 130.0)* 1000))
+        can_data = volt2 + temp1 + volt3 + temp2 + temp3 + volt4 + volt1
+        # can_data = "c05d9600401fc9416075c8325831"
+        can_msg = "cansend can1 206##1" + can_data
+
+        # Execute the cansend command
+        stdin, stdout, stderr = client.exec_command(can_msg)
+        
+        # Check for errors
+        error = stderr.read().decode().strip()
+        output = stdout.read().decode().strip()
+
+        if error:
+            print(f"ERROR sending command: {error}")
+            return False
+        else:
+            print(f"✓ Sample PDB msg sent: {can_msg}")
+            return True
+
+    except Exception as e:
+        print(f"Error sending cansend command: {e}")
+        return False
+    pass
+
+# Use this function to CAN send a frame for any data sensor
+def send_sensor_command(client, frame_id, data: float):
+    global pH_id
+    global temp_sensor_id
+    global sal_id
+    try:
+        # Convert data to CAN format (2-byte hex number in little endian)
+        # Multiplied by 1000 by CAN Frame documentation
+        # print(f"Data passed to send_sensor_command: {data}")
+        can_data = int(data * 1000)
+        # print("data converted to int, * 1000: ", can_data)
+        numBytes = 0
+        if (frame_id == pH_id): numBytes = 2
+        elif (frame_id == temp_sensor_id): numBytes = 3
+        elif (frame_id == sal_id): numBytes = 4
+        else: print(f"[ERROR] send_sensor_command(): frame_id not recognized")
+        hexed_data = convert_to_hex(can_data, numBytes)
+        # print("data converted to hex: ", hexed_data)
+        hex_bytes = convert_to_little_endian(hexed_data)
+        print("hex_bytes: ", hex_bytes)
+        can_msg = "cansend can1 " + frame_id + "##1" + hex_bytes
+
+        # Execute the cansend command
+        stdin, stdout, stderr = client.exec_command(can_msg)
+        
+        # Check for errors
+        error = stderr.read().decode().strip()
+        output = stdout.read().decode().strip()
+
+        if error:
+            print(f"ERROR sending command: {error}")
+            return False
+        else:
+            sent = convert_from_little_endian_str(hex_bytes) / 1000
+            print(f"✓ Sent: {sent} - CAN message: {can_msg}")
+            return True
+        
+    except Exception as e:
+        print(f"Error sending cansend command: {e}")
+        print(f"Attempted command: {can_msg}")
+        return False
+
+def send_rudder_command(client, angle):
+    """Send rudder CAN message via SSH"""
+    try:
+        # Convert angle to CAN message format (same as Remote_Debugger_V3.py)
+        # Convert float angle to integer for hex conversion
+        angle_int = int((angle + 90) * 1000)
+        value = convert_to_hex(angle_int, 8)
+        can_message = "cansend can1 001##1" + convert_to_little_endian(value) + "80"
+        
+        # Execute the cansend command
+        stdin, stdout, stderr = client.exec_command(can_message)
+        
+        # Check for errors
+        error = stderr.read().decode().strip()
+        output = stdout.read().decode().strip()
+        
+        if error:
+            print(f"ERROR sending command: {error}")
+            return False
+        else:
+            print(f"✓ Rudder set to {angle:7.3f}° - CAN message: {can_message}")
+            return True
+            
+    except Exception as e:
+        print(f"Exception sending rudder command: {e}")
+        return False
+
+def main():
+    print("=" * 60)
+    print("SENSOR TEST SCRIPT")
+    print("=" * 60)
+    print(f"Target: {hostname}")
+    print(f"Username: {username}")
+    print(f"Sends CAN Frame with PDB debug data every {delay} secs")
+    print("=" * 60)
+    
+    # Connect to SSH
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    try:
+        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Connecting to SSH...")
+        client.connect(hostname, username=username, password=password)
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] SSH connection established!")
+        
+        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Starting test...")
+        print("Press Ctrl+C to stop the test\n")
+        
+        cycle_count = 0
+        start_time = time.time()
+
+        # current_pH = round(slope_data * 14)
+        # current_water_temp = round(slope_data * 130, 3)
+        # current_sal = round(slope_data * 80000)
+
+        # send_pdb_command(client)
+        # time.sleep(delay)
+        # send_pdb_command(client)
+        # time.sleep(delay)
+        
+        while True:
+            cycle_count += 1
+            print(f"--- CYCLE {cycle_count} ---")
+            
+            # Generate random pH between 0 and 14
+
+            # Note: these random data points don't really check for out of bounds stuff (eg. ph = 15), but it should be fine - just testing if graphing is smooth
+            # pH_data = round(random.uniform(current_pH - 1.5, current_pH + 1.5))
+            # temp_sensor_data = round(random.uniform(current_water_temp - 5.0, current_water_temp + 5.0), 3)
+            # sal_data = round(random.uniform(current_sal - 5000, current_sal + 5000)) # Expect data points between 35,000-60,000 µS/cm
+            # print(f"generated sal_data: {sal_data}")
+
+            generate_slope_data()
+            # pH_data = round(slope_data * 15)
+            # temp_sensor_data = round((slope_data * 1100.0) + 273.15, 3)
+            # sal_data = round(slope_data * 575000, 3)
+        
+
+            current_time = time.time()
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            
+            # Calculate total elapsed time
+            total_elapsed = current_time - start_time
+            print(f"[{timestamp}] Total elapsed time: {total_elapsed:.1f}s")
+            
+            # print(f"[{timestamp}] ", end="")
+
+            # success = send_sensor_command(client, sal_id, sal_data)
+            # if not success:
+            #     print("Failed to send command, continuing...")
+
+            # send_pdb_command(client)
+            # time.sleep(delay)
+
+
+            success = send_pdb_command(client)
+            if not success:
+                print("Failed to send command, continuing...")
+
+            
+            print(f"[{timestamp}] Waiting {delay} seconds before next cansend...")
+            time.sleep(delay)  # Wait 30 seconds before next angle
+    
+    except KeyboardInterrupt:
+        print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Test stopped by user (Ctrl+C)")
+    
+    except paramiko.AuthenticationException:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] SSH Authentication failed!")
+        print("Check username/password credentials")
+    
+    except paramiko.SSHException as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] SSH connection error: {e}")
+    
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Unexpected error: {e}")
+    
+    finally:
+        client.close()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] SSH connection closed")
+        print("=" * 60)
+        print("PDB DEBUG DATA CANSEND TEST COMPLETED")
+        print("=" * 60)
+
+if __name__ == "__main__":
+    main()
