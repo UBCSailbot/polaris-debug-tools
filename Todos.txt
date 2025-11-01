@@ -1,12 +1,19 @@
 TODO
-- refactoring
-    - finally refactor actual rudder angle/set rudder angle
-    - For logging method, put last value logged unless its been too long, in which case will put "--"
-            - log values should still be in Remote_Debugger program, not internal function
+- refactor actual rudder angle/set rudder angle
+    - after it works, try using lambdas for parsing_fn input
+    - Update program with correct ranges and rounding for new data
+- Test program with a variety of sent CAN frames of all types
+- Problem: the y-limits are not adjusting for all lines in graphs with multiple lines
 - Refactor UI
     - new tab for graphs + live values, separate from controls
 - Add new DRV/PWR values
+- Add to controls: The ability to send PID coefficients (0x200)
+- Fix existing controls so that they work with updated CAN frames
+    - Fix send_rudder() so that it works with the refactoring
 - UI: Add the ability to select which graphs you want to see (some sort of checkbox thing?)
+    - Add that to the top of right_layout
+- For logging method, put last value logged unless its been too long, in which case will put "--"
+            - log values should still be in Remote_Debugger program, not internal function
 
 - refactoring
     - make a separate utility file
@@ -36,7 +43,10 @@ At some point as we add more diagnostics we will have to consider how we display
 (i.e. if I'm tunning the rudder I might want to see only 3,4,7 or something so having some configurability would be cool)
 
 Lower priority issues:
+- Remove the "magic strings" in parsing functions: change dict keys to be the names
+- Figure out how to not make so many parsing functions for frames with a lot of data - a separate type of data object?
 - Fix issue where log values rounds down when displaying - sometimes I want the extra zero to show the precision (ie. for temps, I want 127.00 instead of 127.0)
+- Add ability to show/hide specific lines on graphs
 - TODO: Try using Qt5 graphs instead of matplotlib - look up to check if that might make graphs smoother, performance better
 - TODO: Try to make GUI nicer - so you can see more graphs and stuff at once
 - TODO: Set up a timeout so after a failed connection attempt, it will try to connect to the RPi again after a set time period
@@ -145,6 +155,7 @@ DONE
     - Tested that my nice new PDB debug test script works
     - Use test script with V10, then use it with V11 and compare outputs (log output headers should be slightly diff: Temp1_C vs Temp1, Volt1_V vs Volt1)
         - note that if lines are not appearing on graph, it might be due to lack of ax.legend()
+- shrunk window height - minimum height is limited by the left_layout
 
 Bug Tracker
 - Problem with receiving CAN frames with V6 
