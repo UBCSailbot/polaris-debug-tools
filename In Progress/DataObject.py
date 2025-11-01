@@ -38,6 +38,8 @@ class GraphObject: # struct which keeps together objects needed for a graph
         self.ax = ax
         self.minn = minn # min data value expected
         self.maxn = maxn # max data value expected
+
+        ax.legend()
         return
 
 
