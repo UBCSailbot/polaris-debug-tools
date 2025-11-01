@@ -42,9 +42,9 @@ class GraphObject: # struct which keeps together objects needed for a graph
 
 
 class DataObject:
-    def __init__(self, name, round, units, parsing_fn, graph: GraphObject = None, line: plt.Line2D = None, label: QLabel = None):
+    def __init__(self, name, rounding, units, parsing_fn, graph: GraphObject = None, line: plt.Line2D = None, label: QLabel = None):
         self.name = name
-        self.round = round # number of dp to round to
+        self.rounding = rounding # number of dp to round to
         self.units = units
         self.parsing_fn = parsing_fn
         self.graph = graph
@@ -68,7 +68,7 @@ class DataObject:
     # Return a tuple with the time:value of the most current data point collected
     def get_current(self):
         val = self.data.get(self.current) if (self.current is not None) else 0
-        return self.current, round(val, self.round) # returns the time, value of most recently logged datapoint
+        return self.current, round(val, self.rounding) # returns the time, value of most recently logged datapoint
     
     # add a datapoint to self.data (history equivalent)
     def add_datapoint(self, time, data):
@@ -88,7 +88,7 @@ class DataObject:
         # calls the specific parsing_fn that belongs to this object
         # calls add_datapoint to add data
         if (parsed_dict is not None): # for can frames which contain multiple data values
-            data = self.parsing_fn(parsed_dict)
+            data = round(self.parsing_fn(parsed_dict), self.rounding)
         else: # for can frames which hold only a single value
             raw_data = data_line.split(']')[-1].strip().split()
             data = self.parsing_fn(''.join(raw_data))

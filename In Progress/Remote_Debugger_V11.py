@@ -91,11 +91,7 @@ def create_graph(title, ylabel, ymin, ymax):
 ### ----------  Parsing Data Frames  ---------- ###
 
 def parse_0x206_frame(data_hex):
-    try:
-        raw_bytes = bytes.fromhex(data_hex)
-    except Exception as e:
-        print(f"Exception thrown by parse_0x206: {e}")
-        return {}
+    raw_bytes = bytes.fromhex(data_hex)
     if len(raw_bytes) != 24:
         raise ValueError("Incorrect data length (num bytes): ID 0x206")
 
@@ -108,32 +104,32 @@ def parse_0x206_frame(data_hex):
         "temp_3": val(8, 10, 100.0),
         "volt_4": val(10, 12, 10000.0),
         "volt_1": val(12, 14, 10000.0),
-        "curr_hp": val(14, 16, 1000),
-        "curr_hs": val(16, 18, 1000),
-        "curr_sp": val(18, 20, 1000),
-        "curr_ss": val(20, 22, 1000)
+        "curr_hp": val(14, 16, 1000.0),
+        "curr_hs": val(16, 18, 1000.0),
+        "curr_sp": val(18, 20, 1000.0),
+        "curr_ss": val(20, 22, 1000.0)
     }
 
 def temp1_parsing_fn(parsed_dict):
-    return round(parsed_dict["temp_1"], 1)
+    return parsed_dict["temp_1"]
 
 def temp2_parsing_fn(parsed_dict):
-    return round(parsed_dict["temp_2"], 1)
+    return parsed_dict["temp_2"]
 
 def temp3_parsing_fn(parsed_dict):
-    return round(parsed_dict["temp_3"], 1)
+    return parsed_dict["temp_3"]
 
 def volt1_parsing_fn(parsed_dict):
-    return round(parsed_dict["volt_1"], 1)
+    return parsed_dict["volt_1"]
 
 def volt2_parsing_fn(parsed_dict):
-    return round(parsed_dict["volt_2"], 1)
+    return parsed_dict["volt_2"]
 
 def volt3_parsing_fn(parsed_dict):
-    return round(parsed_dict["volt_3"], 1)
+    return parsed_dict["volt_3"]
 
 def volt4_parsing_fn(parsed_dict):
-    return round(parsed_dict["volt_4"], 1)
+    return parsed_dict["volt_4"]
 
 
 def parse_0x204_frame(data_hex):
@@ -234,7 +230,7 @@ def pH_parsing_fn(data_hex):
         print(f"raw = {raw}")
         raise ValueError()  
     
-    return round(actual, 2)
+    return round(actual, pH_obj.rounding)
 
 
 # temp data frame
@@ -274,7 +270,7 @@ def temp_sensor_parsing_fn(data_hex):
         print(f"raw = {raw}")
         raise ValueError()  
     
-    return round(actual, 3)
+    return round(actual, temp_sensor_obj.rounding)
 
 ### ---------- Data Objects ---------- ###
 pH_figure, pH_canvas, pH_ax = create_graph("pH vs Time", "pH", 0, 15)
@@ -305,9 +301,9 @@ pdb_temp_graph_obj = GraphObject(pdb_temp_graph[0], pdb_temp_graph[1], pdb_temp_
 temp1_label = create_label("Temp1: ----  ")
 temp2_label = create_label("Temp2: ----  ")
 temp3_label = create_label("Temp3: ----  ")
-temp1_obj = DataObject("Temp1", 1, "°C", temp1_parsing_fn, pdb_temp_graph_obj, temp1_line, temp1_label)
-temp2_obj = DataObject("Temp2", 1, "°C", temp2_parsing_fn, pdb_temp_graph_obj, temp2_line, temp2_label)
-temp3_obj = DataObject("Temp3", 1, "°C", temp3_parsing_fn, pdb_temp_graph_obj, temp3_line, temp3_label)
+temp1_obj = DataObject("Temp1", 2, "°C", temp1_parsing_fn, pdb_temp_graph_obj, temp1_line, temp1_label)
+temp2_obj = DataObject("Temp2", 2, "°C", temp2_parsing_fn, pdb_temp_graph_obj, temp2_line, temp2_label)
+temp3_obj = DataObject("Temp3", 2, "°C", temp3_parsing_fn, pdb_temp_graph_obj, temp3_line, temp3_label)
 
 pdb_volt_graph = create_graph("Cell Voltages vs Time", "Voltage (V)", 0, 5)
 volt1_line, = pdb_volt_graph[2].plot([], [], 'b-', label='Volt 1')
@@ -319,10 +315,10 @@ volt1_label = create_label("Volt1: --- ")
 volt2_label = create_label("Volt2: --- ")
 volt3_label = create_label("Volt3: --- ")
 volt4_label = create_label("Volt4: --- ")
-volt1_obj = DataObject("Volt1", 1, "V", volt1_parsing_fn, pdb_volt_graph_obj,volt1_line, volt1_label)
-volt2_obj = DataObject("Volt2", 1, "V", volt2_parsing_fn, pdb_volt_graph_obj,volt2_line, volt2_label)
-volt3_obj = DataObject("Volt3", 1, "V", volt3_parsing_fn, pdb_volt_graph_obj,volt3_line, volt3_label)
-volt4_obj = DataObject("Volt4", 1, "V", volt4_parsing_fn, pdb_volt_graph_obj,volt4_line, volt4_label)
+volt1_obj = DataObject("Volt1", 2, "V", volt1_parsing_fn, pdb_volt_graph_obj,volt1_line, volt1_label)
+volt2_obj = DataObject("Volt2", 2, "V", volt2_parsing_fn, pdb_volt_graph_obj,volt2_line, volt2_label)
+volt3_obj = DataObject("Volt3", 2, "V", volt3_parsing_fn, pdb_volt_graph_obj,volt3_line, volt3_label)
+volt4_obj = DataObject("Volt4", 2, "V", volt4_parsing_fn, pdb_volt_graph_obj,volt4_line, volt4_label)
 
 pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj]
 
