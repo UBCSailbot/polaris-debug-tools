@@ -86,14 +86,23 @@ def send_pdb_command(client):
                     # pH_data = round(slope_data * 15)
 
         # designed so that volt1 < volt2 < volt3 < volt4 and temp1 < temp2 < temp3 for easy debugging
-        volt1 = convert_to_little_endian(convert_to_hex(round((slope_data - 0.1) * 3.8) * 1000))
-        volt2 = convert_to_little_endian(convert_to_hex(round((slope_data) * 3.8) * 1000))
-        volt3 = convert_to_little_endian(convert_to_hex(round((slope_data + 0.1) * 4) * 1000))
-        volt4 = convert_to_little_endian(convert_to_hex(round((slope_data + 0.2) * 3.8) * 1000))
-        temp1 = convert_to_little_endian(convert_to_hex(round((slope_data - 0.15)* 127.0)* 1000))
-        temp2 = convert_to_little_endian(convert_to_hex(round((slope_data) * 127.0)* 1000))
-        temp3 = convert_to_little_endian(convert_to_hex(round((slope_data + 0.15) * 130.0)* 1000))
-        can_data = volt2 + temp1 + volt3 + temp2 + temp3 + volt4 + volt1
+        volt1 = convert_to_little_endian(convert_to_hex(int((slope_data - 0.05) * 3.8 * 10000), 2))
+        volt2 = convert_to_little_endian(convert_to_hex(int((slope_data * 3.8) * 10000), 2))
+        volt3 = convert_to_little_endian(convert_to_hex(int((slope_data + 0.1) * 4.0 * 10000), 2))
+        volt4 = convert_to_little_endian(convert_to_hex(int((slope_data + 0.2) * 3.8 * 10000), 2))
+
+        print(f"temp1 = {convert_to_hex(int((slope_data - 0.05) * 127.0) * 100, 2)}")
+        temp1 = convert_to_little_endian(convert_to_hex(int((slope_data - 0.05) * 127.0) * 100, 2))
+        temp2 = convert_to_little_endian(convert_to_hex(int((slope_data) * 127.0) * 100, 2))
+
+        # print(f"temp2 = {convert_to_hex(int((slope_data) * 127.0) * 1000, 2)}")
+        temp3 = convert_to_little_endian(convert_to_hex(int((slope_data + 0.15) * 130.0) * 100, 2))
+        curr_hp = convert_to_little_endian(convert_to_hex(round((slope_data - 0.05) * 25)* 1000, 2))
+        curr_hs = convert_to_little_endian(convert_to_hex(round((slope_data) * 25)* 1000, 2))
+        curr_sp = convert_to_little_endian(convert_to_hex(round((slope_data + 0.1) * 25)* 1000, 2))
+        curr_ss = convert_to_little_endian(convert_to_hex(round((slope_data + 0.2) * 25)* 1000, 2))
+
+        can_data = volt2  + temp1 + volt3 + temp2 + temp3 + volt4 + volt1 + curr_hp + curr_hs + curr_sp + curr_ss
         # can_data = "c05d9600401fc9416075c8325831"
         can_msg = "cansend can1 206##1" + can_data
 
