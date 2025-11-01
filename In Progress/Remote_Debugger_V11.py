@@ -91,8 +91,12 @@ def create_graph(title, ylabel, ymin, ymax):
 ### ----------  Parsing Data Frames  ---------- ###
 
 def parse_0x206_frame(data_hex):
-    raw_bytes = bytes.fromhex(data_hex)
-    if len(raw_bytes) != 14:
+    try:
+        raw_bytes = bytes.fromhex(data_hex)
+    except Exception as e:
+        print(f"Exception thrown by parse_0x206: {e}")
+        return {}
+    if len(raw_bytes) != 24:
         raise ValueError("Incorrect data length (num bytes): ID 0x206")
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
@@ -103,7 +107,11 @@ def parse_0x206_frame(data_hex):
         "temp_2": val(6, 8, 100.0),
         "temp_3": val(8, 10, 100.0),
         "volt_4": val(10, 12, 10000.0),
-        "volt_1": val(12, 14, 10000.0)
+        "volt_1": val(12, 14, 10000.0),
+        "curr_hp": val(14, 16, 1000),
+        "curr_hs": val(16, 18, 1000),
+        "curr_sp": val(18, 20, 1000),
+        "curr_ss": val(20, 22, 1000)
     }
 
 def temp1_parsing_fn(parsed_dict):
@@ -317,6 +325,9 @@ volt3_obj = DataObject("Volt3", 1, "V", volt3_parsing_fn, pdb_volt_graph_obj,vol
 volt4_obj = DataObject("Volt4", 1, "V", volt4_parsing_fn, pdb_volt_graph_obj,volt4_line, volt4_label)
 
 pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj]
+
+all_objs = pdb_objs.copy()
+all_objs.extend(data_objs)
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -1063,35 +1074,16 @@ class CANWindow(QWidget):
                         try:
                             raw_data = line.split(']')[-1].strip().split()
                             parsed = parse_0x206_frame(''.join(raw_data))
+                            # print(f"before\n")
                             for obj in pdb_objs:
-                                obj.parsing_fn(None, parsed_dict = parsed)
+                                obj.parse_frame(current_time, None, parsed)                           
                                 obj.update_label()
-
-                            # self.temp_values_label.setText(
-                            #     # f"Bat: "
-                            #     f"Temp 1: {parsed['temp_1']:6.2f}°C  "
-                            #     f"Temp 2: {parsed['temp_2']:6.2f}°C  "
-                            #     f"Temp 3: {parsed['temp_3']:6.2f}°C"
-                            # )
-                            # self.volt_values_label.setText(
-                            #     # f"Voltage Values:     "
-                            #     f"Volt 1: {parsed['volt_1']:5.2f}V  "
-                            #     f"Volt 2: {parsed['volt_2']:5.2f}V  "
-                            #     f"Volt 3: {parsed['volt_3']:5.2f}V  "
-                            #     f"Volt 4: {parsed['volt_4']:5.2f}V"
-                            # )
-
-                            # Add new data point with current time
-                            # self.temp1_history.append(parsed['temp_1'])
-                            # self.temp2_history.append(parsed['temp_2'])
-                            # self.temp3_history.append(parsed['temp_3'])
-                            # self.volt1_history.append(parsed['volt_1'])
-                            # self.volt2_history.append(parsed['volt_2'])
-                            # self.volt3_history.append(parsed['volt_3'])
-                            # self.volt4_history.append(parsed['volt_4'])
+                                # print(f"after obj {i} \n")
+                            # print(f"before set_rudder_history")
                             self.set_rudder_history.append(self.rudder_angle)                   
-
+                            # print(f"success: line {line_num}")
                         except Exception as e:
+                            print(f"[PARSE ERROR 0x206] {str(e)}")
                             self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
                     
                     # Handle 0x204 frame (actual rudder angle)
@@ -1182,13 +1174,17 @@ class CANWindow(QWidget):
                 if (new_msg_to_log and (len(self.time_history) > 0)):
                     actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
                     self._log_values(
-                        self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
-                        self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
-                        self.volt4_history[-1], self.rudder_angle, actual_rudder
+                        0, 0, 0,
+                        0, 0, 0, 0, self.rudder_angle, actual_rudder
                     )
+                    # self._log_values(
+                    #     self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
+                    #     self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
+                    #     self.volt4_history[-1], self.rudder_angle, actual_rudder
+                    # )
 
                     # trim values no longer being graphed
-                    for obj in data_objs:
+                    for obj in all_objs:
                         obj.update_data(current_time, scroll_window)
 
                 # print(f"sal_history = {self.sal_history}")
@@ -1199,7 +1195,8 @@ class CANWindow(QWidget):
                 # print(f"pH_obj.current = {pH_obj.get_current()}")
                 # print(f"water_temp = {temp_sensor_obj.get_current()}")
                 # print(f"pH_obj.data.keys() = {pH_obj.data.keys()}")
-                print(f"sal = {sal_obj.get_current()}")
+                # print(f"sal = {sal_obj.get_current()}")
+                # print(f"temp1 = {temp1_obj.data}")
                 # print(f"time_history = {self.time_history}")
                             
         
@@ -1255,7 +1252,7 @@ class CANWindow(QWidget):
             # self.temp_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             # self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             pdb_temp_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
-            pdb_volt_graph[2].graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            pdb_volt_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
             self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             # self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
             # pH_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
