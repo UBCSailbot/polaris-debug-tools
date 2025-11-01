@@ -322,8 +322,7 @@ volt4_obj = DataObject("Volt4", 2, "V", volt4_parsing_fn, pdb_volt_graph_obj,vol
 
 pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj]
 
-all_objs = pdb_objs.copy()
-all_objs.extend(data_objs)
+all_objs = pdb_objs + data_objs
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
