@@ -92,7 +92,7 @@ def create_graph(title, ylabel, ymin, ymax):
 
 def parse_0x206_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
-    if len(raw_bytes) != 14:
+    if len(raw_bytes) != 24:
         raise ValueError("Incorrect data length (num bytes): ID 0x206")
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
@@ -103,7 +103,11 @@ def parse_0x206_frame(data_hex):
         "temp_2": val(6, 8, 100.0),
         "temp_3": val(8, 10, 100.0),
         "volt_4": val(10, 12, 10000.0),
-        "volt_1": val(12, 14, 10000.0)
+        "volt_1": val(12, 14, 10000.0),
+        "curr_hp": val(14, 16, 1000),
+        "curr_hs": val(16, 18, 1000),
+        "curr_sp": val(18, 20, 1000),
+        "curr_ss": val(20, 22, 1000)
     }
 
 def parse_0x204_frame(data_hex):
