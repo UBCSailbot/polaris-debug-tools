@@ -545,7 +545,7 @@ class CANWindow(QWidget):
             last_val = history[-1] if history else 0
             history.append(last_val)
 
-    def _log_values(self, temp1, temp2, temp3, volt1, volt2, volt3, volt4, set_rudder, actual_rudder):
+    def _log_values(self):
         """Log current values to CSV file"""
         try:
             timestamp = datetime.now().isoformat()
@@ -599,148 +599,6 @@ class CANWindow(QWidget):
         top_bar_layout.addSpacing(10)
         top_bar_layout.addWidget(self.status_label)
         top_bar_layout.addStretch()
-
-        # === Live Value Display ===
-        # value_style = """
-        #     color: black;
-        #     font-size: 18px;
-        #     font-weight: bold;
-        #     font-family: 'Courier New', monospace;
-        #     padding: 8px;
-        #     background-color: #f0f0f0;
-        #     border: 2px solid #cccccc;
-        #     border-radius: 6px;
-        #     margin: 2px;
-        # """
-        
-        self.temp_values_label = create_label("Temperature Values: --")
-        # self.temp_values_label = QLabel("Temperature Values: --")
-        # self.temp_values_label.setMinimumWidth(300)
-        # self.temp_values_label.setAlignment(Qt.AlignLeft)
-        # self.temp_values_label.setStyleSheet(value_style)
-        
-        self.volt_values_label = create_label("Voltage Values: --")
-        # self.volt_values_label = QLabel("Voltage Values: --")
-        # self.volt_values_label.setMinimumWidth(700)
-        # self.volt_values_label.setAlignment(Qt.AlignLeft)
-        # self.volt_values_label.setStyleSheet(value_style)
-        
-        self.rudder_values_label = create_label("Rudder Angles: Set: 0°  Actual:  --")
-        # self.rudder_values_label = QLabel("Rudder Angles: Set: 0°  Actual:  --")
-        # self.rudder_values_label.setMinimumWidth(550)
-        # self.rudder_values_label.setAlignment(Qt.AlignLeft)
-        # self.rudder_values_label.setStyleSheet(value_style)
-
-        
-        # === Temperature Plot ===
-        self.temp_figure, self.temp_canvas, self.temp_ax = create_graph("Temperatures vs Time", "Temp (°C)", 0, 100)
-        # self.temp_figure = Figure(figsize=(8, 4), tight_layout=True)
-        # self.temp_canvas = FigureCanvas(self.temp_figure)
-        # self.temp_canvas.setMinimumSize(graph_min_width, graph_min_height)
-        # self.temp_ax = self.temp_figure.add_subplot(111)
-        # self.temp_ax.set_title("Temperatures vs Time")
-        # self.temp_ax.set_xlabel("Time (s)")
-        # self.temp_ax.set_ylabel("Temp (°C)")
-        # self.temp_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
-        # self.temp_ax.set_ylim(0, 100)
-        # self.temp_ax.grid(True, alpha=0.3)
-        
-        # Initialize empty lines for temperature data
-        self.temp1_line, = self.temp_ax.plot([], [], 'r-', label='Temp 1')
-        self.temp2_line, = self.temp_ax.plot([], [], 'g-', label='Temp 2')
-        self.temp3_line, = self.temp_ax.plot([], [], 'y-', label='Temp 3')
-        self.temp_ax.legend()
-
-        # === Voltage Plot ===
-        self.volt_figure, self.volt_canvas, self.volt_ax = create_graph("Cell Voltages vs Time", "Voltage (V)", 0, 5)
-        # self.volt_figure = Figure(figsize=(8, 4), tight_layout=True)
-        # self.volt_canvas = FigureCanvas(self.volt_figure)
-        # self.volt_canvas.setMinimumSize(graph_min_width, graph_min_height)
-        # self.volt_ax = self.volt_figure.add_subplot(111)
-        # self.volt_ax.set_title("Cell Voltages vs Time")
-        # self.volt_ax.set_xlabel("Time (s)")
-        # self.volt_ax.set_ylabel("Voltage (V)")
-        # self.volt_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
-        # self.volt_ax.set_ylim(0, 5)
-        # self.volt_ax.grid(True, alpha=0.3)
-        
-        # Initialize empty lines for voltage data
-        self.volt1_line, = self.volt_ax.plot([], [], 'b-', label='Volt 1')
-        self.volt2_line, = self.volt_ax.plot([], [], 'c-', label='Volt 2')
-        self.volt3_line, = self.volt_ax.plot([], [], 'm-', label='Volt 3')
-        self.volt4_line, = self.volt_ax.plot([], [], 'orange', label='Volt 4')
-        self.volt_ax.legend()
-
-        # === Rudder Angle Plot ===
-        self.rudder_figure, self.rudder_canvas, self.rudder_ax = create_graph("Rudder Angle Comparison vs Time", "Angle (degrees)", -50, 50)
-        # self.rudder_figure = Figure(figsize=(8, 4), tight_layout=True)
-        # self.rudder_canvas = FigureCanvas(self.rudder_figure)
-        # self.rudder_canvas.setMinimumSize(graph_min_width, graph_min_height)
-        # self.rudder_ax = self.rudder_figure.add_subplot(111)
-        # self.rudder_ax.set_title("Rudder Angle Comparison vs Time")
-        # self.rudder_ax.set_xlabel("Time (s)")
-        # self.rudder_ax.set_ylabel("Angle (degrees)")
-        # self.rudder_ax.set_xlim(0, 60)  # Set initial X range to 0-60 seconds
-        # self.rudder_ax.set_ylim(-50, 50)  # Rudder range is typically -45 to +45 degrees
-        # self.rudder_ax.grid(True, alpha=0.3)
-        
-        # Initialize empty lines for rudder data
-        self.actual_rudder_line, = self.rudder_ax.plot([], [], 'r-', linewidth=2, label='Actual Rudder')
-        self.set_rudder_line, = self.rudder_ax.plot([], [], 'b--', linewidth=2, label='Set Rudder')
-        self.rudder_ax.legend()
-
-        # === pH Sensor Plot ===
-        # self.pH_figure, self.pH_canvas, self.pH_ax = create_graph("pH vs Time", "pH", 0, 14)
-        # self.pH_figure = Figure(figsize=(8, 4), tight_layout=True)
-        # self.pH_canvas = FigureCanvas(self.pH_figure)
-        # self.pH_canvas.setMinimumSize(graph_min_width, graph_min_height)
-        # self.pH_ax = self.pH_figure.add_subplot(111)
-        # self.pH_ax.set_title("pH vs Time")
-        # self.pH_ax.set_xlabel("Time (s)")
-        # self.pH_ax.set_ylabel("pH")
-        # self.pH_ax.set_xlim(0, 60)
-        # self.pH_ax.set_ylim(0, 14)
-        # self.pH_ax.grid(True, alpha=0.3)
-
-        # Initialize empty lines for pH data
-        # self.pH_line, = self.pH_ax.plot([], [], 'r-', linewidth=2, label='Current pH')
-        # self.pH_ax.legend()
-
-        # === Water Temp Sensor Plot ===
-        self.temp_sensor_figure, self.temp_sensor_canvas, self.temp_sensor_ax = create_graph("Water Temp vs Time", "Temp (°C)", 0, 100)
-        # self.temp_sensor_figure = Figure(figsize=(8, 4), tight_layout=True) 
-        # self.temp_sensor_canvas = FigureCanvas(self.temp_sensor_figure)
-        # self.temp_sensor_canvas.setMinimumSize(graph_min_width, graph_min_height)
-        # self.temp_sensor_ax = self.temp_sensor_figure.add_subplot(111)
-        # self.temp_sensor_ax.set_title("Water Temp vs Time")
-        # self.temp_sensor_ax.set_xlabel("Time (s)")
-        # self.temp_sensor_ax.set_ylabel("Temp (°C)")
-        # self.temp_sensor_ax.set_xlim(0, 60)
-        # self.temp_sensor_ax.set_ylim(-15, 40) # Starting temp range from -15 to 40 degrees; can change in the future
-        # self.temp_sensor_ax.grid(True, alpha=0.3)
-
-        # Initialize empty lines for temp sensor data
-        # self.temp_sensor_line, = self.temp_sensor_ax.plot([], [], 'b-', linewidth=2, label="Water Temp")
-        # self.temp_sensor_ax.legend()
-
-        # === Salinity Sensor Plot ===
-        self.sal_figure, self.sal_canvas, self.sal_ax = create_graph("Salinity vs Time", "Salinity (µS/cm)", 0, 100000)
-        # self.sal_figure = Figure(figsize=(8, 4), tight_layout=True)
-        # self.sal_canvas = FigureCanvas(self.sal_figure)
-        # self.sal_canvas.setMinimumSize(graph_min_width, graph_min_height)
-        # self.sal_ax = self.sal_figure.add_subplot(111)
-        # self.sal_ax.set_title("Salinity vs Time")
-        # self.sal_ax.set_xlabel("Time (s)")
-        # self.sal_ax.set_ylabel("Salinity (µS/cm)")
-        # self.sal_ax.set_xlim(0, 60)
-        # self.sal_ax.set_ylim(40000, 550000)
-        # self.sal_ax.grid(True, alpha=0.3)
-
-        # Initialize empty lines for salinity data
-        self.sal_line, = self.sal_ax.plot([], [], 'g-', linewidth=2, label='Current Salinity')
-        self.sal_ax.legend()
-
-        # Auto-scaling enabled for proper initial display
 
         # === Left Panel ===
         self.keyboard_checkbox = QCheckBox("Keyboard Mode")
@@ -911,41 +769,13 @@ class CANWindow(QWidget):
                 labels_layout.addWidget(obj.label)
         
         labels_layout.addStretch(1)
-        
-        # label_container = QWidget()
-        # label_container.setLayout(labels_layout)
-
-        # label_scroll_area = QScrollArea()
-        # label_scroll_area.setWidgetResizable(True)
-        # label_scroll_area.setWidget(label_container)
-        # label_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # label_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) 
-
-        # container_widget = QWidget()
-        # container_widget.setLayout(right_graphs_layout)
-        # container_sp = container_widget.sizePolicy()
-        # container_sp.setHorizontalPolicy(QSizePolicy.Minimum)
-        # container_widget.setSizePolicy(container_sp)
-        # container_widget.setMinimumWidth(300)
-
-        # scroll_area = QScrollArea()
-        # scroll_area.setWidgetResizable(True)
-        # scroll_area.setWidget(container_widget)
-        # scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) 
-        
+                
         right_graphs_layout = QVBoxLayout()
-        # right_graphs_layout.addWidget(self.temp_canvas)
-        # right_graphs_layout.addWidget(self.volt_canvas)
         right_graphs_layout.addWidget(pdb_temp_graph[1]) # temp canvas
         right_graphs_layout.addWidget(pdb_volt_graph[1]) # volt canvas
         right_graphs_layout.addWidget(rudder_graph[1]) # rudder angle canvas
-        # right_graphs_layout.addWidget(self.pH_canvas)
-        # right_graphs_layout.addWidget(self.temp_sensor_canvas)
         for obj in data_objs:
             right_graphs_layout.addWidget(obj.graph.canvas)
-
-        # right_graphs_layout.addWidget(self.sal_canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_graphs_layout)
@@ -961,7 +791,7 @@ class CANWindow(QWidget):
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) 
         
         right_layout.addWidget(scroll_area)
-        middle_layout = QVBoxLayout()
+        # middle_layout = QVBoxLayout()
         # middle_layout.addWid(label_scroll_area)
 
         bottom_layout = QHBoxLayout()
@@ -1118,19 +948,6 @@ class CANWindow(QWidget):
                             for obj in rudder_objs:
                                 obj.parse_frame(current_time, None, parsed)
                                 obj.update_label()
-                            
-                            # Update the most recent actual rudder value
-                            # if self.actual_rudder_history:
-                            #     self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
-                            # else:
-                            #     # If no history yet, add initial value
-                            #     self.actual_rudder_history.append(parsed['actual_rudder_angle'])
-                            
-                            # # Update rudder display
-                            # actual_angle = parsed['actual_rudder_angle']
-                            # self.rudder_values_label.setText(
-                            #     f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {actual_angle:6.1f}°"
-                            # )
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
@@ -1138,11 +955,6 @@ class CANWindow(QWidget):
                     # Handle temp_sensor frame
                     elif frame_id[0:2] == "10":
                         try:
-                            # Parse frame data, update the most recent temp_sensor value
-                            # raw_data = line.split(']')[-1].strip().split()
-                            # parsed = parse_0x10X_frame(''.join(raw_data))
-                            # self.temp_sensor_history.append(parsed["temp_sensor"])
-
                             temp_sensor_obj.parse_frame(current_time, line)
                             temp_sensor_obj.update_label()
                         except Exception as e:
@@ -1152,12 +964,7 @@ class CANWindow(QWidget):
                        
                     # Handle pH sensor frame
                     elif frame_id[0:2] == "11":
-                        try: 
-                            # Parse frame data, update the most recent pH value
-                            # raw_data = line.split(']')[-1].strip().split() # this line goes into parse_frame
-                            # parsed = parse_0x11X_frame(''.join(raw_data)) # replaced by parse_frame
-                            # self.pH_history.append(parsed["pH"]) # replaced by add_datapoint called by internal function parse_frame
-                                            
+                        try:               
                             pH_obj.parse_frame(current_time, line)
                             pH_obj.update_label()
 
@@ -1169,10 +976,6 @@ class CANWindow(QWidget):
                     # Handle salinity sensor frame
                     elif frame_id[0:2] == "12":
                         try: 
-                            # Parse frame data, update the most recent salinity value
-                            # raw_data = line.split(']')[-1].strip().split()
-                            # parsed = parse_0x12X_frame(''.join(raw_data))
-                            # self.sal_history.append(parsed["sal"])
                             sal_obj.parse_frame(current_time, line)
                             sal_obj.update_label()
                                                 
@@ -1186,29 +989,13 @@ class CANWindow(QWidget):
                 # # limits the number of data points to prevent program crash from too much memory use over time
                 # if (len(self.time_history) > 361): self.time_history.pop(0)
 
-                # Update all histories - Fill in missing data if needed/pop old data if too many data points
-                # self.update_history(self.temp1_history)
-                # self.update_history(self.temp2_history)
-                # self.update_history(self.temp3_history)
-                # self.update_history(self.volt1_history)
-                # self.update_history(self.volt2_history)
-                # self.update_history(self.volt3_history)
-                # self.update_history(self.volt4_history)
-                self.update_history(self.set_rudder_history)
-                self.update_history(self.actual_rudder_history)
+                # self.update_history(self.set_rudder_history)
+                # self.update_history(self.actual_rudder_history)
 
                 # Log current values
                 if (new_msg_to_log and (len(self.time_history) > 0)):
-                    actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
-                    self._log_values(
-                        0, 0, 0,
-                        0, 0, 0, 0, 0, 0
-                    )
-                    # self._log_values(
-                    #     self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
-                    #     self.volt1_history[-1], self.volt2_history[-1], self.volt3_history[-1], 
-                    #     self.volt4_history[-1], self.rudder_angle, actual_rudder
-                    # )
+                    # actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+                    self._log_values()
 
                     # trim values no longer being graphed
                     for obj in all_objs:
@@ -1229,24 +1016,6 @@ class CANWindow(QWidget):
         
         # Always update plots every timer cycle (independent of CAN messages)
         if len(self.time_history) > 0:
-
-            # self.temp1_line.set_data(self.time_history, self.temp1_history)
-            # self.temp2_line.set_data(self.time_history, self.temp2_history)
-            # self.temp3_line.set_data(self.time_history, self.temp3_history)
-            
-            # self.volt1_line.set_data(self.time_history, self.volt1_history)
-            # self.volt2_line.set_data(self.time_history, self.volt2_history)
-            # self.volt3_line.set_data(self.time_history, self.volt3_history)
-            # self.volt4_line.set_data(self.time_history, self.volt4_history)
-            # self.pH_line.set_data(self.time_history, self.pH_history)
-            # self.temp_sensor_line.set_data(self.time_history, self.temp_sensor_history)
-            # self.sal_line.set_data(self.time_history, self.sal_history)
-
-            # print(f"sal_history = {self.sal_history}")
-            # print(f"pH_history = {self.pH_history}")
-            # print(f"temp_sensor_history = {self.temp_sensor_history}")
-            # print(f"time_history = {self.time_history}")
-
             self._update_plot_ranges(current_time)
 
 
@@ -1276,27 +1045,13 @@ class CANWindow(QWidget):
         # === Auto-scale and scroll X axis ===
         if len(self.time_history) > 1:
             # Automatically scroll X axis to show latest data
-            # self.temp_ax.set_xlim(max(0, current_time - scroll_window), current_time)
-            # self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             pdb_temp_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
             pdb_volt_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
             rudder_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
-            # self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
-            # self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
-            # pH_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
-            # self.temp_sensor_ax.set_xlim(max(0, current_time - scroll_window), current_time)
-            # temp_sensor_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
-
-            # self.sal_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             for obj in data_objs:
                 obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
 
         else:
-            # For initial data points, auto-scale
-            # self.temp_ax.relim()
-            # self.temp_ax.autoscale_view()
-            # self.volt_ax.relim()
-            # self.volt_ax.autoscale_view()
             pdb_temp_graph[2].relim()
             pdb_temp_graph[2].autoscale_view()
             pdb_volt_graph[2].relim()
@@ -1308,76 +1063,32 @@ class CANWindow(QWidget):
                 obj.graph.ax.relim()
                 obj.graph.ax.autoscale_view()
 
-        # === Auto Y adjustment (Temp) ===
-        # if self.temp1_history and self.temp2_history and self.temp3_history:
-        #     temp_max = max(self.temp1_history + self.temp2_history + self.temp3_history)
-        #     temp_min = min(self.temp1_history + self.temp2_history + self.temp3_history)
-        #     if temp_max > 75 or temp_min < 10:
-        #         self.temp_ax.set_ylim(min(temp_min - 2, 10), max(temp_max + 2, 75))
-        #     else:
-        #         self.temp_ax.set_ylim(10, 75)
+        # === Auto Y adjustment ===
 
         temp1_obj.adjust_ylim()
-
-        # === Auto Y adjustment (Volt) ===
-        # if self.volt1_history and self.volt2_history and self.volt3_history and self.volt4_history:
-        #     volt_max = max(self.volt1_history + self.volt2_history + self.volt3_history + self.volt4_history)
-        #     volt_min = min(self.volt1_history + self.volt2_history + self.volt3_history + self.volt4_history)
-        #     if volt_max > 4 or volt_min < 2.5:
-        #         self.volt_ax.set_ylim(min(volt_min - 0.1, 2.5), max(volt_max + 0.1, 4))
-        #     else:
-        #         self.volt_ax.set_ylim(2.5, 4)
-
         volt1_obj.adjust_ylim()
         actual_rudder_obj.adjust_ylim()
 
         # === Auto Y adjustment (Rudder) ===
-        if self.actual_rudder_history or self.set_rudder_history:
-            all_rudder_angles = self.actual_rudder_history + self.set_rudder_history
-            if all_rudder_angles:
-                rudder_max = max(all_rudder_angles)
-                rudder_min = min(all_rudder_angles)
-                # Keep some margin around the data
-                margin = 5
-                self.rudder_ax.set_ylim(max(-50, rudder_min - margin), min(50, rudder_max + margin))
+        # if self.actual_rudder_history or self.set_rudder_history:
+        #     all_rudder_angles = self.actual_rudder_history + self.set_rudder_history
+        #     if all_rudder_angles:
+        #         rudder_max = max(all_rudder_angles)
+        #         rudder_min = min(all_rudder_angles)
+        #         # Keep some margin around the data
+        #         margin = 5
+        #         self.rudder_ax.set_ylim(max(-50, rudder_min - margin), min(50, rudder_max + margin))
 
-        # === Auto Y adjustment (pH) === # pH Change
-        # TODO: pH range is only 0 to 14, but it may need auto-scaling adjustment
-        #       to allow us to see smaller changes in pH
-
-        # === Auto Y adjustment (temp sensor) === 
-        # if (self.temp_sensor_history):
-        #     temp_max = max(self.temp_sensor_history)
-        #     temp_min = min(self.temp_sensor_history)
-        #     margin = 5
-        #     self.temp_sensor_ax.set_ylim(max(temp_min - margin, -130), min(1275, temp_max + margin))
         temp_sensor_obj.adjust_ylim()
-
-        # === Auto Y adjustment (sal sensor) ===
-        # if (self.sal_history):
-        #     sal_max = max(self.sal_history)
-        #     sal_min = min(self.sal_history)
-        #     margin = 10
-        #     self.sal_ax.set_ylim(max(sal_min - margin, 0), min(sal_max + margin, 500000))
         sal_obj.adjust_ylim()
 
         # Update the canvas to reflect changes
-        # self.temp_canvas.draw()
-        # self.volt_canvas.draw()
         pdb_temp_graph[1].draw()
         pdb_volt_graph[1].draw()
         rudder_graph[1].draw()
-        # self.rudder_canvas.draw()
-        # self.pH_canvas.draw() # pH Change
-        # pH_obj.graph.canvas.draw()
-        # self.temp_sensor_canvas.draw()
-        # temp_sensor_obj.graph.canvas.draw()
         
         for obj in data_objs:
             obj.graph.canvas.draw()
-
-        # self.sal_canvas.draw()
-
 
     def show_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
