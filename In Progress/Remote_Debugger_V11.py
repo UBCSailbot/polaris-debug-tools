@@ -134,16 +134,29 @@ def volt4_parsing_fn(parsed_dict):
 
 def parse_0x204_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
-    if len(raw_bytes) != 4:
+    if len(raw_bytes) != 16:
         raise ValueError("Incorrect data length (num bytes): ID 0x204")
     
     # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
-    actual_rudder_raw = int.from_bytes(raw_bytes[0:4], 'little')
-    actual_rudder_angle = (actual_rudder_raw / 1000.0) - 90
+    raw = int.from_bytes(raw_bytes, 'little')
     
+    val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
-        "actual_rudder_angle": actual_rudder_angle
+        actual_rudder_obj.name: val(0, 2, 100.0) - 90,
+        "imu_roll": val(2, 4, 100.0) - 100,
+        "imu_pitch": val(4, 6, 100.0) - 180,
+        "imu_heading": val(6, 8, 100.0),
+        set_rudder_obj.name: val(8, 10, 100.0) - 90,
+        "integral": val(10, 12, 1.0),
+        "derivative": val(12, 14, 1.0),
+        "spd_over_gnd": val(14, 16, 1000.0)
     }
+
+def actual_rudder_parsing_fn(parsed_dict):
+    return parsed_dict[actual_rudder_obj.name]
+
+def set_rudder_parsing_fn(parsed_dict):
+    return parsed_dict[set_rudder_obj.name]
 
 # Salinity data frame
 def parse_0x12X_frame(data_hex):
@@ -322,7 +335,18 @@ volt4_obj = DataObject("Volt4", 2, "V", volt4_parsing_fn, pdb_volt_graph_obj,vol
 
 pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj]
 
-all_objs = pdb_objs + data_objs
+rudder_graph = create_graph("Rudder Angles vs Time", "degrees (°)", -50, 50)
+actual_rudder_line, = rudder_graph[2].plot([], [], 'r-', linewidth=2, label='Actual Rudder Angle')
+set_rudder_line, = rudder_graph[2].plot([], [], 'b--', linewidth=2, label='Commanded Rudder Angle')
+rudder_graph_obj = GraphObject(rudder_graph[0], rudder_graph[1], rudder_graph[2], -90, 90)
+actual_rudder_label = create_label("Actual_rudder_deg: ---- ")
+set_rudder_label = create_label("Set_rudder_deg: ---- ")
+actual_rudder_obj = DataObject("Actual_rudder_deg", 2, "°", actual_rudder_parsing_fn, rudder_graph_obj, line=actual_rudder_line, label=actual_rudder_label)
+set_rudder_obj = DataObject("Set_rudder_deg", 2, "°", set_rudder_parsing_fn, None, line=set_rudder_line, label=set_rudder_label)
+
+rudder_objs = [actual_rudder_obj, set_rudder_obj]
+
+all_objs = pdb_objs + rudder_objs + data_objs
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -338,12 +362,9 @@ def candump_process(queue: multiprocessing.Queue):
         while True:
             if session.recv_ready():
                 line = session.recv(1024).decode()
-                # print(f"line.strip() = {line.strip()}")
-                # print(f"line.split(newline) = {line.split("\n")}")
                 lines = line.split("\n")
                 for l in lines:
                     if (l != ""): queue.put(l.strip())
-                # queue.put(line.strip())
             time.sleep(0.1)
     except Exception as e:
         queue.put(f"[ERROR] {str(e)}")
@@ -460,18 +481,16 @@ class CANWindow(QWidget):
 
         self.time_start = time.time()
         self.time_history = []
-        self.temp1_history = []
-        self.temp2_history = []
-        self.temp3_history = []
-        self.volt1_history = []
-        self.volt2_history = []
-        self.volt3_history = []
-        self.volt4_history = []
+        # self.temp1_history = []
+        # self.temp2_history = []
+        # self.temp3_history = []
+        # self.volt1_history = []
+        # self.volt2_history = []
+        # self.volt3_history = []
+        # self.volt4_history = []
         self.actual_rudder_history = []
         self.set_rudder_history = []
-        # self.pH_history = [] # replaced by pH.data
-        # self.temp_sensor_history = []
-        # self.sal_history = []
+
 
         # Initialize logging
         self._init_logging()
@@ -507,13 +526,7 @@ class CANWindow(QWidget):
         values_header = [
             'Timestamp', 'Elapsed_Time_s'
         ]
-        for obj in pdb_objs:
-            values_header.append(obj.name)
-
-        values_header.append('Set_Rudder_deg')
-        values_header.append('Actual_Rudder_deg')
-
-        for obj in data_objs:
+        for obj in all_objs:
             values_header.append(obj.name)
         # values_header.append('Salinity')
 
@@ -544,12 +557,16 @@ class CANWindow(QWidget):
             values = [timestamp, f'{elapsed_time:.3f}'
                 # f'{pH}', f'{temp_sensor}'# , f'{sal}'
             ]
-            for obj in pdb_objs:
-                values.append(str(obj.get_current()[1]))
-            values.append(str(round(set_rudder, 1)))
-            values.append(str(round(actual_rudder, 1)) if actual_rudder is not None else '')
-            for obj in data_objs:
-                values.append(str(obj.get_current()[1]))
+            for obj in all_objs:
+                val = obj.get_current()[1]
+                if (val is not None):
+                    values.append(str(val))
+                else:
+                    values.append("None")
+            # values.append(str(round(set_rudder, 1)))
+            # values.append(str(round(actual_rudder, 1)) if actual_rudder is not None else '')
+            # for obj in data_objs:
+            #     values.append(str(obj.get_current()[1]))
             # values.append(str(sal))
             self.values_writer.writerow(values)
             self.values_csv_file.flush()  # Flush immediately to prevent data loss
@@ -899,14 +916,19 @@ class CANWindow(QWidget):
             pdb_volt_labels_layout.addWidget(pdb_objs[i].label)
         right_labels_layout.addLayout(pdb_temp_labels_layout)
         right_labels_layout.addLayout(pdb_volt_labels_layout)
-        right_labels_layout.addWidget(self.rudder_values_label)
+        
+        rudder_labels_layout = QHBoxLayout()
+        for obj in rudder_objs:
+            if (obj.label is not None):
+                rudder_labels_layout.addWidget(obj.label)
+        right_labels_layout.addLayout(rudder_labels_layout)
 
         data_labels_layout = QHBoxLayout() # Horizontal layout for labels
         # TODO: modify for loop to add labels for all items
         for obj in data_objs:
             data_labels_layout.addWidget(obj.label)
         right_labels_layout.addLayout(data_labels_layout)
-
+        
         right_layout.addLayout(right_labels_layout)
         # right_layout.addSpacing(10)  # Add small spacing before plots
         
@@ -915,7 +937,7 @@ class CANWindow(QWidget):
         # right_graphs_layout.addWidget(self.volt_canvas)
         right_graphs_layout.addWidget(pdb_temp_graph[1]) # temp canvas
         right_graphs_layout.addWidget(pdb_volt_graph[1]) # volt canvas
-        right_graphs_layout.addWidget(self.rudder_canvas)
+        right_graphs_layout.addWidget(rudder_graph[1]) # rudder angle canvas
         # right_graphs_layout.addWidget(self.pH_canvas)
         # right_graphs_layout.addWidget(self.temp_sensor_canvas)
         for obj in data_objs:
@@ -1012,17 +1034,18 @@ class CANWindow(QWidget):
             msg = "cansend can1 001##0" + convert_to_little_endian(value) + "80"
             self.cansend_queue.put(msg)
             self.output_display.append(f"[RUDDER SENT] {msg}")
-            self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
+            # self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
             
             # Update rudder values display
-            current_actual = "---"
-            if self.actual_rudder_history:
-                current_actual = f"{self.actual_rudder_history[-1]:6.1f}°"
-            else:
-                current_actual = "--"
-            self.rudder_values_label.setText(
-                f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {current_actual}"
-            )
+            # set_rudder_obj 
+            # current_actual = "---"
+            # if self.actual_rudder_history:
+            #     current_actual = f"{self.actual_rudder_history[-1]:6.1f}°"
+            # else:
+            #     current_actual = "--"
+            # self.rudder_values_label.setText(
+            #     f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {current_actual}"
+            # )
         except ValueError:
             self.show_error("Invalid angle input for Rudder")
 
@@ -1075,10 +1098,10 @@ class CANWindow(QWidget):
                                 obj.update_label()
                                 # print(f"after obj {i} \n")
                             # print(f"before set_rudder_history")
-                            self.set_rudder_history.append(self.rudder_angle)                   
+                            # self.set_rudder_history.append(self.rudder_angle)                   
                             # print(f"success: line {line_num}")
                         except Exception as e:
-                            print(f"[PARSE ERROR 0x206] {str(e)}")
+                            # print(f"[PARSE ERROR 0x206] {str(e)}")
                             self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
                     
                     # Handle 0x204 frame (actual rudder angle)
@@ -1086,19 +1109,23 @@ class CANWindow(QWidget):
                         try:
                             raw_data = line.split(']')[-1].strip().split()
                             parsed = parse_0x204_frame(''.join(raw_data))
+
+                            for obj in rudder_objs:
+                                obj.parse_frame(current_time, None, parsed)
+                                obj.update_label()
                             
                             # Update the most recent actual rudder value
-                            if self.actual_rudder_history:
-                                self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
-                            else:
-                                # If no history yet, add initial value
-                                self.actual_rudder_history.append(parsed['actual_rudder_angle'])
+                            # if self.actual_rudder_history:
+                            #     self.actual_rudder_history[-1] = parsed['actual_rudder_angle']
+                            # else:
+                            #     # If no history yet, add initial value
+                            #     self.actual_rudder_history.append(parsed['actual_rudder_angle'])
                             
-                            # Update rudder display
-                            actual_angle = parsed['actual_rudder_angle']
-                            self.rudder_values_label.setText(
-                                f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {actual_angle:6.1f}°"
-                            )
+                            # # Update rudder display
+                            # actual_angle = parsed['actual_rudder_angle']
+                            # self.rudder_values_label.setText(
+                            #     f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {actual_angle:6.1f}°"
+                            # )
 
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
@@ -1170,7 +1197,7 @@ class CANWindow(QWidget):
                     actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
                     self._log_values(
                         0, 0, 0,
-                        0, 0, 0, 0, self.rudder_angle, actual_rudder
+                        0, 0, 0, 0, 0, 0
                     )
                     # self._log_values(
                     #     self.temp1_history[-1], self.temp2_history[-1], self.temp3_history[-1],
@@ -1248,7 +1275,8 @@ class CANWindow(QWidget):
             # self.volt_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             pdb_temp_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
             pdb_volt_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
-            self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
+            rudder_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
+            # self.rudder_ax.set_xlim(max(0, current_time - scroll_window), current_time)
             # self.pH_ax.set_xlim(max(0, current_time - scroll_window), current_time) # pH Change
             # pH_obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
             # self.temp_sensor_ax.set_xlim(max(0, current_time - scroll_window), current_time)
@@ -1268,20 +1296,8 @@ class CANWindow(QWidget):
             pdb_temp_graph[2].autoscale_view()
             pdb_volt_graph[2].relim()
             pdb_volt_graph[2].autoscale_view()
-
-            self.rudder_ax.relim()
-            self.rudder_ax.autoscale_view()
-            # self.pH_ax.relim() # pH Change
-            # self.pH_ax.autoscale_view() # pH Change
-            # pH_obj.graph.ax.relim()
-            # pH_obj.graph.ax.autoscale_view()
-
-            # self.temp_sensor_ax.relim()
-            # self.temp_sensor_ax.autoscale_view()
-            # temp_sensor_obj.graph.ax.relim()
-            # temp_sensor_obj.graph.ax.autoscale_view()
-            # self.sal_ax.relim()
-            # self.sal_ax.autoscale_view()
+            rudder_graph[2].relim()
+            rudder_graph[2].autoscale_view()
 
             for obj in data_objs:
                 obj.graph.ax.relim()
@@ -1308,6 +1324,7 @@ class CANWindow(QWidget):
         #         self.volt_ax.set_ylim(2.5, 4)
 
         volt1_obj.adjust_ylim()
+        actual_rudder_obj.adjust_ylim()
 
         # === Auto Y adjustment (Rudder) ===
         if self.actual_rudder_history or self.set_rudder_history:
@@ -1344,7 +1361,8 @@ class CANWindow(QWidget):
         # self.volt_canvas.draw()
         pdb_temp_graph[1].draw()
         pdb_volt_graph[1].draw()
-        self.rudder_canvas.draw()
+        rudder_graph[1].draw()
+        # self.rudder_canvas.draw()
         # self.pH_canvas.draw() # pH Change
         # pH_obj.graph.canvas.draw()
         # self.temp_sensor_canvas.draw()
