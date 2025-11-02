@@ -46,9 +46,9 @@ hex_conversion = {
 
 negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
 
-slope = 0.1
+slope = -0.1
 data_min = 0.2
-data_max = 0.8
+data_max = 0.95
 slope_data = data_min
 
 ### ----------  Utility Functions ---------- ###
@@ -167,14 +167,24 @@ def send_sensor_command(client, frame_id, data: float):
         print(f"Attempted command: {can_msg}")
         return False
 
-def send_rudder_command(client, angle):
+def send_rudder_command(client):
     """Send rudder CAN message via SSH"""
     try:
-        # Convert angle to CAN message format (same as Remote_Debugger_V3.py)
-        # Convert float angle to integer for hex conversion
-        angle_int = int((angle + 90) * 1000)
-        value = convert_to_hex(angle_int, 8)
-        can_message = "cansend can1 001##1" + convert_to_little_endian(value) + "80"
+        # print(f"actual_angle = {convert_to_hex(int((slope_data) * 90.0 * 100), 2)}")
+        actual_angle = convert_to_little_endian(convert_to_hex(int(((slope_data - 0.45) * 90 + 90) * 100), 2))
+        # print(f"imu_roll = {convert_to_hex(int((slope_data + 0.1) * 180 * 100), 2)}")
+        imu_roll = convert_to_little_endian(convert_to_hex(int((slope_data + 0.1) * 180 * 100), 2))
+        # print(f"imu_pitch = {convert_to_hex(int((slope_data + - 0.05) * 180 * 100), 2)}")
+        imu_pitch = convert_to_little_endian(convert_to_hex(int((slope_data - 0.05) * 180 * 100), 2))
+        # print(f"imu_heading = {convert_to_hex(int((slope_data) * 360 * 100), 2)}")
+        imu_heading = convert_to_little_endian(convert_to_hex(int((slope_data) * 360 * 100), 2))
+        set_angle = convert_to_little_endian(convert_to_hex(int(((slope_data - 0.50) * 90 + 90) * 100), 2))
+        integral = convert_to_little_endian(convert_to_hex(int((slope_data) * 100), 2))
+        derivative = convert_to_little_endian(convert_to_hex(int((slope_data) * 100), 2))
+        spd_over_gnd = convert_to_little_endian(convert_to_hex(int((slope_data) * 30 * 1000), 2))
+
+        can_data = actual_angle + imu_roll + imu_pitch + imu_heading + set_angle + integral + derivative + spd_over_gnd
+        can_message = "cansend can1 204##1" + can_data
         
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_message)
@@ -187,20 +197,49 @@ def send_rudder_command(client, angle):
             print(f"ERROR sending command: {error}")
             return False
         else:
-            print(f"✓ Rudder set to {angle:7.3f}° - CAN message: {can_message}")
+            print(f"✓ Sent - CAN message: {can_message}")
             return True
             
     except Exception as e:
         print(f"Exception sending rudder command: {e}")
         return False
+    
+def send_data_wind_command(client):
+    """Send wind sensor CAN message via SSH"""
+    try:
+        # print(f"actual_angle = {convert_to_hex(int((slope_data) * 90.0 * 100), 2)}")
+        wind_dir = convert_to_little_endian(convert_to_hex(int((slope_data) * 360), 2))
+        # print(f"imu_roll = {convert_to_hex(int((slope_data + 0.1) * 180 * 100), 2)}")
+        wind_speed = convert_to_little_endian(convert_to_hex(int((slope_data) * 30 * 10), 2))
+
+        can_data = wind_dir + wind_speed
+        can_message = "cansend can1 041##1" + can_data
+        
+        # Execute the cansend command
+        stdin, stdout, stderr = client.exec_command(can_message)
+        
+        # Check for errors
+        error = stderr.read().decode().strip()
+        output = stdout.read().decode().strip()
+        
+        if error:
+            print(f"ERROR sending command: {error}")
+            return False
+        else:
+            print(f"✓ Sent - CAN message: {can_message}")
+            return True
+            
+    except Exception as e:
+        print(f"Exception sending wind sensor command: {e}")
+        return False
 
 def main():
     print("=" * 60)
-    print("SENSOR TEST SCRIPT")
+    print("Debug CAN Frame TEST SCRIPT")
     print("=" * 60)
     print(f"Target: {hostname}")
     print(f"Username: {username}")
-    print(f"Sends CAN Frame with PDB debug data every {delay} secs")
+    print(f"Sends CAN Frame with debug data every {delay} secs")
     print("=" * 60)
     
     # Connect to SSH
@@ -263,6 +302,11 @@ def main():
 
 
             success = send_pdb_command(client)
+            # time.sleep(delay)
+            success = send_rudder_command(client)
+            # time.sleep(delay)
+            success = send_data_wind_command(client)
+            # time.sleep(delay)
             if not success:
                 print("Failed to send command, continuing...")
 
