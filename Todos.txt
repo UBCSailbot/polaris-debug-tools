@@ -1,17 +1,14 @@
 TODO
-- refactor actual rudder angle/set rudder angle
-    - after it works, try using lambdas for parsing_fn input
-    - Update program with correct ranges and rounding for new data
+- Add the rest of the new DRV/PWR values
+- Make the UI faster - right now graphs and scrolling is slow to respond
+- Update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
 - Test program with a variety of sent CAN frames of all types
-- Problem: the y-limits are not adjusting for all lines in graphs with multiple lines
-- Refactor UI
-    - new tab for graphs + live values, separate from controls
-- Add new DRV/PWR values
-- Add to controls: The ability to send PID coefficients (0x200)
+- Problem: the y-limits don't adjust for all lines in graphs with multiple lines
 - Fix existing controls so that they work with updated CAN frames
     - Fix send_rudder() so that it works with the refactoring
 - UI: Add the ability to select which graphs you want to see (some sort of checkbox thing?)
     - Add that to the top of right_layout
+- Add to controls: The ability to send PID coefficients (0x200)
 - For logging method, put last value logged unless its been too long, in which case will put "--"
             - log values should still be in Remote_Debugger program, not internal function
 
@@ -27,20 +24,23 @@ Regarding GUI diagnostics we will need the following real time values in some fo
 3. All of the data in frame 0x041
 4. The ability to send coefficients for message 0x200
 Lots of graphs would be good, but I'll list in order of priority:
-1. Battery temperatures vs time (0x206)
-2. Cell voltages vs time (0x206)
-3. Desired rudder angle and actual rudder angle vs time ( 0x204)
 4. IMU heading and desired heading vs. time (0x204)
 5. Wind speed vs. time (0x041)
 6. Wind direction vs. time (0x041)
 7. Speed over ground vs time (0x204)
+
 8. MPPT current vs. time (0x206)
 9. IMU roll and pitch vs time (0x204)
 10. Rudder controller integral and derivative term vs. time (0x204)
-11. Data sensors x4 vs time (0x100-0x103)
 I'd say we really need 1-7 but 8-11 are a little more quality of life. 
 At some point as we add more diagnostics we will have to consider how we display things 
 (i.e. if I'm tunning the rudder I might want to see only 3,4,7 or something so having some configurability would be cool)
+
+Finished graphs
+1. Battery temperatures vs time (0x206)
+2. Cell voltages vs time (0x206)
+3. Desired rudder angle and actual rudder angle vs time ( 0x204)
+11. Data sensors x3 vs time (0x10X-0x12X)
 
 Lower priority issues:
 - Remove the "magic strings" in parsing functions: change dict keys to be the names
@@ -156,10 +156,18 @@ DONE
     - Use test script with V10, then use it with V11 and compare outputs (log output headers should be slightly diff: Temp1_C vs Temp1, Volt1_V vs Volt1)
         - note that if lines are not appearing on graph, it might be due to lack of ax.legend()
 - shrunk window height - minimum height is limited by the left_layout
+- refactor actual rudder angle/set rudder angle with DataObject
+- add spd_over_gnd - problems may arise from the lambdas in parsing_fn input
+- add imu_heading
+- add mppt objects (4 of them)
+- Create send data_wind command test function
+- add data_wind_dir and data_wind_speed objects
+- Mdify the parsing function for those with lambdas- can I make the parsing function just internal?
 
 Bug Tracker
 - Problem with receiving CAN frames with V6 
     - sending any CAN frame causes GUI window to close, but console messages continue "Error logging..."
+- "ERROR sending command: write: No buffer space available" with automated testing script can be fixed with turning loopback on
 
 For fixing the "only plots when pdb plots" problem:
     - Literally only plots when pdb canframe is sent

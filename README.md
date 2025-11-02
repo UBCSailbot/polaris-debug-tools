@@ -1,10 +1,11 @@
 # polaris-debug-tools
 Providing debug tools for testing of POLARIS's systems.
 
-Note: V11 is the most updated (working) version.
-      V10 is the most updated version tested with physical sensors.
-      V9 was also tested (more rigorously) with physical sensors.
-Version Descriptions:
+Note: 
+- V11 is the most updated (working) version.
+- V10 is the most updated version tested with physical sensors.
+- V9 was also tested (more rigorously) with physical sensors.
+### Version Descriptions:
 - V4.1 - V4 + graph of pH sensor only
 - V5 - V4 + graph of pH sensor + graphing functionality
 - V5.5 - V4 + graph of pH sensor + graphing functionality + logging functionality
@@ -16,19 +17,19 @@ Version Descriptions:
 - V9 - Changed parsing for temperature, Revert UI
 - V10 - refactoring to more easily add stuff (depends on DataObject.py) + added visuals for existing data sensor values (pH, water temp, salinity)
 - V11 - V10 + refactored previously existing temps/volts + refactored rudder debug frame
-- V12 - Update UI - shift live values to column in the middle
-- V13 - add new DRV/PWR data and graph visuals/functionality
+- V12 - Update UI - shift live values to column in the middle + add new DRV/PWR data (new debug frames)
+- V13 - add new controls (eg. send PID values)
 
 
 
-Important usage notes
+### Important usage notes
 - May need to put CAN line down and back up before CAN works properly
 - salinity is measured in big numbers - assumes range is between 40,000 and 55,000, graphs values in units of µS/cm * 1000
 - temp is assumed to be between -15 and 140 degrees celsius
 - If Raspberry pi is returning the message "device or resource busy" when attempting to put up CAN1 line with loopback on, and you have confirmed no other application/session is using the pi, try "sudo reboot"
 
 
-Steps for setting up mainframe/CAN stuff (for testing)
+### Steps for setting up mainframe/CAN stuff (for testing)
 - Need: mainframe, 1 nucleo with CAN hat (use a CAN test board) to transmit CAN messages, bullet wifi modem, special ethernet cable for bullet - mainframe, CAN connector with wires thing (white = 12V power, black = ground, brown = CAN high, blue = CAN low), micro-USB cable, assorted alligator clips
 1. Connect bullet to mainframe with ethernet cable
 2. Set up power supply (12V, 2A), connect power & ground appropriately - green, yellow light for ethernet, red lights on for pi = correct setup
