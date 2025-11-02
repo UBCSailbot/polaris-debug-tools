@@ -45,7 +45,7 @@ value_style = """
 linewidth = 2
 graph_xlabel = "Time (s)" # all graphs read in seconds
 graph_min_width = 275
-graph_min_height = 275
+graph_min_height = 250
 scroll_window = 60 # in seconds
 
 ### ----------  Utility Functions ---------- ###
@@ -99,39 +99,39 @@ def parse_0x206_frame(data_hex):
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
-        "volt_2": val(0, 2, 10000.0),
-        "temp_1": val(2, 4, 100.0),
-        "volt_3": val(4, 6, 10000.0),
-        "temp_2": val(6, 8, 100.0),
-        "temp_3": val(8, 10, 100.0),
-        "volt_4": val(10, 12, 10000.0),
-        "volt_1": val(12, 14, 10000.0),
-        "curr_hp": val(14, 16, 1000.0),
-        "curr_hs": val(16, 18, 1000.0),
-        "curr_sp": val(18, 20, 1000.0),
-        "curr_ss": val(20, 22, 1000.0)
+        volt2_obj.name: val(0, 2, 10000.0),
+        temp1_obj.name: val(2, 4, 100.0),
+        volt3_obj.name: val(4, 6, 10000.0),
+        temp2_obj.name: val(6, 8, 100.0),
+        temp3_obj.name: val(8, 10, 100.0),
+        volt4_obj.name: val(10, 12, 10000.0),
+        volt1_obj.name: val(12, 14, 10000.0),
+        mppt_hp_obj.name: val(14, 16, 1000.0),
+        mppt_hs_obj.name: val(16, 18, 1000.0),
+        mppt_sp_obj.name: val(18, 20, 1000.0),
+        mppt_ss_obj.name: val(20, 22, 1000.0)
     }
 
-def temp1_parsing_fn(parsed_dict):
-    return parsed_dict["temp_1"]
+# def temp1_parsing_fn(parsed_dict):
+#     return parsed_dict["temp_1"]
 
-def temp2_parsing_fn(parsed_dict):
-    return parsed_dict["temp_2"]
+# def temp2_parsing_fn(parsed_dict):
+#     return parsed_dict["temp_2"]
 
-def temp3_parsing_fn(parsed_dict):
-    return parsed_dict["temp_3"]
+# def temp3_parsing_fn(parsed_dict):
+#     return parsed_dict["temp_3"]
 
-def volt1_parsing_fn(parsed_dict):
-    return parsed_dict["volt_1"]
+# def volt1_parsing_fn(parsed_dict):
+#     return parsed_dict["volt_1"]
 
-def volt2_parsing_fn(parsed_dict):
-    return parsed_dict["volt_2"]
+# def volt2_parsing_fn(parsed_dict):
+#     return parsed_dict["volt_2"]
 
-def volt3_parsing_fn(parsed_dict):
-    return parsed_dict["volt_3"]
+# def volt3_parsing_fn(parsed_dict):
+#     return parsed_dict["volt_3"]
 
-def volt4_parsing_fn(parsed_dict):
-    return parsed_dict["volt_4"]
+# def volt4_parsing_fn(parsed_dict):
+#     return parsed_dict["volt_4"]
 
 
 def parse_0x204_frame(data_hex):
@@ -324,9 +324,9 @@ pdb_temp_graph_obj = GraphObject(pdb_temp_graph, 0, 127.0)
 temp1_label = create_label("Temp1: ----  ")
 temp2_label = create_label("Temp2: ----  ")
 temp3_label = create_label("Temp3: ----  ")
-temp1_obj = DataObject("Temp1", 2, "°C", temp1_parsing_fn, pdb_temp_graph_obj, temp1_line, temp1_label)
-temp2_obj = DataObject("Temp2", 2, "°C", temp2_parsing_fn, None, temp2_line, temp2_label)
-temp3_obj = DataObject("Temp3", 2, "°C", temp3_parsing_fn, None, temp3_line, temp3_label)
+temp1_obj = DataObject("Temp1", 2, "°C", None, pdb_temp_graph_obj, temp1_line, temp1_label)
+temp2_obj = DataObject("Temp2", 2, "°C", None, None, temp2_line, temp2_label)
+temp3_obj = DataObject("Temp3", 2, "°C", None, None, temp3_line, temp3_label)
 
 pdb_volt_graph = create_graph("Cell Voltages vs Time", "Voltage (V)", 0, 5)
 volt1_line, = pdb_volt_graph[2].plot([], [], 'b-', label='Volt 1')
@@ -338,10 +338,10 @@ volt1_label = create_label("Volt1: --- ")
 volt2_label = create_label("Volt2: --- ")
 volt3_label = create_label("Volt3: --- ")
 volt4_label = create_label("Volt4: --- ")
-volt1_obj = DataObject("Volt1", 2, "V", volt1_parsing_fn, pdb_volt_graph_obj,volt1_line, volt1_label)
-volt2_obj = DataObject("Volt2", 2, "V", volt2_parsing_fn, None,volt2_line, volt2_label)
-volt3_obj = DataObject("Volt3", 2, "V", volt3_parsing_fn, None,volt3_line, volt3_label)
-volt4_obj = DataObject("Volt4", 2, "V", volt4_parsing_fn, None,volt4_line, volt4_label)
+volt1_obj = DataObject("Volt1", 2, "V", None, pdb_volt_graph_obj,volt1_line, volt1_label)
+volt2_obj = DataObject("Volt2", 2, "V", None, None,volt2_line, volt2_label)
+volt3_obj = DataObject("Volt3", 2, "V", None, None,volt3_line, volt3_label)
+volt4_obj = DataObject("Volt4", 2, "V", None, None,volt4_line, volt4_label)
 
 mppt_current_graph = create_graph("MPPT Current vs Time", "Amps (A)", 0, 5)
 mppt_hp_line, = mppt_current_graph[2].plot([], [], 'c-', label='Hull Port')
@@ -353,10 +353,10 @@ mppt_hp_label = create_label("MPPT_curr_hull_port: ---- ")
 mppt_hs_label = create_label("MPPT_curr_hull_starbd: ---- ")
 mppt_sp_label = create_label("MPPT_curr_sail_port: ---- ")
 mppt_ss_label = create_label("MPPT_curr_sail_starbd: ---- ")
-mppt_hp_obj = DataObject("MPPT_curr_hull_port", 2, "A", lambda p: p["MPPT_curr_hull_port"], mppt_current_graph_obj, mppt_hp_line, mppt_hp_label)
-mppt_hs_obj = DataObject("MPPT_curr_hull_starbd", 2, "A", lambda p: p["MPPT_curr_hull_starbd"], None, mppt_hs_line, mppt_hs_label)
-mppt_sp_obj = DataObject("MPPT_curr_sail_port", 2, "A", lambda p: p["MPPT_curr_sail_port"], None, mppt_sp_line, mppt_sp_label)
-mppt_ss_obj = DataObject("MPPT_curr_sail_starbd", 2, "A", lambda p: p["MPPT_curr_sail_starbd"], None, mppt_ss_line, mppt_ss_label)
+mppt_hp_obj = DataObject("MPPT_curr_hull_port", 2, "A", None, mppt_current_graph_obj, mppt_hp_line, mppt_hp_label)
+mppt_hs_obj = DataObject("MPPT_curr_hull_starbd", 2, "A", None, None, mppt_hs_line, mppt_hs_label)
+mppt_sp_obj = DataObject("MPPT_curr_sail_port", 2, "A", None, None, mppt_sp_line, mppt_sp_label)
+mppt_ss_obj = DataObject("MPPT_curr_sail_starbd", 2, "A", None, None, mppt_ss_line, mppt_ss_label)
 
 pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 
@@ -374,25 +374,25 @@ spd_over_gnd_graph = create_graph("Speed over ground vs Time", "Speed (km/h)", 0
 spd_over_gnd_line, = spd_over_gnd_graph[2].plot([], [], 'g-', linewidth=2, label="Speed over ground")
 spd_over_gnd_graph_obj = GraphObject(spd_over_gnd_graph, 0, 35)
 spd_over_gnd_label = create_label("Speed_over_gnd: ---- ")
-spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", lambda p:p["Speed_over_gnd"], spd_over_gnd_graph_obj, spd_over_gnd_line, spd_over_gnd_label)
+spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", None, spd_over_gnd_graph_obj, spd_over_gnd_line, spd_over_gnd_label)
 
 imu_heading_graph = create_graph("IMU Heading vs Time", "degrees (°)", 0, 360)
 imu_heading_line, = imu_heading_graph[2].plot([], [], 'r-', linewidth=2, label="IMU heading")
 imu_heading_graph_obj = GraphObject(imu_heading_graph, 0, 360)
 imu_heading_label = create_label("IMU_heading: ---- ")
-imu_heading_obj = DataObject("IMU_heading", 3, "°", lambda p:p["IMU_heading"], imu_heading_graph_obj, imu_heading_line, imu_heading_label)
+imu_heading_obj = DataObject("IMU_heading", 3, "°", None, imu_heading_graph_obj, imu_heading_line, imu_heading_label)
 
 data_wind_dir_graph = create_graph("Data_Wind Direction vs Time", "degrees (°)", 0, 360)
 data_wind_dir_line, = data_wind_dir_graph[2].plot([], [], 'orange', linewidth=2, label="Wind Direction")
 data_wind_dir_graph_obj = GraphObject(data_wind_dir_graph, 0, 360)
 data_wind_dir_label = create_label("Data_wind_dir: ---- ")
-data_wind_dir_obj = DataObject("Data_wind_dir", 0, "°", lambda p:p["Data_wind_dir"], data_wind_dir_graph_obj, data_wind_dir_line, data_wind_dir_label)
+data_wind_dir_obj = DataObject("Data_wind_dir", 0, "°", None, data_wind_dir_graph_obj, data_wind_dir_line, data_wind_dir_label)
 
 data_wind_spd_graph = create_graph("Data_Wind Speed vs Time", "Speed (knots)", 0, 20)
 data_wind_spd_line, = data_wind_spd_graph[2].plot([], [], 'purple', linewidth=2, label="Wind Speed")
 data_wind_spd_graph_obj = GraphObject(data_wind_spd_graph, 0, 360)
 data_wind_spd_label = create_label("Data_wind_spd: ---- ")
-data_wind_spd_obj = DataObject("Data_wind_spd", 0, "°", lambda p:p["Data_wind_spd"], data_wind_spd_graph_obj, data_wind_spd_line, data_wind_spd_label)
+data_wind_spd_obj = DataObject("Data_wind_spd", 0, "°", None, data_wind_spd_graph_obj, data_wind_spd_line, data_wind_spd_label)
 
 data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 

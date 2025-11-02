@@ -23,23 +23,23 @@ from datetime import datetime
 #             values.append(self.data[key])
 #         self.line.set_data(self.data.keys, values)
 
-graph_margin = 10
+graph_margin = 0.2
 
 # data is a dictionary with values = data logged, keys = time logged
 class GraphObject: # struct which keeps together objects needed for a graph
-    def __init__(self, figure: plt.Figure, canvas: FigureCanvas, ax: plt.Axes, minn, maxn): # data = history?
+    def __init__(self, graph :tuple[Figure, FigureCanvas, plt.Axes], minn, maxn): # data = history?
         '''
         Initialization for GraphObject\n
         minn : minimum data value expected over graph lifetime\n
         maxn : maximum data value expected over graph lifetime
         '''
-        self.figure = figure
-        self.canvas = canvas
-        self.ax = ax
+        self.figure = graph[0]
+        self.canvas = graph[1]
+        self.ax = graph[2]
         self.minn = minn # min data value expected
         self.maxn = maxn # max data value expected
 
-        ax.legend()
+        self.ax.legend()
         return
 
 
@@ -65,12 +65,12 @@ class DataObject:
         if (values):
             maxn = max(values)
             minn = min(values)
-            self.graph.ax.set_ylim(max(minn - graph_margin, self.graph.minn), min(maxn + graph_margin, self.graph.maxn))
+            self.graph.ax.set_ylim(max(minn - (self.graph.maxn * graph_margin), self.graph.minn), min(maxn + (self.graph.maxn * graph_margin), self.graph.maxn))
 
     # Return a tuple with the time:value of the most current data point collected
     def get_current(self):
-        val = self.data.get(self.current) if (self.current is not None) else 0
-        return self.current, round(val, self.rounding) # returns the time, value of most recently logged datapoint
+        val = round(self.data.get(self.current), self.rounding) if (self.current is not None) else None
+        return self.current, val # returns the time, value of most recently logged datapoint
     
     # add a datapoint to self.data (history equivalent)
     def add_datapoint(self, time, data):
@@ -90,7 +90,7 @@ class DataObject:
         # calls the specific parsing_fn that belongs to this object
         # calls add_datapoint to add data
         if (parsed_dict is not None): # for can frames which contain multiple data values
-            data = round(self.parsing_fn(parsed_dict), self.rounding)
+            data = round(parsed_dict[self.name], self.rounding)
         else: # for can frames which hold only a single value
             raw_data = data_line.split(']')[-1].strip().split()
             data = self.parsing_fn(''.join(raw_data))
