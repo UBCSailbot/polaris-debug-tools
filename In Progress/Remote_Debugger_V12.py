@@ -139,19 +139,16 @@ def parse_0x204_frame(data_hex):
     if len(raw_bytes) != 16:
         raise ValueError("Incorrect data length (num bytes): ID 0x204")
     
-    # According to the image: Actual Rudder Angle is sent as (Rudder Angle + 90) * 1000
-    raw = int.from_bytes(raw_bytes, 'little')
-    
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
         actual_rudder_obj.name: val(0, 2, 100.0) - 90,
         "imu_roll": val(2, 4, 100.0) - 100,
         "imu_pitch": val(4, 6, 100.0) - 180,
-        "imu_heading": val(6, 8, 100.0),
+        imu_heading_obj.name: val(6, 8, 100.0),
         set_rudder_obj.name: val(8, 10, 100.0) - 90,
         "integral": val(10, 12, 1.0),
         "derivative": val(12, 14, 1.0),
-        "spd_over_gnd": val(14, 16, 1000.0)
+        spd_over_gnd_obj.name: val(14, 16, 1000.0)
     }
 
 def actual_rudder_parsing_fn(parsed_dict):
@@ -159,6 +156,17 @@ def actual_rudder_parsing_fn(parsed_dict):
 
 def set_rudder_parsing_fn(parsed_dict):
     return parsed_dict[set_rudder_obj.name]
+
+def parse_0x041_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) != 4:
+        raise ValueError("Incorrect data length (num bytes): ID 0x041")
+    
+    val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
+    return {
+        data_wind_dir_obj.name: val(0, 2, 1.0),
+        data_wind_spd_obj.name: val(2, 4, 10.0)
+    }
 
 # Salinity data frame
 def parse_0x12X_frame(data_hex):
@@ -288,67 +296,110 @@ def temp_sensor_parsing_fn(data_hex):
     return round(actual, temp_sensor_obj.rounding)
 
 ### ---------- Data Objects ---------- ###
-pH_figure, pH_canvas, pH_ax = create_graph("pH vs Time", "pH", 0, 15)
-pH_line, = pH_ax.plot([], [], 'r-', linewidth=linewidth, label='Current pH')
-pH_graph_obj = GraphObject(pH_figure, pH_canvas, pH_ax, 0, 14)
+pH_graph = create_graph("pH vs Time", "pH", 0, 15)
+pH_line, = pH_graph[2].plot([], [], 'r-', linewidth=linewidth, label='Current pH')
+pH_graph_obj = GraphObject(pH_graph, 0, 14)
 pH_label = create_label("pH: ---- ")
 pH_obj = DataObject("pH", 1, "", pH_parsing_fn, pH_graph_obj, pH_line, pH_label)
 
-temp_sensor_figure, temp_sensor_canvas, temp_sensor_ax = create_graph("Water Temp vs Time", "Temp (°C)", 0, 100)
-temp_sensor_line, = temp_sensor_ax.plot([], [], 'b-', linewidth=linewidth, label="Water Temp")
-temp_sensor_graph_obj = GraphObject(temp_sensor_figure, temp_sensor_canvas, temp_sensor_ax, 0, 1400)
+temp_sensor_graph = create_graph("Water Temp vs Time", "Temp (°C)", 0, 100)
+temp_sensor_line, = temp_sensor_graph[2].plot([], [], 'b-', linewidth=linewidth, label="Water Temp")
+temp_sensor_graph_obj = GraphObject(temp_sensor_graph, 0, 1400)
 temp_sensor_label = create_label("Water temp: ----   ")
 temp_sensor_obj = DataObject("Water_Temp", 3, "°C", temp_sensor_parsing_fn, temp_sensor_graph_obj, temp_sensor_line, temp_sensor_label)
 
-sal_figure, sal_canvas, sal_ax = create_graph("Salinity vs Time", "Salinity (µS/cm)", 0, 100000)
-sal_line, = sal_ax.plot([], [], 'g-', linewidth=linewidth, label="Salinity")
-sal_graph_obj = GraphObject(sal_figure, sal_canvas, sal_ax, 0, 550000)
+sal_graph = create_graph("Salinity vs Time", "Salinity (µS/cm)", 0, 100000)
+sal_line, = sal_graph[2].plot([], [], 'g-', linewidth=linewidth, label="Salinity")
+sal_graph_obj = GraphObject(sal_graph, 0, 550000)
 sal_label = create_label("Salinity: ----    ")
 sal_obj = DataObject("Salinity", 3, "µS/cm", sal_parsing_fn, sal_graph_obj, sal_line, sal_label)
 
 data_objs = [pH_obj, temp_sensor_obj, sal_obj]
 
-pdb_temp_graph = create_graph("Temperatures vs Time", "Temp (°C)", 0, 100)
+pdb_temp_graph = create_graph("Battery Temperatures vs Time", "Temp (°C)", 0, 100)
 temp1_line, = pdb_temp_graph[2].plot([], [], 'r-', label='Temp 1')
 temp2_line, = pdb_temp_graph[2].plot([], [], 'g-', label='Temp 2')
 temp3_line, = pdb_temp_graph[2].plot([], [], 'y-', label='Temp 3')
-pdb_temp_graph_obj = GraphObject(pdb_temp_graph[0], pdb_temp_graph[1], pdb_temp_graph[2], 0, 127.0)
+pdb_temp_graph_obj = GraphObject(pdb_temp_graph, 0, 127.0)
 temp1_label = create_label("Temp1: ----  ")
 temp2_label = create_label("Temp2: ----  ")
 temp3_label = create_label("Temp3: ----  ")
 temp1_obj = DataObject("Temp1", 2, "°C", temp1_parsing_fn, pdb_temp_graph_obj, temp1_line, temp1_label)
-temp2_obj = DataObject("Temp2", 2, "°C", temp2_parsing_fn, pdb_temp_graph_obj, temp2_line, temp2_label)
-temp3_obj = DataObject("Temp3", 2, "°C", temp3_parsing_fn, pdb_temp_graph_obj, temp3_line, temp3_label)
+temp2_obj = DataObject("Temp2", 2, "°C", temp2_parsing_fn, None, temp2_line, temp2_label)
+temp3_obj = DataObject("Temp3", 2, "°C", temp3_parsing_fn, None, temp3_line, temp3_label)
 
 pdb_volt_graph = create_graph("Cell Voltages vs Time", "Voltage (V)", 0, 5)
 volt1_line, = pdb_volt_graph[2].plot([], [], 'b-', label='Volt 1')
 volt2_line, = pdb_volt_graph[2].plot([], [], 'c-', label='Volt 2')
 volt3_line, = pdb_volt_graph[2].plot([], [], 'm-', label='Volt 3')
 volt4_line, = pdb_volt_graph[2].plot([], [], 'orange', label='Volt 4')
-pdb_volt_graph_obj = GraphObject(pdb_volt_graph[0], pdb_volt_graph[1], pdb_volt_graph[2], 0, 3.5)
+pdb_volt_graph_obj = GraphObject(pdb_volt_graph, 0, 3.5)
 volt1_label = create_label("Volt1: --- ")
 volt2_label = create_label("Volt2: --- ")
 volt3_label = create_label("Volt3: --- ")
 volt4_label = create_label("Volt4: --- ")
 volt1_obj = DataObject("Volt1", 2, "V", volt1_parsing_fn, pdb_volt_graph_obj,volt1_line, volt1_label)
-volt2_obj = DataObject("Volt2", 2, "V", volt2_parsing_fn, pdb_volt_graph_obj,volt2_line, volt2_label)
-volt3_obj = DataObject("Volt3", 2, "V", volt3_parsing_fn, pdb_volt_graph_obj,volt3_line, volt3_label)
-volt4_obj = DataObject("Volt4", 2, "V", volt4_parsing_fn, pdb_volt_graph_obj,volt4_line, volt4_label)
+volt2_obj = DataObject("Volt2", 2, "V", volt2_parsing_fn, None,volt2_line, volt2_label)
+volt3_obj = DataObject("Volt3", 2, "V", volt3_parsing_fn, None,volt3_line, volt3_label)
+volt4_obj = DataObject("Volt4", 2, "V", volt4_parsing_fn, None,volt4_line, volt4_label)
 
-pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj]
+mppt_current_graph = create_graph("MPPT Current vs Time", "Amps (A)", 0, 5)
+mppt_hp_line, = mppt_current_graph[2].plot([], [], 'c-', label='Hull Port')
+mppt_hs_line, = mppt_current_graph[2].plot([], [], 'b-', label='Hull Starboard')
+mppt_sp_line, = mppt_current_graph[2].plot([], [], 'g-', label='Sail Port')
+mppt_ss_line, = mppt_current_graph[2].plot([], [], 'y-', label='Sail Starboard')
+mppt_current_graph_obj = GraphObject(mppt_current_graph, 0, 20)
+mppt_hp_label = create_label("MPPT_curr_hull_port: ---- ")
+mppt_hs_label = create_label("MPPT_curr_hull_starbd: ---- ")
+mppt_sp_label = create_label("MPPT_curr_sail_port: ---- ")
+mppt_ss_label = create_label("MPPT_curr_sail_starbd: ---- ")
+mppt_hp_obj = DataObject("MPPT_curr_hull_port", 2, "A", lambda p: p["MPPT_curr_hull_port"], mppt_current_graph_obj, mppt_hp_line, mppt_hp_label)
+mppt_hs_obj = DataObject("MPPT_curr_hull_starbd", 2, "A", lambda p: p["MPPT_curr_hull_starbd"], None, mppt_hs_line, mppt_hs_label)
+mppt_sp_obj = DataObject("MPPT_curr_sail_port", 2, "A", lambda p: p["MPPT_curr_sail_port"], None, mppt_sp_line, mppt_sp_label)
+mppt_ss_obj = DataObject("MPPT_curr_sail_starbd", 2, "A", lambda p: p["MPPT_curr_sail_starbd"], None, mppt_ss_line, mppt_ss_label)
+
+pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 
 rudder_graph = create_graph("Rudder Angles vs Time", "degrees (°)", -50, 50)
 actual_rudder_line, = rudder_graph[2].plot([], [], 'r-', linewidth=2, label='Actual Rudder Angle')
 set_rudder_line, = rudder_graph[2].plot([], [], 'b--', linewidth=2, label='Commanded Rudder Angle')
-rudder_graph_obj = GraphObject(rudder_graph[0], rudder_graph[1], rudder_graph[2], -90, 90)
+rudder_graph_obj = GraphObject(rudder_graph, -90, 90)
 actual_rudder_label = create_label("Actual_rdr_deg: ---- ")
 set_rudder_label = create_label("Set_rdr_deg: ---- ")
 actual_rudder_obj = DataObject("Actual_rdr_deg", 2, "°", actual_rudder_parsing_fn, rudder_graph_obj, line=actual_rudder_line, label=actual_rudder_label)
-set_rudder_obj = DataObject("Set_rdr_deg", 2, "°", set_rudder_parsing_fn, None, line=set_rudder_line, label=set_rudder_label)
+set_rudder_obj = DataObject("Set_rdr_deg", 2, "°", set_rudder_parsing_fn, line=set_rudder_line, label=set_rudder_label)
+# set_rudder_obj = DataObject("Set_rdr_deg", 2, "°", lambda p: p["Set_rdr_deg"], None, line=set_rudder_line, label=set_rudder_label)
 
-rudder_objs = [actual_rudder_obj, set_rudder_obj]
+spd_over_gnd_graph = create_graph("Speed over ground vs Time", "Speed (km/h)", 0, 10)
+spd_over_gnd_line, = spd_over_gnd_graph[2].plot([], [], 'g-', linewidth=2, label="Speed over ground")
+spd_over_gnd_graph_obj = GraphObject(spd_over_gnd_graph, 0, 35)
+spd_over_gnd_label = create_label("Speed_over_gnd: ---- ")
+spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", lambda p:p["Speed_over_gnd"], spd_over_gnd_graph_obj, spd_over_gnd_line, spd_over_gnd_label)
 
-all_objs = pdb_objs + rudder_objs + data_objs
+imu_heading_graph = create_graph("IMU Heading vs Time", "degrees (°)", 0, 360)
+imu_heading_line, = imu_heading_graph[2].plot([], [], 'r-', linewidth=2, label="IMU heading")
+imu_heading_graph_obj = GraphObject(imu_heading_graph, 0, 360)
+imu_heading_label = create_label("IMU_heading: ---- ")
+imu_heading_obj = DataObject("IMU_heading", 3, "°", lambda p:p["IMU_heading"], imu_heading_graph_obj, imu_heading_line, imu_heading_label)
+
+data_wind_dir_graph = create_graph("Data_Wind Direction vs Time", "degrees (°)", 0, 360)
+data_wind_dir_line, = data_wind_dir_graph[2].plot([], [], 'orange', linewidth=2, label="Wind Direction")
+data_wind_dir_graph_obj = GraphObject(data_wind_dir_graph, 0, 360)
+data_wind_dir_label = create_label("Data_wind_dir: ---- ")
+data_wind_dir_obj = DataObject("Data_wind_dir", 0, "°", lambda p:p["Data_wind_dir"], data_wind_dir_graph_obj, data_wind_dir_line, data_wind_dir_label)
+
+data_wind_spd_graph = create_graph("Data_Wind Speed vs Time", "Speed (knots)", 0, 20)
+data_wind_spd_line, = data_wind_spd_graph[2].plot([], [], 'purple', linewidth=2, label="Wind Speed")
+data_wind_spd_graph_obj = GraphObject(data_wind_spd_graph, 0, 360)
+data_wind_spd_label = create_label("Data_wind_spd: ---- ")
+data_wind_spd_obj = DataObject("Data_wind_spd", 0, "°", lambda p:p["Data_wind_spd"], data_wind_spd_graph_obj, data_wind_spd_line, data_wind_spd_label)
+
+data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
+
+# all objects with data from 0x204 frame (rudder -> mainframe)
+rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_heading_obj]
+
+all_objs = pdb_objs + rudder_objs + data_wind_objs + data_objs
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -550,15 +601,7 @@ class CANWindow(QWidget):
         try:
             timestamp = datetime.now().isoformat()
             elapsed_time = time.time() - self.time_start
-            # values = [timestamp, f'{elapsed_time:.3f}',
-            #     f'{temp1:.2f}', f'{temp2:.2f}', f'{temp3:.2f}',
-            #     f'{volt1:.2f}', f'{volt2:.2f}', f'{volt3:.2f}', f'{volt4:.2f}',
-            #     f'{set_rudder:.0f}', f'{actual_rudder:.1f}' if actual_rudder is not None else '',
-            #     # f'{pH}', f'{temp_sensor}'# , f'{sal}'
-            # ]
-            values = [timestamp, f'{elapsed_time:.3f}'
-                # f'{pH}', f'{temp_sensor}'# , f'{sal}'
-            ]
+            values = [timestamp, f'{elapsed_time:.3f}']
             for obj in all_objs:
                 val = obj.get_current()[1]
                 if (val is not None):
@@ -771,11 +814,14 @@ class CANWindow(QWidget):
         labels_layout.addStretch(1)
                 
         right_graphs_layout = QVBoxLayout()
-        right_graphs_layout.addWidget(pdb_temp_graph[1]) # temp canvas
-        right_graphs_layout.addWidget(pdb_volt_graph[1]) # volt canvas
-        right_graphs_layout.addWidget(rudder_graph[1]) # rudder angle canvas
-        for obj in data_objs:
-            right_graphs_layout.addWidget(obj.graph.canvas)
+        # right_graphs_layout.addWidget(pdb_temp_graph[1]) # temp canvas
+        # right_graphs_layout.addWidget(pdb_volt_graph[1]) # volt canvas
+        # right_graphs_layout.addWidget(rudder_graph[1]) # rudder angle canvas
+        # Note: It is important that each distinct graph canvas is only added as a widget
+        #       a single time, or else problems
+        for obj in all_objs:
+            if (obj.graph is not None):
+                right_graphs_layout.addWidget(obj.graph.canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_graphs_layout)
@@ -952,6 +998,19 @@ class CANWindow(QWidget):
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
 
+                    # Handle Data_wind frame
+                    elif frame_id == "041":
+                        try:
+                            raw_data = line.split(']')[-1].strip().split()
+                            parsed = parse_0x041_frame(''.join(raw_data))
+
+                            for obj in data_wind_objs:
+                                obj.parse_frame(current_time, None, parsed)
+                                obj.update_label()
+
+                        except Exception as e:
+                            self.output_display.append(f"[PARSE ERROR 0x041] {str(e)}")
+
                     # Handle temp_sensor frame
                     elif frame_id[0:2] == "10":
                         try:
@@ -960,7 +1019,7 @@ class CANWindow(QWidget):
                         except Exception as e:
                             self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
                             print(f"line parsed: {line}\n--- end of line ---")
-                            print(f"raw_data = {raw_data}")
+                            # print(f"raw_data = {raw_data}")
                        
                     # Handle pH sensor frame
                     elif frame_id[0:2] == "11":
@@ -984,7 +1043,7 @@ class CANWindow(QWidget):
                             print(f"line parsed: {line}\n--- end of line ---")
                             print(f"parts = {parts}")
                             print(f"frame_id = {frame_id}")
-                            print(f"raw_data = {raw_data}")
+                            # print(f"raw_data = {raw_data}")
 
                 # # limits the number of data points to prevent program crash from too much memory use over time
                 # if (len(self.time_history) > 361): self.time_history.pop(0)
@@ -1044,51 +1103,35 @@ class CANWindow(QWidget):
     def _update_plot_ranges(self, current_time):
         # === Auto-scale and scroll X axis ===
         if len(self.time_history) > 1:
-            # Automatically scroll X axis to show latest data
-            pdb_temp_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
-            pdb_volt_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
-            rudder_graph[2].set_xlim(max(0, current_time - scroll_window), current_time)
-            for obj in data_objs:
-                obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
-
+            for obj in all_objs:
+                if (obj.graph is not None):
+                    obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
         else:
-            pdb_temp_graph[2].relim()
-            pdb_temp_graph[2].autoscale_view()
-            pdb_volt_graph[2].relim()
-            pdb_volt_graph[2].autoscale_view()
-            rudder_graph[2].relim()
-            rudder_graph[2].autoscale_view()
-
-            for obj in data_objs:
-                obj.graph.ax.relim()
-                obj.graph.ax.autoscale_view()
+            for obj in all_objs:
+                if (obj.graph is not None):
+                    obj.graph.ax.relim()
+                    obj.graph.ax.autoscale_view()
 
         # === Auto Y adjustment ===
 
-        temp1_obj.adjust_ylim()
-        volt1_obj.adjust_ylim()
-        actual_rudder_obj.adjust_ylim()
+        # temp1_obj.adjust_ylim()
+        # volt1_obj.adjust_ylim()
+        # actual_rudder_obj.adjust_ylim()
+        # temp_sensor_obj.adjust_ylim()
+        # sal_obj.adjust_ylim()
 
-        # === Auto Y adjustment (Rudder) ===
-        # if self.actual_rudder_history or self.set_rudder_history:
-        #     all_rudder_angles = self.actual_rudder_history + self.set_rudder_history
-        #     if all_rudder_angles:
-        #         rudder_max = max(all_rudder_angles)
-        #         rudder_min = min(all_rudder_angles)
-        #         # Keep some margin around the data
-        #         margin = 5
-        #         self.rudder_ax.set_ylim(max(-50, rudder_min - margin), min(50, rudder_max + margin))
-
-        temp_sensor_obj.adjust_ylim()
-        sal_obj.adjust_ylim()
+        for obj in all_objs:
+            if (obj.graph is not None):
+                obj.adjust_ylim()
 
         # Update the canvas to reflect changes
-        pdb_temp_graph[1].draw()
-        pdb_volt_graph[1].draw()
-        rudder_graph[1].draw()
+        # pdb_temp_graph[1].draw()
+        # pdb_volt_graph[1].draw()
+        # rudder_graph[1].draw()
         
-        for obj in data_objs:
-            obj.graph.canvas.draw()
+        for obj in all_objs:
+            if (obj.graph is not None):
+                    obj.graph.canvas.draw()
 
     def show_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
