@@ -653,7 +653,7 @@ class CANWindow(QWidget):
         self.instructions1_display = QLabel("For Rudder    (+/- 3 degrees): A / S / D  (Left / Center / Right)")
         self.instructions2_display = QLabel("For Trim Tab (+/- 3 degrees): Q / W / E (Left / Center / Right)")
 
-        self.rudder_display = QLabel("Current Rudder Angle:      0 degrees")
+        self.rudder_display = QLabel("Current Set Rudder Angle:  0 degrees")
         self.trimtab_display = QLabel("Current Trim Tab Angle:   0 degrees")
 
         self.rudder_input_layout = QVBoxLayout()
@@ -941,7 +941,7 @@ class CANWindow(QWidget):
             msg = "cansend " + can_line + " 002##0" + convert_to_little_endian(value)
             self.cansend_queue.put(msg)
             self.output_display.append(f"[TRIMTAB SENT] {msg}")
-            self.trimtab_display.setText(f"Current Trim Tab Angle:   {self.trimtab_angle} degrees")
+            self.trimtab_display.setText(f"Current Trim Tab Angle: {self.trimtab_angle} degrees")
         except ValueError:
             self.show_error("Invalid angle input for Trim Tab")
 
@@ -954,8 +954,11 @@ class CANWindow(QWidget):
             msg = "cansend " + can_line + " 001##0" + convert_to_little_endian(value) + "80"
             self.cansend_queue.put(msg)
             self.output_display.append(f"[RUDDER SENT] {msg}")
-            # self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
+            self.rudder_display.setText(f"Current Set Rudder Angle:  {self.rudder_angle} degrees")
             
+            set_rudder_obj.add_datapoint(time.time() - self.time_start, angle)
+            set_rudder_obj.update_label()
+
             # Update rudder values display
             # set_rudder_obj 
             # current_actual = "---"
