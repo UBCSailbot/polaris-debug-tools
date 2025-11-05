@@ -16,8 +16,10 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
+can_line = "can0"
+
 # Time between sent frames (in secs)
-delay = 1
+delay = 0.5
 
 # CAN Frame IDs
 temp_sensor_id = "100" # 0x10X
@@ -104,7 +106,7 @@ def send_pdb_command(client):
 
         can_data = volt2  + temp1 + volt3 + temp2 + temp3 + volt4 + volt1 + curr_hp + curr_hs + curr_sp + curr_ss
         # can_data = "c05d9600401fc9416075c8325831"
-        can_msg = "cansend can1 206##1" + can_data
+        can_msg = "cansend " + can_line + " 206##1" + can_data
 
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_msg)
@@ -145,7 +147,7 @@ def send_sensor_command(client, frame_id, data: float):
         # print("data converted to hex: ", hexed_data)
         hex_bytes = convert_to_little_endian(hexed_data)
         print("hex_bytes: ", hex_bytes)
-        can_msg = "cansend can1 " + frame_id + "##1" + hex_bytes
+        can_msg = "cansend " + can_line + " " + frame_id + "##1" + hex_bytes
 
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_msg)
@@ -184,7 +186,7 @@ def send_rudder_command(client):
         spd_over_gnd = convert_to_little_endian(convert_to_hex(int((slope_data) * 30 * 1000), 2))
 
         can_data = actual_angle + imu_roll + imu_pitch + imu_heading + set_angle + integral + derivative + spd_over_gnd
-        can_message = "cansend can1 204##1" + can_data
+        can_message = "cansend " + can_line + " 204##1" + can_data
         
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_message)
@@ -213,7 +215,7 @@ def send_data_wind_command(client):
         wind_speed = convert_to_little_endian(convert_to_hex(int((slope_data) * 30 * 10), 2))
 
         can_data = wind_dir + wind_speed
-        can_message = "cansend can1 041##1" + can_data
+        can_message = "cansend " + can_line + " 041##1" + can_data
         
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_message)

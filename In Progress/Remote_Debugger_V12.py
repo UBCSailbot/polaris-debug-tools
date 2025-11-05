@@ -25,6 +25,8 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
+can_line = "can0"
+
 timestamp = 0 # datetime.now().strftime('%Y%m%d_%H%M%S')
 
 value_label_min_width = 100
@@ -411,7 +413,7 @@ def candump_process(queue: multiprocessing.Queue):
         # session = transport.open_session()
         # session.exec_command("bash sailbot_workspace/scripts/canup.sh -l")
         session = transport.open_session()
-        session.exec_command("candump can1")
+        session.exec_command(f"candump {can_line}")
         while True:
             if session.recv_ready():
                 line = session.recv(1024).decode()
@@ -711,9 +713,9 @@ class CANWindow(QWidget):
         # Define commands with labels
         commands = [
             ("SSH Connect", "ssh sailbot@192.168.0.10"),
-            ("CAN1 Down", "sudo ip link set can1 down"),
-            ("CAN1 Up", "sudo ip link set can1 up type can bitrate 500000 dbitrate 1000000 fd on"),
-            ("Check CAN Status", "ip link show can1"),
+            ("CAN0 Down", "sudo ip link set can0 down"),
+            ("CAN0 Up", "sudo ip link set can0 up type can bitrate 500000 dbitrate 1000000 fd on"),
+            ("Check CAN Status", "ip link show can0"),
             ("View System Logs", "dmesg | tail"),
             ("System Info", "uname -a")
         ]
@@ -899,7 +901,7 @@ class CANWindow(QWidget):
             if not from_keyboard:
                 self.trimtab_angle = angle
             value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend can1 002##0" + convert_to_little_endian(value)
+            msg = "cansend " + can_line + " 002##0" + convert_to_little_endian(value)
             self.cansend_queue.put(msg)
             self.output_display.append(f"[TRIMTAB SENT] {msg}")
             self.trimtab_display.setText(f"Current Trim Tab Angle:   {self.trimtab_angle} degrees")
@@ -912,7 +914,7 @@ class CANWindow(QWidget):
             if not from_keyboard:
                 self.rudder_angle = angle
             value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend can1 001##0" + convert_to_little_endian(value) + "80"
+            msg = "cansend " + can_line + " 001##0" + convert_to_little_endian(value) + "80"
             self.cansend_queue.put(msg)
             self.output_display.append(f"[RUDDER SENT] {msg}")
             # self.rudder_display.setText(f"Current Rudder Angle:      {self.rudder_angle} degrees")
@@ -931,12 +933,12 @@ class CANWindow(QWidget):
             self.show_error("Invalid angle input for Rudder")
 
     def send_power_off_indefinitely(self):
-        msg = "cansend can1 202##00A"
+        msg = "cansend " + can_line + " 202##00A"
         self.cansend_queue.put(msg)
         self.output_display.append(f"[POWER OFF] {msg}")
 
     def send_restart_power(self):
-        msg = "cansend can1 202##014"
+        msg = "cansend " + can_line + " 202##014"
         self.cansend_queue.put(msg)
         self.output_display.append(f"[RESTART POWER] {msg}")
 
@@ -960,7 +962,7 @@ class CANWindow(QWidget):
                 print(f"line was not logged!")
                 pass  # Queue full, skip logging this message to avoid blocking
 
-            if line.startswith("can1"):
+            if line.startswith(can_line):
                 # print(f"line was graphed!")
                 new_msg_to_log = True
                 parts = line.split()
