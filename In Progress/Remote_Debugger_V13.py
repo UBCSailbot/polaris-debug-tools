@@ -655,13 +655,25 @@ class CANWindow(QWidget):
         self.rudder_display = QLabel("Current Rudder Angle:      0 degrees")
         self.trimtab_display = QLabel("Current Trim Tab Angle:   0 degrees")
 
+        self.rudder_input_layout = QVBoxLayout()
+        # self.rudder_input_layout.setSpacing(0)
         self.rudder_input = QLineEdit()
         self.rudder_button = QPushButton("Send Rudder")
+        self.rudder_input_layout.addWidget(QLabel("Rudder Angle:"))
+        self.rudder_input_layout.addWidget(self.rudder_input)
+        self.rudder_input_layout.addWidget(self.rudder_button)
         self.rudder_button.clicked.connect(self.send_rudder)
 
         self.trim_input = QLineEdit()
         self.trim_button = QPushButton("Send Trim Tab")
         self.trim_button.clicked.connect(self.send_trim_tab)
+        self.trim_input_layout = QVBoxLayout()
+        self.trim_input_layout.addWidget(QLabel("Trim Tab Angle:"))
+        self.trim_input_layout.addWidget(self.trim_input)
+        self.trim_input_layout.addWidget(self.trim_button)
+
+        # self.p_input = QLineEdit()
+
 
         self.output_display = QTextEdit()
         self.output_display.setReadOnly(True)
@@ -782,13 +794,17 @@ class CANWindow(QWidget):
         left_layout.addWidget(self.rudder_display)
         left_layout.addWidget(self.trimtab_display)
         left_layout.addSpacing(5)  # Add small spacing
-        left_layout.addWidget(QLabel("Rudder Angle:"))
-        left_layout.addWidget(self.rudder_input)
-        left_layout.addWidget(self.rudder_button)
-        left_layout.addSpacing(5)  # Add small spacing
-        left_layout.addWidget(QLabel("Trim Tab Angle:"))
-        left_layout.addWidget(self.trim_input)
-        left_layout.addWidget(self.trim_button)
+        input_layout = QHBoxLayout()
+        input_layout.addLayout(self.rudder_input_layout)
+        input_layout.addLayout(self.trim_input_layout)
+        left_layout.addLayout(input_layout)
+        # left_layout.addWidget(QLabel("Rudder Angle:"))
+        # left_layout.addWidget(self.rudder_input)
+        # left_layout.addWidget(self.rudder_button)
+        # left_layout.addSpacing(5)  # Add small spacing
+        # left_layout.addWidget(QLabel("Trim Tab Angle:"))
+        # left_layout.addWidget(self.trim_input)
+        # left_layout.addWidget(self.trim_button)
         left_layout.addSpacing(5)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
