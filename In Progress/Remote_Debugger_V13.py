@@ -43,6 +43,7 @@ value_style = """
             border-radius: 3px;
             margin: 2px;
         """
+bold_text = "font-weight: bold;"
 
 linewidth = 2
 graph_xlabel = "Time (s)" # all graphs read in seconds
@@ -660,7 +661,7 @@ class CANWindow(QWidget):
         self.rudder_input = QLineEdit()
         self.rudder_button = QPushButton("Send Rudder")
         self.rudder_input_label = QLabel("Rudder Angle:")
-        self.rudder_input_label.setStyleSheet("font-weight: bold;")
+        self.rudder_input_label.setStyleSheet(bold_text)
         self.rudder_input_layout.addWidget(self.rudder_input_label)
         self.rudder_input_layout.addWidget(self.rudder_input)
         self.rudder_input_layout.addWidget(self.rudder_button)
@@ -671,12 +672,25 @@ class CANWindow(QWidget):
         self.trim_button.clicked.connect(self.send_trim_tab)
         self.trim_input_layout = QVBoxLayout()
         self.trim_input_label = QLabel("Trim Tab Angle:")
-        self.trim_input_label.setStyleSheet("font-weight: bold;")
+        self.trim_input_label.setStyleSheet(bold_text)
         self.trim_input_layout.addWidget(self.trim_input_label)
         self.trim_input_layout.addWidget(self.trim_input)
         self.trim_input_layout.addWidget(self.trim_button)
 
-        # self.p_input = QLineEdit()
+        self.p_input = QLineEdit()
+        self.p_input.setPlaceholderText("P")
+        self.i_input = QLineEdit()
+        self.i_input.setPlaceholderText("I")
+        self.d_input = QLineEdit()
+        self.d_input.setPlaceholderText("D")
+        self.pid_input_layout = QHBoxLayout()
+        self.pid_input_layout.addWidget(self.p_input)
+        self.pid_input_layout.addWidget(self.i_input)
+        self.pid_input_layout.addWidget(self.d_input)
+        self.pid_input_button = QPushButton("Send PID")
+        self.pid_layout = QVBoxLayout()
+        self.pid_layout.addLayout(self.pid_input_layout)
+        self.pid_layout.addWidget(self.pid_input_button)
 
 
         self.output_display = QTextEdit()
@@ -809,6 +823,8 @@ class CANWindow(QWidget):
         # left_layout.addWidget(QLabel("Trim Tab Angle:"))
         # left_layout.addWidget(self.trim_input)
         # left_layout.addWidget(self.trim_button)
+        left_layout.addLayout(self.pid_layout)
+
         left_layout.addSpacing(5)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
         left_layout.addWidget(self.output_display)
