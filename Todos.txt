@@ -1,14 +1,14 @@
 TODO
 - Add the rest of the new DRV/PWR values
-- Make the UI faster - right now graphs and scrolling is slow to respond
 - Update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
 - Test program with a variety of sent CAN frames of all types
+- Performance - Make the UI faster - right now graphs and scrolling is slow to respond
+    - Do stress testing - sending a ton of data all at once - need to know if/when can data is dropped
+    - delay = 0.5 secs for PDB script - already very very slow
 - Problem: the y-limits don't adjust for all lines in graphs with multiple lines
-- Fix existing controls so that they work with updated CAN frames
-    - Fix send_rudder() so that it works with the refactoring
+- Refactor cansend functions to all call a single cansend() - abstract a new function cansend()
 - UI: Add the ability to select which graphs you want to see (some sort of checkbox thing?)
     - Add that to the top of right_layout
-- Add to controls: The ability to send PID coefficients (0x200)
 - For logging method, put last value logged unless its been too long, in which case will put "--"
             - log values should still be in Remote_Debugger program, not internal function
 
@@ -24,10 +24,8 @@ Regarding GUI diagnostics we will need the following real time values in some fo
 3. All of the data in frame 0x041
 4. The ability to send coefficients for message 0x200
 Lots of graphs would be good, but I'll list in order of priority:
-4. IMU heading and desired heading vs. time (0x204)
-5. Wind speed vs. time (0x041)
-6. Wind direction vs. time (0x041)
-7. Speed over ground vs time (0x204)
+4. IMU heading and DESIRED HEADING vs. time (0x204)
+
 
 8. MPPT current vs. time (0x206)
 9. IMU roll and pitch vs time (0x204)
@@ -40,7 +38,12 @@ Finished graphs
 1. Battery temperatures vs time (0x206)
 2. Cell voltages vs time (0x206)
 3. Desired rudder angle and actual rudder angle vs time ( 0x204)
+4. IMU heading (w/o desired) vs. time (0x204)
+5. Wind speed vs. time (0x041)
+6. Wind direction vs. time (0x041)
+7. Speed over ground vs time (0x204)
 11. Data sensors x3 vs time (0x10X-0x12X)
+
 
 Lower priority issues:
 - Remove the "magic strings" in parsing functions: change dict keys to be the names
@@ -59,7 +62,6 @@ Lower priority issues:
         - I do prefer to access pdb_temp_graph and pdb_volt_graph directly since the different temps/volts share the same graph
         - honestly why don't I set their graph objects to be None, and just use pdb_temp_graph and pdb_volt_graph?
 
-- Later - add wind sensor - direction/heading + wind sensor speed (in knots)
 
 - I'm thinking in the future I might have a separate log file for each thing/can message/data sensor?
 
@@ -162,7 +164,11 @@ DONE
 - add mppt objects (4 of them)
 - Create send data_wind command test function
 - add data_wind_dir and data_wind_speed objects
-- Mdify the parsing function for those with lambdas- can I make the parsing function just internal?
+- Modify the parsing function for those with lambdas- made the parsing function just internal
+- Changed the can line to can0 and added variable can_line in case of future changes
+- Add to controls: The ability to send PID coefficients (0x200)
+- Fix existing controls so that they work with updated CAN frames
+    - Fix send_rudder() so that it works with the refactoring
 
 Bug Tracker
 - Problem with receiving CAN frames with V6 

@@ -1,10 +1,14 @@
 # polaris-debug-tools
 Providing debug tools for testing of POLARIS's systems.
 
-Note: 
-- V11 is the most updated (working) version.
-- V10 is the most updated version tested with physical sensors.
+Notes:
+- V13 is the most updated (working) version.
+- V12 is the most updated version tested with physical sensors.
 - V9 was also tested (more rigorously) with physical sensors.
+- Note that V10 onwards depends on DataObject.py being in the same folder as Remote_debugger (at least for now)
+- Make sure to put the can line up before using the GUI
+    - Can use "bash sailbot_workspace/scripts/canup.sh" with optional "-l" argument to turn loopback on (this puts up can0)
+- Graphs don't start showing values until at there are at least 2 data points
 ### Version Descriptions:
 - V4.1 - V4 + graph of pH sensor only
 - V5 - V4 + graph of pH sensor + graphing functionality
