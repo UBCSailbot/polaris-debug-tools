@@ -688,6 +688,7 @@ class CANWindow(QWidget):
         self.pid_input_layout.addWidget(self.i_input)
         self.pid_input_layout.addWidget(self.d_input)
         self.pid_input_button = QPushButton("Send PID")
+        self.pid_input_button.clicked.connect(self.send_pid)
         self.pid_layout = QVBoxLayout()
         self.pid_layout.addLayout(self.pid_input_layout)
         self.pid_layout.addWidget(self.pid_input_button)
@@ -967,6 +968,9 @@ class CANWindow(QWidget):
             # )
         except ValueError:
             self.show_error("Invalid angle input for Rudder")
+        except Exception:
+            print("Exception thrown from send_rudder")
+            self.show_error("Exception thrown from send_rudder")
 
     def send_power_off_indefinitely(self):
         msg = "cansend " + can_line + " 202##00A"
@@ -976,7 +980,27 @@ class CANWindow(QWidget):
     def send_restart_power(self):
         msg = "cansend " + can_line + " 202##014"
         self.cansend_queue.put(msg)
+        self.cansend_queue.put("cansend " + can_line + " 003##F")
         self.output_display.append(f"[RESTART POWER] {msg}")
+    
+    def send_pid(self):
+        # check for valid p, i, d inputs
+        try:
+            p = convert_to_little_endian(convert_to_hex(int(float(self.p_input.text()) * 1000000), 4))
+            i = convert_to_little_endian(convert_to_hex(int(float(self.i_input.text()) * 1000000), 4))
+            d = convert_to_little_endian(convert_to_hex(int(float(self.d_input.text()) * 1000000), 4))
+
+            can_data = p + i + d
+
+            msg = "cansend " + can_line + " 200##0" + can_data
+            self.cansend_queue.put(msg)
+            self.output_display.append(f"[SEND PID] {msg}")
+        except ValueError as v:
+            self.show_error(f"Invalid input for p, i, or d: {v}")
+
+        except Exception as e:
+            print(f"Exception thrown from send_pid: {e}")
+            self.show_error(f"Exception thrown from send_pid: {e}")
 
     def update_status(self):
         # Update time independently of CAN messages
