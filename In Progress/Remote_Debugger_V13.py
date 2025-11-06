@@ -994,15 +994,18 @@ class CANWindow(QWidget):
             self.show_error("Exception thrown from send_rudder")
 
     def send_power_off_indefinitely(self):
-        msg = "cansend " + can_line + " 202##00A"
-        self.cansend_queue.put(msg)
-        self.output_display.append(f"[POWER OFF] {msg}")
+        # msg = "cansend " + can_line + " 202##00A"
+        # self.cansend_queue.put(msg)
+        # self.output_display.append(f"[POWER OFF] {msg}")
+        self.can_send("202", "0A", "POWER OFF")
 
     def send_restart_power(self):
-        msg = "cansend " + can_line + " 202##014"
-        self.cansend_queue.put(msg)
-        self.cansend_queue.put("cansend " + can_line + " 003##F")
-        self.output_display.append(f"[RESTART POWER] {msg}")
+        self.can_send("202", "14", "RESTART POWER")
+        self.can_send("003", "0F", "")
+        # msg = "cansend " + can_line + " 202##014"
+        # self.cansend_queue.put(msg)
+        # self.cansend_queue.put("cansend " + can_line + " 003##F")
+        # self.output_display.append(f"[RESTART POWER] {msg}")
     
     def send_pid(self):
         # check for valid p, i, d inputs
@@ -1013,9 +1016,11 @@ class CANWindow(QWidget):
 
             can_data = p + i + d
 
-            msg = "cansend " + can_line + " 200##0" + can_data
-            self.cansend_queue.put(msg)
-            self.output_display.append(f"[SEND PID] {msg}")
+            self.can_send("200", can_data, "SEND PID")
+
+            # msg = "cansend " + can_line + " 200##0" + can_data
+            # self.cansend_queue.put(msg)
+            # self.output_display.append(f"[SEND PID] {msg}")
         except ValueError as v:
             self.show_error(f"Invalid input for p, i, or d: {v}")
 
