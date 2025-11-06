@@ -928,7 +928,7 @@ class CANWindow(QWidget):
     def can_send(self, frame_id, data, display_msg):
         '''
         Helper function for sending CAN messages\n
-        frame_id: frame id of message as a string WITHOUT 0x prefix
+        frame_id: full frame id of message as a string WITHOUT 0x prefix (eg. 001, 041)
         data: hex string of message in little endian (assumes valid data)
         display_msg: Message to be outputted on GUI CAN_DUMP display
         '''
@@ -937,7 +937,15 @@ class CANWindow(QWidget):
         self.cansend_queue.put(msg)
         self.output_display.append(f"[{display_msg}] {msg}")
         try:
-            self.can_log_queue.put_nowait(msg)
+            data_length = int(len(data) / 2)
+            padding = "0" if (data_length < 10) else ""
+            data_nice = ""
+            for i in range(len(data)):
+                data_nice += data[i]
+                if ((i % 2) == 1):
+                    data_nice += " "
+            logged_msg = can_line + "  " + frame_id + "  [" + padding + str(data_length) + "]  " + data_nice
+            self.can_log_queue.put_nowait(logged_msg)
         except Exception as e:
             print(f"ERROR - Command not logged: {str(e)}")
 
@@ -947,9 +955,10 @@ class CANWindow(QWidget):
             if not from_keyboard:
                 self.trimtab_angle = angle
             value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend " + can_line + " 002##0" + convert_to_little_endian(value)
-            self.cansend_queue.put(msg)
-            self.output_display.append(f"[TRIMTAB SENT] {msg}")
+            # msg = "cansend " + can_line + " 002##0" + convert_to_little_endian(value)
+            # self.cansend_queue.put(msg)
+            # self.output_display.append(f"[TRIMTAB SENT] {msg}")
+            self.can_send("002", convert_to_little_endian(value), "TRIMTAB SENT")
             self.trimtab_display.setText(f"Current Trim Tab Angle: {self.trimtab_angle} degrees")
         except ValueError:
             self.show_error("Invalid angle input for Trim Tab")
