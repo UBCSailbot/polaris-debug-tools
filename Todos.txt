@@ -1,22 +1,22 @@
 TODO
-- Add the rest of the new DRV/PWR values
-- Update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
+- Add limits for Trim tab angle input & desired heading & all other inputs really
+    - Add a helper function which checks range and throws ValueException("Out of range") if out of range
+    - Update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
+- Test program with really fast sending can frames and confirm that no messages are dropped
+    - Find the limit at which stuff starts dropping
+    - May create a parsing script which checks candump csv for incrementing commands
 - Test program with a variety of sent CAN frames of all types
-- Performance - Make the UI faster - right now graphs and scrolling is slow to respond
+- Performance - Make the UI faster - right now graphs and scrolling is slow to respond - switch to pyqt graphs
     - Do stress testing - sending a ton of data all at once - need to know if/when can data is dropped
     - delay = 0.5 secs for PDB script - already very very slow
 - Problem: the y-limits don't adjust for all lines in graphs with multiple lines
-- Refactor cansend functions to all call a single cansend() - abstract a new function cansend()
 - UI: Add the ability to select which graphs you want to see (some sort of checkbox thing?)
     - Add that to the top of right_layout
 - For logging method, put last value logged unless its been too long, in which case will put "--"
             - log values should still be in Remote_Debugger program, not internal function
+- Fix error: if disconnected from raspberry pi, commands you send will still be logged in csv file
+    - Modify so that cansend commands are only logged if successful
 
-- refactoring
-    - make a separate utility file
-        - containing all utility functions
-        - containing all data objects?
-        - make DataObject.py be the utility file?
 
 Regarding GUI diagnostics we will need the following real time values in some format (in addition to all information we had last test):
 1. All of the data in frame 0x204
@@ -169,6 +169,12 @@ DONE
 - Add to controls: The ability to send PID coefficients (0x200)
 - Fix existing controls so that they work with updated CAN frames
     - Fix send_rudder() so that it works with the refactoring
+- Refactor cansend functions to all call a single cansend() - abstract a new function cansend()
+- Fix send_rudder - implement modified 0x001 mainframe frame
+- Desired heading angle keeps graphing, adding new points for itself so that the 
+    line continues even when angle is not regularly manually updated
+- Finished adding all new DRV/PWR values
+
 
 Bug Tracker
 - Problem with receiving CAN frames with V6 
