@@ -817,13 +817,6 @@ class CANWindow(QWidget):
         input_layout.addLayout(self.rudder_input_layout)
         input_layout.addLayout(self.trim_input_layout)
         left_layout.addLayout(input_layout)
-        # left_layout.addWidget(QLabel("Rudder Angle:"))
-        # left_layout.addWidget(self.rudder_input)
-        # left_layout.addWidget(self.rudder_button)
-        # left_layout.addSpacing(5)  # Add small spacing
-        # left_layout.addWidget(QLabel("Trim Tab Angle:"))
-        # left_layout.addWidget(self.trim_input)
-        # left_layout.addWidget(self.trim_button)
         left_layout.addLayout(self.pid_layout)
 
         left_layout.addSpacing(5)  # Add small spacing
@@ -931,6 +924,22 @@ class CANWindow(QWidget):
         elif key == Qt.Key_W:
             self.trimtab_angle = 0
             self.send_trim_tab(from_keyboard=True)
+    
+    def can_send(self, frame_id, data, display_msg):
+        '''
+        Helper function for sending CAN messages\n
+        frame_id: frame id of message as a string WITHOUT 0x prefix
+        data: hex string of message in little endian (assumes valid data)
+        display_msg: Message to be outputted on GUI CAN_DUMP display
+        '''
+
+        msg = "cansend " + can_line + " " + frame_id + "##0" + data
+        self.cansend_queue.put(msg)
+        self.output_display.append(f"[{display_msg}] {msg}")
+        try:
+            self.can_log_queue.put_nowait(msg)
+        except Exception as e:
+            print(f"ERROR - Command not logged: {str(e)}")
 
     def send_trim_tab(self, from_keyboard=False):
         try:
@@ -1178,22 +1187,11 @@ class CANWindow(QWidget):
                     obj.graph.ax.autoscale_view()
 
         # === Auto Y adjustment ===
-
-        # temp1_obj.adjust_ylim()
-        # volt1_obj.adjust_ylim()
-        # actual_rudder_obj.adjust_ylim()
-        # temp_sensor_obj.adjust_ylim()
-        # sal_obj.adjust_ylim()
-
         for obj in all_objs:
             if (obj.graph is not None):
                 obj.adjust_ylim()
 
-        # Update the canvas to reflect changes
-        # pdb_temp_graph[1].draw()
-        # pdb_volt_graph[1].draw()
-        # rudder_graph[1].draw()
-        
+        # Update the canvas to reflect changes        
         for obj in all_objs:
             if (obj.graph is not None):
                     obj.graph.canvas.draw()
