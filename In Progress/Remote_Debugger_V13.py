@@ -145,12 +145,12 @@ def parse_0x204_frame(data_hex):
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
         actual_rudder_obj.name: val(0, 2, 100.0) - 90,
-        "imu_roll": val(2, 4, 100.0) - 100,
-        "imu_pitch": val(4, 6, 100.0) - 180,
+        imu_roll_obj.name: val(2, 4, 100.0) - 100,
+        imu_pitch_obj.name: val(4, 6, 100.0) - 180,
         imu_heading_obj.name: val(6, 8, 100.0),
         set_rudder_obj.name: val(8, 10, 100.0) - 90,
-        "integral": val(10, 12, 1.0),
-        "derivative": val(12, 14, 1.0),
+        integral_obj.name: val(10, 12, 1.0),
+        derivative_obj.name: val(12, 14, 1.0),
         spd_over_gnd_obj.name: val(14, 16, 1000.0)
     }
 
@@ -379,11 +379,39 @@ spd_over_gnd_graph_obj = GraphObject(spd_over_gnd_graph, 0, 35)
 spd_over_gnd_label = create_label("Speed_over_gnd: ---- ")
 spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", None, spd_over_gnd_graph_obj, spd_over_gnd_line, spd_over_gnd_label)
 
-imu_heading_graph = create_graph("IMU Heading vs Time", "degrees (°)", 0, 360)
-imu_heading_line, = imu_heading_graph[2].plot([], [], 'r-', linewidth=2, label="IMU heading")
-imu_heading_graph_obj = GraphObject(imu_heading_graph, 0, 360)
+headings_graph = create_graph("IMU & Desired Headings vs Time", "degrees (°)", 0, 360)
+imu_heading_line, = headings_graph[2].plot([], [], 'r-', linewidth=2, label="IMU heading")
+desired_heading_line, = headings_graph[2].plot([], [], 'b--', linewidth=2, label="Desired heading")
 imu_heading_label = create_label("IMU_heading: ---- ")
+imu_heading_graph_obj = GraphObject(headings_graph, 0, 360)
 imu_heading_obj = DataObject("IMU_heading", 3, "°", None, imu_heading_graph_obj, imu_heading_line, imu_heading_label)
+
+desired_heading_label = create_label("Desired_heading: ---- ")
+desired_heading_obj = DataObject("Desired_heading", 3, "°", None, None, desired_heading_line, desired_heading_label)
+
+imu_roll_pitch_graph = create_graph("IMU Roll & Pitch vs Time","degrees (°)", 0, 360)
+imu_roll_line, = imu_roll_pitch_graph[2].plot([], [], 'g-', linewidth=2, label="IMU Roll")
+imu_pitch_line, = imu_roll_pitch_graph[2].plot([], [], 'brown', linewidth=2, label="IMU Pitch")
+imu_roll_pitch_graph_obj = GraphObject(imu_roll_pitch_graph, 0, 360)
+imu_roll_label = create_label("IMU_roll: ---- ")
+imu_pitch_label = create_label("IMU_pitch: ---- ")
+imu_roll_obj = DataObject("IMU_roll", 2, "°", None, imu_roll_pitch_graph_obj, imu_roll_line, imu_roll_label)
+imu_pitch_obj = DataObject("IMU_pitch", 2, "°", None, None, imu_pitch_line, imu_pitch_label)
+
+int_der_graph = create_graph("IMU Integral & Derivative vs Time","", 0, 100)
+der_line, = int_der_graph[2].plot([], [], 'mediumseagreen', linewidth=2, label="Derivative")
+int_line, = int_der_graph[2].plot([], [], 'm--', linewidth=2, label="Integral")
+int_der_graph_obj = GraphObject(int_der_graph, 0, 360)
+int_label = create_label("IMU_integral: ---- ")
+der_label = create_label("IMU_derivative: ---- ")
+integral_obj = DataObject("IMU_integral", 2, "°", None, int_der_graph_obj, int_line, int_label)
+derivative_obj = DataObject("IMU_derivative", 2, "°", None, None, der_line, der_label)
+
+data_wind_spd_graph = create_graph("Data_Wind Speed vs Time", "Speed (knots)", 0, 20)
+data_wind_spd_line, = data_wind_spd_graph[2].plot([], [], 'purple', linewidth=2, label="Wind Speed")
+data_wind_spd_graph_obj = GraphObject(data_wind_spd_graph, 0, 360)
+data_wind_spd_label = create_label("Data_wind_spd: ---- ")
+data_wind_spd_obj = DataObject("Data_wind_spd", 0, "knots", None, data_wind_spd_graph_obj, data_wind_spd_line, data_wind_spd_label)
 
 data_wind_dir_graph = create_graph("Data_Wind Direction vs Time", "degrees (°)", 0, 360)
 data_wind_dir_line, = data_wind_dir_graph[2].plot([], [], 'orange', linewidth=2, label="Wind Direction")
@@ -391,18 +419,12 @@ data_wind_dir_graph_obj = GraphObject(data_wind_dir_graph, 0, 360)
 data_wind_dir_label = create_label("Data_wind_dir: ---- ")
 data_wind_dir_obj = DataObject("Data_wind_dir", 0, "°", None, data_wind_dir_graph_obj, data_wind_dir_line, data_wind_dir_label)
 
-data_wind_spd_graph = create_graph("Data_Wind Speed vs Time", "Speed (knots)", 0, 20)
-data_wind_spd_line, = data_wind_spd_graph[2].plot([], [], 'purple', linewidth=2, label="Wind Speed")
-data_wind_spd_graph_obj = GraphObject(data_wind_spd_graph, 0, 360)
-data_wind_spd_label = create_label("Data_wind_spd: ---- ")
-data_wind_spd_obj = DataObject("Data_wind_spd", 0, "°", None, data_wind_spd_graph_obj, data_wind_spd_line, data_wind_spd_label)
-
 data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 
 # all objects with data from 0x204 frame (rudder -> mainframe)
-rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_heading_obj]
+rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj]
 
-all_objs = pdb_objs + rudder_objs + data_wind_objs + data_objs
+all_objs = pdb_objs + rudder_objs + [desired_heading_obj] + data_wind_objs + data_objs
 
 ### ----------  Background CAN Dump Process ---------- ###
 def candump_process(queue: multiprocessing.Queue):
@@ -647,8 +669,15 @@ class CANWindow(QWidget):
         top_bar_layout.addStretch()
 
         # === Left Panel ===
+        small_spacing = 2
+        self.manual_steer_checkbox = QCheckBox("Manual Steering")
+        self.manual_steer_checkbox.toggled.connect(self.set_manual_steer)
         self.keyboard_checkbox = QCheckBox("Keyboard Mode")
         self.keyboard_checkbox.toggled.connect(self.toggle_keyboard_mode)
+
+        checkbox_layout = QHBoxLayout()
+        checkbox_layout.addWidget(self.manual_steer_checkbox)
+        checkbox_layout.addWidget(self.keyboard_checkbox)
 
         self.instructions1_display = QLabel("For Rudder    (+/- 3 degrees): A / S / D  (Left / Center / Right)")
         self.instructions2_display = QLabel("For Trim Tab (+/- 3 degrees): Q / W / E (Left / Center / Right)")
@@ -656,16 +685,34 @@ class CANWindow(QWidget):
         self.rudder_display = QLabel("Current Set Rudder Angle:  0 degrees")
         self.trimtab_display = QLabel("Current Trim Tab Angle:   0 degrees")
 
+        self.desired_heading_input_layout = QVBoxLayout()
+        self.desired_heading_input = QLineEdit()
+        self.desired_heading_button = QPushButton("Set Desired Heading")
+        self.desired_heading_label = QLabel("Heading Angle:")
+        self.desired_heading_label.setStyleSheet(bold_text)
+        self.desired_heading_input_layout.addWidget(self.desired_heading_label)
+        self.desired_heading_input_layout.addSpacing(small_spacing)
+        self.desired_heading_input_layout.addWidget(self.desired_heading_input)
+        self.desired_heading_input_layout.addSpacing(small_spacing)
+        self.desired_heading_input_layout.addWidget(self.desired_heading_button)
+        self.desired_heading_button.clicked.connect(self.send_desired_heading)
+        self.desired_heading_input_group = QWidget()
+        self.desired_heading_input_group.setLayout(self.desired_heading_input_layout)
+
         self.rudder_input_layout = QVBoxLayout()
-        # self.rudder_input_layout.setSpacing(0)
         self.rudder_input = QLineEdit()
         self.rudder_button = QPushButton("Send Rudder")
         self.rudder_input_label = QLabel("Rudder Angle:")
         self.rudder_input_label.setStyleSheet(bold_text)
         self.rudder_input_layout.addWidget(self.rudder_input_label)
+        self.rudder_input_layout.addSpacing(small_spacing)
         self.rudder_input_layout.addWidget(self.rudder_input)
+        self.rudder_input_layout.addSpacing(small_spacing)
         self.rudder_input_layout.addWidget(self.rudder_button)
         self.rudder_button.clicked.connect(self.send_rudder)
+        self.rudder_input_group = QWidget()
+        self.rudder_input_group.setLayout(self.rudder_input_layout)
+        
 
         self.trim_input = QLineEdit()
         self.trim_button = QPushButton("Send Trim Tab")
@@ -674,8 +721,13 @@ class CANWindow(QWidget):
         self.trim_input_label = QLabel("Trim Tab Angle:")
         self.trim_input_label.setStyleSheet(bold_text)
         self.trim_input_layout.addWidget(self.trim_input_label)
+        self.trim_input_layout.addSpacing(small_spacing)
         self.trim_input_layout.addWidget(self.trim_input)
+        self.trim_input_layout.addSpacing(small_spacing)
         self.trim_input_layout.addWidget(self.trim_button)
+        self.trim_input_group = QWidget()
+        self.trim_input_group.setLayout(self.trim_input_layout)
+
 
         self.p_input = QLineEdit()
         self.p_input.setPlaceholderText("P")
@@ -805,7 +857,8 @@ class CANWindow(QWidget):
 
         left_layout = QVBoxLayout()
         left_layout.addLayout(top_bar_layout)
-        left_layout.addWidget(self.keyboard_checkbox)
+        left_layout.addLayout(checkbox_layout)
+        # left_layout.addWidget(self.keyboard_checkbox)
         left_layout.addSpacing(5)  # Add small spacing
         left_layout.addWidget(self.instructions1_display)
         left_layout.addWidget(self.instructions2_display)
@@ -813,11 +866,15 @@ class CANWindow(QWidget):
         left_layout.addWidget(self.rudder_display)
         left_layout.addWidget(self.trimtab_display)
         left_layout.addSpacing(5)  # Add small spacing
-        input_layout = QHBoxLayout()
-        input_layout.addLayout(self.rudder_input_layout)
-        input_layout.addLayout(self.trim_input_layout)
+        input_layout = QGridLayout()
+        input_layout.setSpacing(0)
+        input_layout.addWidget(self.rudder_input_group, 0, 0)
+        input_layout.addWidget(self.trim_input_group, 0, 1)
+        input_layout.addWidget(self.desired_heading_input_group, 0, 0)
         left_layout.addLayout(input_layout)
         left_layout.addLayout(self.pid_layout)
+
+        self.rudder_input_group.setVisible(False)
 
         left_layout.addSpacing(5)  # Add small spacing
         left_layout.addWidget(QLabel("Candump Output:"))
@@ -882,6 +939,10 @@ class CANWindow(QWidget):
         # main_layout.addLayout(bottom_layout)
 
         self.setLayout(bottom_layout)
+    
+    def set_manual_steer(self, checked):
+        self.rudder_input_group.setVisible(checked)
+        self.desired_heading_input_group.setVisible(not checked)
 
     def toggle_keyboard_mode(self, checked):
         self.rudder_input.setDisabled(checked)
@@ -928,15 +989,14 @@ class CANWindow(QWidget):
     def can_send(self, frame_id, data, display_msg):
         '''
         Helper function for sending CAN messages\n
-        frame_id: full frame id of message as a string WITHOUT 0x prefix (eg. 001, 041)
-        data: hex string of message in little endian (assumes valid data)
+        frame_id: full frame id of message as a string WITHOUT 0x prefix (eg. 001, 041)\n
+        data: hex string of message in little endian (assumes valid data)\n
         display_msg: Message to be outputted on GUI CAN_DUMP display
         '''
-
-        msg = "cansend " + can_line + " " + frame_id + "##0" + data
-        self.cansend_queue.put(msg)
-        self.output_display.append(f"[{display_msg}] {msg}")
         try:
+            msg = "cansend " + can_line + " " + frame_id + "##0" + data
+            self.cansend_queue.put(msg)
+            self.output_display.append(f"[{display_msg}] {msg}")
             data_length = int(len(data) / 2)
             padding = "0" if (data_length < 10) else ""
             data_nice = ""
@@ -963,15 +1023,31 @@ class CANWindow(QWidget):
         except ValueError:
             self.show_error("Invalid angle input for Trim Tab")
 
+    def send_desired_heading(self):
+        try:
+            heading = float(self.desired_heading_input.text())
+            data = convert_to_little_endian(convert_to_hex(int(heading * 1000), 4))
+            status_byte = "00" # a = 0, b = 0, c = 0
+            self.can_send("001", data + status_byte, "HEADING SENT")
+            desired_heading_obj.add_datapoint(time.time() - self.time_start, heading)
+            desired_heading_obj.update_label()
+        except ValueError:
+            self.show_error(f"Invalid angle input for desired heading: {e}")
+        except Exception:
+            print("Exception thrown from send_desired_heading")
+            self.show_error("Exception thrown from send_desired_heading")
+
     def send_rudder(self, from_keyboard=False):
         try:
             angle = self.rudder_angle if from_keyboard else int(self.rudder_input.text())
             if not from_keyboard:
                 self.rudder_angle = angle
-            value = convert_to_hex((angle+90) * 1000, 8)
-            msg = "cansend " + can_line + " 001##0" + convert_to_little_endian(value) + "80"
-            self.cansend_queue.put(msg)
-            self.output_display.append(f"[RUDDER SENT] {msg}")
+            data = convert_to_little_endian(convert_to_hex((angle+90) * 1000, 4))
+            status_byte = "80" # a = 1, b = 0, c = 0
+            # msg = "cansend " + can_line + " 001##0" + convert_to_little_endian(value) + "80"
+            # self.cansend_queue.put(msg)
+            # self.output_display.append(f"[RUDDER SENT] {msg}")
+            self.can_send("001", data + status_byte, "RUDDER SENT")
             self.rudder_display.setText(f"Current Set Rudder Angle:  {self.rudder_angle} degrees")
             
             set_rudder_obj.add_datapoint(time.time() - self.time_start, angle)
@@ -1147,7 +1223,7 @@ class CANWindow(QWidget):
                     # trim values no longer being graphed
                     for obj in all_objs:
                         obj.update_data(current_time, scroll_window)
-
+                
                 # print(f"sal_history = {self.sal_history}")
                 # print(f"pH_history = {self.pH_history}")
                 # print(f"temp_sensor_history = {self.temp_sensor_history}")
@@ -1164,6 +1240,12 @@ class CANWindow(QWidget):
         # Always update plots every timer cycle (independent of CAN messages)
         if len(self.time_history) > 0:
             self._update_plot_ranges(current_time)
+
+        # Add new data point to desired_heading graph every 5 secs - since it's not regularly updated with CAN messages
+        current_dheading = desired_heading_obj.get_current()
+        if (current_dheading[1] is not None and ((current_time - current_dheading[0]) > 5)): # if not graphed since 5 seconds ago
+            desired_heading_obj.add_datapoint(current_time, current_dheading[1])
+
 
 
         # Handle temperature updates with connection status tracking
