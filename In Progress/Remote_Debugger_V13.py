@@ -1043,7 +1043,7 @@ class CANWindow(QWidget):
                 self.trimtab_angle = angle
             if (angle < -90):
                 raise ValueError("Invalid angle input for Trim Tab")
-            value = convert_to_hex((angle+90) * 1000, 8)
+            value = convert_to_hex((angle+90) * 1000, 4)
             # msg = "cansend " + can_line + " 002##0" + convert_to_little_endian(value)
             # self.cansend_queue.put(msg)
             # self.output_display.append(f"[TRIMTAB SENT] {msg}")
