@@ -298,6 +298,26 @@ def temp_sensor_parsing_fn(data_hex):
     
     return round(actual, temp_sensor_obj.rounding)
 
+def make_pretty(cmd):
+    '''
+    Helper function for putting cansend commands into the same format as candump received messages\n
+    '''
+    try:
+        frame_id = cmd[12:15]
+        data = cmd[18:]
+        data_length = int(len(data) / 2)
+        padding = "0" if (data_length < 10) else ""
+        data_nice = ""
+        for i in range(len(data)):
+            data_nice += data[i]
+            if ((i % 2) == 1):
+                data_nice += " "
+        msg = can_line + "  " + frame_id + "  [" + padding + str(data_length) + "]  " + data_nice
+    except Exception as e:
+        print(f"ERROR - Command not logged: {str(e)}")
+    
+    return msg
+
 ### ---------- Data Objects ---------- ###
 pH_graph = create_graph("pH vs Time", "pH", 0, 15)
 pH_line, = pH_graph[2].plot([], [], 'r-', linewidth=linewidth, label='Current pH')
@@ -476,7 +496,7 @@ def temperature_reader(pipe):
         client.close()
 
 ### ---------- Background CAN Send Worker ---------- ###
-def cansend_worker(cmd_queue: multiprocessing.Queue, response_queue: multiprocessing.Queue):
+def cansend_worker(cmd_queue: multiprocessing.Queue, response_queue: multiprocessing.Queue, can_log_queue: multiprocessing.Queue):
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
@@ -490,6 +510,12 @@ def cansend_worker(cmd_queue: multiprocessing.Queue, response_queue: multiproces
                 out = stdout.read().decode()
                 err = stderr.read().decode()
                 response_queue.put((cmd, out, err))
+                # print("Error: ",err)
+                if (not err):
+                    can_log_queue.put_nowait(make_pretty(cmd))
+                    # self.output_display.append(f"[{display_msg}] {msg}")
+                else:
+                    raise Exception(f"Command not logged: {cmd}")
             except Exception as e:
                 response_queue.put((cmd, "", f"Exec error: {str(e)}"))
     except Exception as e:
@@ -998,15 +1024,15 @@ class CANWindow(QWidget):
             msg = "cansend " + can_line + " " + frame_id + "##0" + data
             self.cansend_queue.put(msg)
             self.output_display.append(f"[{display_msg}] {msg}")
-            data_length = int(len(data) / 2)
-            padding = "0" if (data_length < 10) else ""
-            data_nice = ""
-            for i in range(len(data)):
-                data_nice += data[i]
-                if ((i % 2) == 1):
-                    data_nice += " "
-            logged_msg = can_line + "  " + frame_id + "  [" + padding + str(data_length) + "]  " + data_nice
-            self.can_log_queue.put_nowait(logged_msg)
+            # data_length = int(len(data) / 2)
+            # padding = "0" if (data_length < 10) else ""
+            # data_nice = ""
+            # for i in range(len(data)):
+            #     data_nice += data[i]
+            #     if ((i % 2) == 1):
+            #         data_nice += " "
+            # logged_msg = can_line + "  " + frame_id + "  [" + padding + str(data_length) + "]  " + data_nice
+            # self.can_log_queue.put_nowait(logged_msg)
         except Exception as e:
             print(f"ERROR - Command not logged: {str(e)}")
 
@@ -1015,14 +1041,17 @@ class CANWindow(QWidget):
             angle = self.trimtab_angle if from_keyboard else int(self.trim_input.text())
             if not from_keyboard:
                 self.trimtab_angle = angle
+            if (angle < -90):
+                raise ValueError("Invalid angle input for Trim Tab")
             value = convert_to_hex((angle+90) * 1000, 8)
             # msg = "cansend " + can_line + " 002##0" + convert_to_little_endian(value)
             # self.cansend_queue.put(msg)
             # self.output_display.append(f"[TRIMTAB SENT] {msg}")
             self.can_send("002", convert_to_little_endian(value), "TRIMTAB SENT")
             self.trimtab_display.setText(f"Current Trim Tab Angle: {self.trimtab_angle} degrees")
-        except ValueError:
-            self.show_error("Invalid angle input for Trim Tab")
+        except ValueError as e:
+            print(f"ValueError: {e}")
+            self.show_error(f"ValueError: {e}")
 
     def send_desired_heading(self):
         try:
@@ -1043,6 +1072,8 @@ class CANWindow(QWidget):
             angle = self.rudder_angle if from_keyboard else int(self.rudder_input.text())
             if not from_keyboard:
                 self.rudder_angle = angle
+            if (angle < -90):
+                raise ValueError("Invalid angle input for Rudder")
             data = convert_to_little_endian(convert_to_hex((angle+90) * 1000, 4))
             status_byte = "80" # a = 1, b = 0, c = 0
             # msg = "cansend " + can_line + " 001##0" + convert_to_little_endian(value) + "80"
@@ -1054,16 +1085,6 @@ class CANWindow(QWidget):
             set_rudder_obj.add_datapoint(time.time() - self.time_start, angle)
             set_rudder_obj.update_label()
 
-            # Update rudder values display
-            # set_rudder_obj 
-            # current_actual = "---"
-            # if self.actual_rudder_history:
-            #     current_actual = f"{self.actual_rudder_history[-1]:6.1f}°"
-            # else:
-            #     current_actual = "--"
-            # self.rudder_values_label.setText(
-            #     f"Rudder Angles:  Set: {self.rudder_angle:4.0f}°  Actual: {current_actual}"
-            # )
         except ValueError:
             self.show_error("Invalid angle input for Rudder")
         except Exception:
@@ -1308,7 +1329,7 @@ if __name__ == "__main__":
 
     candump_proc = multiprocessing.Process(target=candump_process, args=(queue,))
     temp_proc = multiprocessing.Process(target=temperature_reader, args=(child_conn,))
-    cansend_proc = multiprocessing.Process(target=cansend_worker, args=(cmd_queue, response_queue))
+    cansend_proc = multiprocessing.Process(target=cansend_worker, args=(cmd_queue, response_queue, can_log_queue))
     can_logging_proc = multiprocessing.Process(target=can_logging_process, args=(queue, can_log_queue, timestamp))
 
     candump_proc.start()
