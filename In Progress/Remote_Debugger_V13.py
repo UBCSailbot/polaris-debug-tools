@@ -12,11 +12,9 @@ from PyQt5.QtWidgets import (
     QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QPixmap, QFont
-import matplotlib.pyplot as plt
+from PyQt5.QtGui import QPixmap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import matplotlib.dates as mdates
 from datetime import datetime
 from DataObject import *
 
@@ -97,18 +95,18 @@ def create_graph(title, ylabel, ymin, ymax):
 
 def parse_0x206_frame(data_hex):
     raw_bytes = bytes.fromhex(data_hex)
-    if len(raw_bytes) != 24:
+    if len(raw_bytes) != 16:
         raise ValueError("Incorrect data length (num bytes): ID 0x206")
 
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
-        volt2_obj.name: val(0, 2, 10000.0),
+        volt2_obj.name: val(0, 2, 1000.0),
         temp1_obj.name: val(2, 4, 100.0),
-        volt3_obj.name: val(4, 6, 10000.0),
+        volt3_obj.name: val(4, 6, 1000.0),
         temp2_obj.name: val(6, 8, 100.0),
         temp3_obj.name: val(8, 10, 100.0),
-        volt4_obj.name: val(10, 12, 10000.0),
-        volt1_obj.name: val(12, 14, 10000.0),
+        volt4_obj.name: val(10, 12, 1000.0),
+        volt1_obj.name: val(12, 14, 1000.0),
         mppt_hp_obj.name: val(14, 16, 1000.0),
         mppt_hs_obj.name: val(16, 18, 1000.0),
         mppt_sp_obj.name: val(18, 20, 1000.0),
@@ -145,12 +143,12 @@ def parse_0x204_frame(data_hex):
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
         actual_rudder_obj.name: val(0, 2, 100.0) - 90,
-        imu_roll_obj.name: val(2, 4, 100.0) - 100,
+        imu_roll_obj.name: val(2, 4, 100.0) - 180,
         imu_pitch_obj.name: val(4, 6, 100.0) - 180,
         imu_heading_obj.name: val(6, 8, 100.0),
         set_rudder_obj.name: val(8, 10, 100.0) - 90,
-        integral_obj.name: val(10, 12, 1.0),
-        derivative_obj.name: val(12, 14, 1.0),
+        integral_obj.name: val(10, 12, 1.0) - 30000,
+        derivative_obj.name: val(12, 14, 100.0)-300,
         spd_over_gnd_obj.name: val(14, 16, 1000.0)
     }
 
