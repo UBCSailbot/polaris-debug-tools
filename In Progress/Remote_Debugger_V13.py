@@ -145,7 +145,7 @@ def parse_0x204_frame(data_hex):
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
     return {
         actual_rudder_obj.name: val(0, 2, 100.0) - 90,
-        imu_roll_obj.name: val(2, 4, 100.0) - 100,
+        imu_roll_obj.name: val(2, 4, 100.0) - 180,
         imu_pitch_obj.name: val(4, 6, 100.0) - 180,
         imu_heading_obj.name: val(6, 8, 100.0),
         set_rudder_obj.name: val(8, 10, 100.0) - 90,

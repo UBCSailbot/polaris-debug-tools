@@ -19,7 +19,7 @@ password = "sailbot"
 can_line = "can0"
 
 # Time between sent frames (in secs)
-delay = 1
+delay = 0.005
 
 # CAN Frame IDs
 temp_sensor_id = "100" # 0x10X

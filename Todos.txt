@@ -1,7 +1,20 @@
 TODO
-- Add limits for Trim tab angle input & desired heading & all other inputs really
-    - Add a helper function which checks range and throws ValueException("Out of range") if out of range
-    - Update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
+- make GUI faster & more optimized - low latency and frame rate --> trying to improve frame rate (aim for 2-10fps)
+- might be latency from SSH
+- ensure it stays responsive as we add more graphs - also reduce latency 
+- add options to modify which graphs you see - - use dropdown to limit the number of graphs that can be shown at once - limit amount of rendering
+    - note: ditch the scrollbar- that part is slow
+- try to split up into multiple python files
+- .close - parent thread not closing children - use 'htop' in the terminal and check for processes
+    - disable daemons, etc. -> check multiprocessing lectures
+- ask chatgpt how to optimize
+- look into multiprocessing vs multithreading
+- config file for steering; 
+- check out ways to "profile" the script -> examine what processes are running and how long they take
+
+
+- Fix error: if disconnected from raspberry pi, commands you send will still be logged in csv file
+    - Modify so that cansend commands are only logged if successful
 - Test program with really fast sending can frames and confirm that no messages are dropped
     - Find the limit at which stuff starts dropping
     - May create a parsing script which checks candump csv for incrementing commands
@@ -14,8 +27,7 @@ TODO
     - Add that to the top of right_layout
 - For logging method, put last value logged unless its been too long, in which case will put "--"
             - log values should still be in Remote_Debugger program, not internal function
-- Fix error: if disconnected from raspberry pi, commands you send will still be logged in csv file
-    - Modify so that cansend commands are only logged if successful
+- Double-check/update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
 
 
 Regarding GUI diagnostics we will need the following real time values in some format (in addition to all information we had last test):
