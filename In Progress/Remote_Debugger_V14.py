@@ -15,7 +15,7 @@ from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QPixmap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from DataObject import *
+from DataObject_V2 import *
 from utility import *
 
 # # SSH Credentials
@@ -48,6 +48,10 @@ from utility import *
 # scroll_window = 60 # in seconds
 
 timestamp = 0
+
+# pH_graph_obj = GraphObject("pH", "Time", "", "(s)", 0, 14)
+# pH_obj = DataObject("pH", 1, "", pH_parsing_fn, line_colour = "r", graph=pH_graph_obj)
+# all_objs = [pH_obj]
 
 ### ----------  Utility Functions ---------- ###
 # Note that these functions are designed to work with positive numbers
@@ -769,8 +773,12 @@ class CANWindow(QWidget):
         # Note: It is important that each distinct graph canvas is only added as a widget
         #       a single time, or else problems
         for obj in all_objs:
-            if (obj.graph is not None):
-                right_graphs_layout.addWidget(obj.graph.canvas)
+            if (obj.graph_obj is not None):
+                right_graphs_layout.addWidget(obj.graph_obj.graph)
+                right_graphs_layout.addSpacing(4)
+        # for obj in all_objs:
+        #     if (obj.graph_obj is not None):
+        #         right_graphs_layout.addWidget(obj.graph_obj.canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_graphs_layout)
@@ -954,6 +962,7 @@ class CANWindow(QWidget):
                     frame_id = parts[1].lower()
                     self.time_history.append(current_time)
                     
+                    # TODO: Turn the if-else-if-else statement into a dictionary with frame id:function - just runs the function associated with frame id
                     # Handle 0x206 frame (temperature and voltage data)
                     if frame_id == "206":
                         try:
@@ -1036,9 +1045,9 @@ class CANWindow(QWidget):
             self._update_plot_ranges(current_time)
 
         # Add new data point to desired_heading graph every 5 secs - since it's not regularly updated with CAN messages
-        current_dheading = desired_heading_obj.get_current()
-        if (current_dheading[1] is not None and ((current_time - current_dheading[0]) > 5)): # if not graphed since 5 seconds ago
-            desired_heading_obj.add_datapoint(current_time, current_dheading[1])
+        # current_dheading = desired_heading_obj.get_current()
+        # if (current_dheading[1] is not None and ((current_time - current_dheading[0]) > 5)): # if not graphed since 5 seconds ago
+        #     desired_heading_obj.add_datapoint(current_time, current_dheading[1])
 
         # Handle temperature updates with connection status tracking
         if self.temp_pipe.poll():
@@ -1066,23 +1075,25 @@ class CANWindow(QWidget):
         # === Auto-scale and scroll X axis ===
         if len(self.time_history) > 1:
             for obj in all_objs:
-                if (obj.graph is not None):
-                    obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
+                if (obj.graph_obj is not None):
+                    obj.graph_obj.update_xlim(max(0, current_time - scroll_window), current_time)
+                    # obj.graph_obj.ax.set_xlim(max(0, current_time - scroll_window), current_time)
         else:
             for obj in all_objs:
-                if (obj.graph is not None):
-                    obj.graph.ax.relim()
-                    obj.graph.ax.autoscale_view()
+                if (obj.graph_obj is not None):
+                    obj.graph_obj.ax.relim()
+                    obj.graph_obj.ax.autoscale_view()
 
         # === Auto Y adjustment ===
-        for obj in all_objs:
-            if (obj.graph is not None):
-                obj.adjust_ylim()
+        # for obj in all_objs:
+        #     if (obj.graph is not None):
+        #         obj.adjust_ylim()
+        # TODO: removed auto adjust_ylim() for now
 
         # Update the canvas to reflect changes        
-        for obj in all_objs:
-            if (obj.graph is not None):
-                    obj.graph.canvas.draw()
+        # for obj in all_objs:
+        #     if (obj.graph_obj is not None):
+        #             obj.graph_obj.canvas.draw()
 
     def show_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
@@ -1108,6 +1119,8 @@ if __name__ == "__main__":
     can_logging_proc.start()
 
     app = QApplication(sys.argv)
+    for obj in all_objs:
+        obj.initialize() # create QWidgets
     window = CANWindow(queue, parent_conn, cmd_queue, response_queue, can_log_queue)
     window.show()
 
