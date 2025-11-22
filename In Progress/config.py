@@ -24,6 +24,12 @@ value_style = """
 bold_text = "font-weight: bold;"
 
 linewidth = 2
+graph_bg = "w"
+graph_title_style = ["black", "20pt"]
+graph_label_style = {
+    "color": "black",
+    "font-size": "16px"
+}
 graph_xlabel = "Time (s)" # all graphs read in seconds
 graph_min_width = 275
 graph_min_height = 250
