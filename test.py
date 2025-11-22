@@ -1,102 +1,93 @@
+import pyqtgraph as pg
+from PyQt5 import QtWidgets
 
+from random import randint
 
-# Hex Two's complement conversion dict
-hex_conversion = {
-    "0": "f",
-    "1": "e",
-    "2": "d",
-    "3": "c",
-    "4": "b",
-    "5": "a",
-    "6": "9",
-    "7": "8",
-    "8": "7",
-    "9": "6",
-    "a": "5",
-    "b": "4",
-    "c": "3",
-    "d": "2",
-    "e": "1",
-    "f": "0",
-}
+import pyqtgraph as pg
+from PyQt5 import QtCore, QtWidgets
 
-negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-### ----------  Utility Functions ---------- ###
-def convert_to_hex(decimal, num_bytes):
-    # if (decimal < 0):
-    #     decimal = ~decimal + 1 # Two's complement for negative ints
-    #     print(f"After two's complement in convert_to_hex: {decimal}")
+        # Temperature vs time dynamic plot
+        self.plot_graph = pg.PlotWidget() # create PlotWidget object
+        self.plot_graph.getPlotItem().getViewBox().setMouseEnabled(False, False) # disable graph interaction
+        self.setCentralWidget(self.plot_graph) # set plot_graph to be main widget of window
+        self.plot_graph.setBackground("w") # set background color to white
+        pen = pg.mkPen(color=(255, 0, 0)) # set line color (pen)
+        self.plot_graph.setTitle("Temperature vs Time", color="b", size="20pt") # set title of graph
+        styles = {"color": "red", "font-size": "18px"} # create a style sheet
+        self.plot_graph.setLabel("left", "Temperature (°C)", **styles) # create y-axis label, set its style
+        self.plot_graph.setLabel("bottom", "Time (min)", **styles) # create x-axis label, set its style
+        self.plot_graph.addLegend() # must be called before calling plot to add legend to graph
+        self.plot_graph.showGrid(x=True, y=True) # set grid on graph
+        self.plot_graph.setYRange(20, 40) # fix y-range on graph
+        self.time = list(range(10)) # create a list of times from 1-10 for time
+        self.temperature = [randint(20, 40) for _ in range(10)] # create a length 10 list of random data between 20-40 for temp
+        # Get a line reference
+        self.line = self.plot_graph.plot( # create a line for the plot; save reference to line in var self.line
+            self.time, # x-data
+            self.temperature, # y-data
+            name="Temperature Sensor", # data/line name
+            pen=pen, # brush/style used for this line
+            symbol="+", # datapoint markers
+            symbolSize=15, 
+            symbolBrush="b",
+        )
+        # Add a timer to simulate new temperature measurements
+        self.timer = QtCore.QTimer() # timer object
+        self.timer.setInterval(300) # set timer to timeout every 300 milliseconds
+        self.timer.timeout.connect(self.update_plot) # call update plot on timeout
+        self.timer.start() # start timer
 
-    if (abs(decimal) > ((2 ** ((num_bytes * 8) - 1)) - 1)):
-        raise ValueError("Number is too large for given number of bytes")
+    def update_plot(self):
+        self.time = self.time[1:] # remove first element of self.time
+        self.time.append(self.time[-1] + 1) # add new time to the end of self.time
+        self.temperature = self.temperature[1:] # remove first element of self.temperature
+        self.temperature.append(randint(20, 40)) # add new random data point
+        self.line.setData(self.time, self.temperature) # graph the new data
 
-    hexed = format(decimal, "X").zfill(2 * num_bytes)
-    hex_list = list(hexed)
-    print(hex_list)
-    if (hex_list[0] == '-'):
-        if len(hex_list) == (2 * num_bytes):
-            hex_list[0] = "0"
-        else:
-            hex_list = hex_list[1:]
-        print(hex_list)
-        hexed = "".join(hex_list)
-        return twos_complement(hexed)
+app = QtWidgets.QApplication([])
+main = MainWindow()
+main.show()
+app.exec()
 
-    return format(decimal, "X").zfill(2 * num_bytes)
+# ==== Testing for setting can network up remotely ====
 
-def convert_to_little_endian(hex_str):
-    print(f"convert_to_little_endian: Given hex string: {hex_str}")
-    # hex_list = list(hex_str)
-    # if (hex_list[0] == '-'):
-    #     hex_list[0] = "0"
-    #     new_str = "".join(hex_list)
-    #     new_str = twos_complement(new_str)
+# import paramiko
 
-    raw = bytes.fromhex(hex_str)
-    return raw[::-1].hex()
+# hostname = "192.168.0.10"
+# username = "sailbot"
+# password = "sailbot"
+# can_line = "can0"
 
-def convert_from_little_endian_str(hex_str):
-    raw = bytes.fromhex(hex_str)
-    big_endian = raw[::-1].hex()
-    if big_endian[0] in negative_hex_starting_digits:
-        return int(twos_complement(big_endian), 16) * -1
-    return int(big_endian, 16)
-
-def twos_complement(hex_str):
-    hex_list = list(hex_str)
-    for i in range(0, len(hex_list)):
-        hex_list[i] = hex_conversion[hex_list[i].lower()]
-
-    hex_list[-1] = hex(int(hex_list[-1], 16) + 1).replace("0x", "")
-    return "".join(hex_list)
-
-def test(line):
-    parts = line.split()
-    frame_id = parts[1].lower()
-    print("Frame id: ", frame_id)
-    if (frame_id == "121"):
-        print("True!")
-    else:
-        print("False")
-    raw_data = line.split(']')[-1].strip().split()
-    return raw_data
-
-if __name__ == "__main__":
-    # print(test("can1 [121] 30e1"))
-    # can_data = 0xc05d9600401fc8e158313075
-    # print(str(can_data))
-    print(2 ** ((4 * 8) - 1) - 1)
-    while (True):
-        data = input("\nEnter data: ")
-        hexed = convert_to_hex(int(data), 4)
-        print(f"convert_to_hex(input, 4 bytes) = {hexed}")
-        little_endian = convert_to_little_endian(hexed)
-        print(f"convert_to_little_endian(hexed)= {little_endian}")
-        back_to_int = convert_from_little_endian_str(little_endian)
-        print(f"received int: {back_to_int} (using convert_from_little_endian(little_endian_hex_str))")
-
-
+# if __name__ == "__main__":
+#     client = paramiko.SSHClient()
+#     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#     try:
+#         client.connect(hostname, username=username, password=password)
+#         print("Connected to host...")
+#         transport = client.get_transport()
+#         # session = transport.open_session()
+#         # session.exec_command("bash sailbot_workspace/scripts/canup.sh -l")
+#         session = transport.open_session()
+#         print("Sesson opened")
+#         session.exec_command(f"candump {can_line}")
+#         print("Command executed")
+#         if session.recv_ready():
+#             line = session.recv(1024).decode()
+#             print(f"line = {line}")
+#         else:
+#             print(f"session not recv_ready")
+#             # print(f"stderr = {stderr}")
+#         # print(f"stdin: {stdin.read().decode().strip()}")
+#         # print(f"stoud: {stdout.read().decode().strip()}")
+#         # print(f"stderr: {stderr.read().decode().strip()}")
+#     except Exception as e:
+#         print(f"Error: {e}")
+#     finally:
+#         client.close()
 
 
 # === Multiprocessing Basics ===
