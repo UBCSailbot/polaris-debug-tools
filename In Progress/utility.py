@@ -390,5 +390,6 @@ data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 # all objects with data from 0x204 frame (rudder -> mainframe)
 rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj]
 
-all_objs = pdb_objs + rudder_objs + [desired_heading_obj] + data_wind_objs # + data_objs
+# all_objs = pdb_objs + rudder_objs + [desired_heading_obj] + data_wind_objs # + data_objs
 # TODO: PUT data_objs back for pH, salinity, water temp sensors
+all_objs = [pH_obj]
