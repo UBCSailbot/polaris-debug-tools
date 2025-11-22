@@ -1,9 +1,10 @@
 TODO
-- make GUI faster & more optimized - low latency and frame rate --> trying to improve frame rate (aim for 2-10fps (min 2 fps))
-    - ensure it stays responsive as we add more graphs - also reduce latency 
-    - ask chatgpt how to optimize
-    - modify how you see graphs- see below
-    - look up switching graphs to PyQt5 - what's the improvement amount?
+- What you are currently doing:
+- switch from matplotlib to PyQt5 graphs
+    - create alternate interface for GraphObject/DataObject - Remote_Debugger should never call any matplotlib/pyqt5 internal function/library
+    - Note graph creation in utility.py
+    - first test using only pH_obj & Test_Script_Sensors
+    - then switch internal implementation to PyQt5
 - add options to modify which graphs you see - use dropdown to limit the number of graphs that can be shown at once - limit amount of rendering
     - note: ditch the scrollbar- that part is slow
     - make sure when they're not visible, they're not actually plotting- aiming to reduce the latency
@@ -11,8 +12,6 @@ TODO
     - .close - parent thread not closing children - use 'htop' in the terminal and check for processes
         - disable daemons, etc. -> check multiprocessing lectures
     - make sure there are no daemon threads active - make sure all child processes get killed
-- try to split up into multiple python files
-    - make it modular, reusable - config files for objects, settings, etc.?
 - look into multiprocessing vs multithreading
 - add option to candump line to save local copy of candump to file
 
@@ -24,11 +23,27 @@ TODO
 - add libraries file to automatically import all libraries
 - status indicator - "voltage is too low", "current too high", etc. - warnings to show something is wrong
 
-- Fix error: if disconnected from raspberry pi, commands you send will still be logged in csv file
-    - Modify so that cansend commands are only logged if successful
-- Test program with really fast sending can frames and confirm that no messages are dropped
-    - Find the limit at which stuff starts dropping
-    - May create a parsing script which checks candump csv for incrementing commands
+
+High-level priorities:
+- make GUI faster & more optimized - low latency and frame rate --> trying to improve frame rate (aim for 2-10fps (min 2 fps))
+    - ensure it stays responsive as we add more graphs - also reduce latency 
+    - ask chatgpt how to optimize
+    - modify how you see graphs- see below
+    - switch graphs to PyQt5
+        - note: the implementation should really all be internal, and DataObject provides the 
+            whole interface for interacting with graphs; that way it doesn't matter to external user
+            whether its implemented with PyQt5 or matplotlib
+- try to split up into multiple python files
+    - make it modular, reusable - config files for objects, settings, etc.?
+
+Later:
+- adding functionality to call the canup.sh bash script through a button
+    - currently after pressing the button the logging stops working
+    - candump itself is working- I can see the messages on putty - so I think it might be because I set can0 down - need a way to restart the logging process
+    - currently I'm trying to figure out where/what queues can messages in update_status (self.queue)
+- interesting note: can_log_process intentionally sleeps for 0.1 secs... do I need that? Why is that there?
+
+
 - Test program with a variety of sent CAN frames of all types
 - Performance - Make the UI faster - right now graphs and scrolling is slow to respond - switch to pyqt graphs
     - Do stress testing - sending a ton of data all at once - need to know if/when can data is dropped

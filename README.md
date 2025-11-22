@@ -23,6 +23,7 @@ Notes:
 - V11 - V10 + refactored previously existing temps/volts + refactored rudder debug frame
 - V12 - Update UI - shift live values to column in the middle + add new DRV/PWR data (new debug frames)
 - V13 - add new controls (eg. send PID values)
+- V14 - switch from matplotlib to pyqtgraph
 
 
 
