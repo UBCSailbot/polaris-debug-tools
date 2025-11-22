@@ -16,6 +16,8 @@ hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
+can_line = "can0"
+
 # Time between sent frames (in secs)
 delay = 1
 
@@ -24,70 +26,12 @@ temp_sensor_id = "100" # 0x10X
 pH_id = "110" # 0x11X
 sal_id = "120" # 0x12X
 
-# Hex Two's complement conversion dict
-hex_conversion = {
-    "0": "f",
-    "1": "e",
-    "2": "d",
-    "3": "c",
-    "4": "b",
-    "5": "a",
-    "6": "9",
-    "7": "8",
-    "8": "7",
-    "9": "6",
-    "a": "5",
-    "b": "4",
-    "c": "3",
-    "d": "2",
-    "e": "1",
-    "f": "0",
-}
-
-negative_hex_starting_digits = ["8", "9", "a", "b", "c", "d", "e", "f"]
-
 slope = 0.1
 data_min = 0.2
 data_max = 0.8
 slope_data = data_min
 
 ### ----------  Utility Functions ---------- ###
-# def convert_to_hex(decimal, num_bytes):
-#     if (decimal < 0):
-#         decimal = ~decimal + 1 # Two's complement for negative ints
-#         print(f"After two's complement in convert_to_hex: {decimal}")
-
-#     return format(decimal, "X").zfill(2 * num_bytes)
-
-# def convert_to_little_endian(hex_str):
-#     print(f"convert_to_little_endian: Given hex string: {hex_str}")
-#     if (hex_str[0] == '-'):
-#         hex_str[0] = 0
-#         for i in range(1, hex_str.len()):
-#             hex_str[i] = hex_conversion[i]
-
-#     raw = bytes.fromhex(hex_str)
-#     return raw[::-1].hex()
-
-# def convert_from_bytes(num_in_bytes):
-#     return int.from_bytes(num_in_bytes)
-
-# def convert_to_hex(decimal, num_bytes):
-#     if (abs(decimal) > ((2 ** ((num_bytes * 8) - 1)) - 1)):
-#         raise ValueError("Number is too large for given number of bytes")
-
-#     hexed = format(decimal, "X").zfill(2 * num_bytes)
-#     hex_list = list(hexed)
-#     if (hex_list[0] == '-'):
-#         if len(hex_list) == (2 * num_bytes):
-#             hex_list[0] = "0"
-#         else:
-#             hex_list = hex_list[1:]
-#         hexed = "".join(hex_list)
-#         return twos_complement(hexed)
-
-#     return format(decimal, "X").zfill(2 * num_bytes)
-
 # Works only for positive numbers
 def convert_to_hex(decimal, num_bytes):
     return format(decimal, "X").zfill(2 * num_bytes)
@@ -99,17 +43,7 @@ def convert_to_little_endian(hex_str):
 def convert_from_little_endian_str(hex_str):
     raw = bytes.fromhex(hex_str)
     big_endian = raw[::-1].hex()
-    # for twos complement
-    # if big_endian[0] in negative_hex_starting_digits:
-    #     return int(twos_complement(big_endian), 16) * -1
     return int(big_endian, 16)
-
-# def twos_complement(hex_str):
-#     hex_list = list(hex_str)
-#     for i in range(0, len(hex_list)):
-#         hex_list[i] = hex_conversion[hex_list[i].lower()]
-#     final_string = hex(int("".join(hex_list), 16) + 1).replace("0x", "")
-#     return final_string
 
 def generate_slope_data():
     global slope
@@ -130,7 +64,7 @@ def send_pdb_command(client):
         # Multiplied by 1000 by CAN Frame documentation
         # can_data = 0x5dc0 0096 1f40 e1c8 3158 7530
         can_data = "c05d9600401fc9416075c8325831"
-        can_msg = "cansend can1 206##1" + can_data
+        can_msg = f"cansend {can_line} 206##1" + can_data
 
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_msg)
@@ -171,7 +105,7 @@ def send_sensor_command(client, frame_id, data: float):
         # print("data converted to hex: ", hexed_data)
         hex_bytes = convert_to_little_endian(hexed_data)
         print("hex_bytes: ", hex_bytes)
-        can_msg = "cansend can1 " + frame_id + "##1" + hex_bytes
+        can_msg = f"cansend {can_line} " + frame_id + "##1" + hex_bytes
 
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_msg)
@@ -200,7 +134,7 @@ def send_rudder_command(client, angle):
         # Convert float angle to integer for hex conversion
         angle_int = int((angle + 90) * 1000)
         value = convert_to_hex(angle_int, 8)
-        can_message = "cansend can1 001##1" + convert_to_little_endian(value) + "80"
+        can_message = f"cansend {can_line} 001##1" + convert_to_little_endian(value) + "80"
         
         # Execute the cansend command
         stdin, stdout, stderr = client.exec_command(can_message)
@@ -256,14 +190,6 @@ def main():
         while True:
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
-            
-            # Generate random pH between 0 and 14
-
-            # Note: these random data points don't really check for out of bounds stuff (eg. ph = 15), but it should be fine - just testing if graphing is smooth
-            # pH_data = round(random.uniform(current_pH - 1.5, current_pH + 1.5))
-            # temp_sensor_data = round(random.uniform(current_water_temp - 5.0, current_water_temp + 5.0), 3)
-            # sal_data = round(random.uniform(current_sal - 5000, current_sal + 5000)) # Expect data points between 35,000-60,000 µS/cm
-            # print(f"generated sal_data: {sal_data}")
 
             generate_slope_data()
             pH_data = round(slope_data * 15)
@@ -293,15 +219,15 @@ def main():
             if not success:
                 print("Failed to send command, continuing...")
 
-            print(f"generated temp_sensor_data = {temp_sensor_data}")
-            success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-            if not success:
-                print("Failed to send command, continuing...")
+            # print(f"generated temp_sensor_data = {temp_sensor_data}")
+            # success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            # if not success:
+            #     print("Failed to send command, continuing...")
 
-            print(f"generated sal_data = {sal_data}")
-            success = send_sensor_command(client, sal_id, sal_data)
-            if not success:
-                print("Failed to send command, continuing...")
+            # print(f"generated sal_data = {sal_data}")
+            # success = send_sensor_command(client, sal_id, sal_data)
+            # if not success:
+            #     print("Failed to send command, continuing...")
 
             # # === For combining frames randomly ===
             # rnd_cmd = random.randrange(3)
