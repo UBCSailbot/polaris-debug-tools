@@ -25,12 +25,15 @@ bold_text = "font-weight: bold;"
 
 linewidth = 2
 graph_bg = "w"
-graph_title_style = ["black", "20pt"]
+graph_title_style = ["black", "10pt"]
 graph_label_style = {
     "color": "black",
-    "font-size": "16px"
+    "font-size": "15px"
 }
-graph_xlabel = "Time (s)" # all graphs read in seconds
+
+graph_y = "Time"
+graph_y_units = "s"
+graph_ylabel = "Time (s)" # all graphs read in seconds
 graph_min_width = 275
 graph_min_height = 250
 scroll_window = 60 # in seconds

@@ -59,7 +59,7 @@ def create_graph(title, ylabel, ymin, ymax):
     canvas.setMinimumSize(graph_min_width, graph_min_height)
     ax = figure.add_subplot(111)
     ax.set_title(title)
-    ax.set_xlabel(graph_xlabel)
+    ax.set_xlabel(graph_ylabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim(0, 60) # Initial X range is 0-60 secs
     ax.set_ylim(ymin, ymax) # Initial ymin and ymax
@@ -94,6 +94,8 @@ def parse_0x204_frame(data_hex):
         raise ValueError("Incorrect data length (num bytes): ID 0x204")
     
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
+    print(f"derivative_obj: {(val(12, 14, 1.0) - 300) / 100.0}")
+    print(f"spd_over_gnd_obj: {val(14, 16, 100.0)}")
     return {
         actual_rudder_obj.name: val(0, 2, 100.0) - 90,
         imu_roll_obj.name: val(2, 4, 100.0) - 180,
@@ -101,9 +103,10 @@ def parse_0x204_frame(data_hex):
         imu_heading_obj.name: val(6, 8, 100.0),
         set_rudder_obj.name: val(8, 10, 100.0) - 90,
         integral_obj.name: val(10, 12, 1.0) - 30000,
-        derivative_obj.name: val(12, 14, 100.0) - 300,
+        derivative_obj.name: (val(12, 14, 1.0) - 300) / 100.0,
         spd_over_gnd_obj.name: val(14, 16, 1000.0)
     }
+    
 
 def actual_rudder_parsing_fn(parsed_dict):
     return parsed_dict[actual_rudder_obj.name]
@@ -304,6 +307,17 @@ def make_pretty(cmd):
 # temp2_obj = DataObject("Temp2", 2, "°C", None, None, temp2_line, temp2_label)
 # temp3_obj = DataObject("Temp3", 2, "°C", None, None, temp3_line, temp3_label)
 
+pdb_temp_graph_obj = GraphObject("Temperature", cg.graph_y, "°C", cg.graph_y_units, 0, 127.0)
+temp1_obj = DataObject("Temp1", 2, "°C", None, line_colour="r", graph=pdb_temp_graph_obj)
+temp2_obj = DataObject("Temp2", 2, "°C", None, line_colour="g", graph=pdb_temp_graph_obj)
+temp3_obj = DataObject("Temp3", 2, "°C", None, line_colour="y", graph=pdb_temp_graph_obj)
+
+pdb_volt_graph_obj = GraphObject("Cell Voltages", cg.graph_y, "V", cg.graph_y_units, 0, 5)
+volt1_obj = DataObject("Volt1", 2, "V", None, line_colour="b", graph=pdb_volt_graph_obj)
+volt2_obj = DataObject("Volt2", 2, "V", None, line_colour="c", graph=pdb_volt_graph_obj)
+volt3_obj = DataObject("Volt3", 2, "V", None, line_colour="m", graph=pdb_volt_graph_obj)
+volt4_obj = DataObject("Volt4", 2, "V", None, line_colour="orange", graph=pdb_volt_graph_obj)
+
 # pdb_volt_graph = create_graph("Cell Voltages vs Time", "Voltage (V)", 0, 5)
 # volt1_line, = pdb_volt_graph[2].plot([], [], 'b-', label='Volt 1')
 # volt2_line, = pdb_volt_graph[2].plot([], [], 'c-', label='Volt 2')
@@ -334,6 +348,12 @@ def make_pretty(cmd):
 # mppt_sp_obj = DataObject("MPPT_curr_sail_port", 2, "A", None, None, mppt_sp_line, mppt_sp_label)
 # mppt_ss_obj = DataObject("MPPT_curr_sail_starbd", 2, "A", None, None, mppt_ss_line, mppt_ss_label)
 
+mppt_current_graph_obj = GraphObject("MPPT Current", cg.graph_y, "A", cg.graph_y_units, 0, 5)
+mppt_hp_obj = DataObject("MPPT_curr_hull_port", 2, "A", None, line_colour="c", graph=mppt_current_graph_obj)
+mppt_sp_obj = DataObject("MPPT_curr_hull_starbd", 2, "A", None, line_colour="purple", graph=mppt_current_graph_obj)
+mppt_hs_obj = DataObject("MPPT_curr_sail_port", 2, "A", None, line_colour="g", graph=mppt_current_graph_obj)
+mppt_ss_obj = DataObject("MPPT_curr_sail_starbd", 2, "A", None, line_colour="y", graph=mppt_current_graph_obj)
+
 # pdb_objs = [temp1_obj, temp2_obj, temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 
 # rudder_graph = create_graph("Rudder Angles vs Time", "degrees (°)", -50, 50)
@@ -345,11 +365,18 @@ def make_pretty(cmd):
 # actual_rudder_obj = DataObject("Actual_rdr_deg", 2, "°", actual_rudder_parsing_fn, rudder_graph_obj, line=actual_rudder_line, label=actual_rudder_label)
 # set_rudder_obj = DataObject("Set_rdr_deg", 2, "°", set_rudder_parsing_fn, line=set_rudder_line, label=set_rudder_label)
 
+rudder_graph = GraphObject("Rudder Angles", cg.graph_y, "°", cg.graph_y_units, -90, 90)
+actual_rudder_obj = DataObject("Actual_rdr_deg", 2, "°", None, line_colour="r", graph=rudder_graph) # NOTE: graph parsing function changed to None here - potential for bug/error
+set_rudder_obj = DataObject("Set_rdr_deg", 2, "°", None, line_dashed=True, line_colour="b", graph=rudder_graph) # NOTE: graph parsing function changed to None here
+
 # spd_over_gnd_graph = create_graph("Speed over ground vs Time", "Speed (km/h)", 0, 10)
 # spd_over_gnd_line, = spd_over_gnd_graph[2].plot([], [], 'g-', linewidth=2, label="Speed over ground")
 # spd_over_gnd_graph_obj = GraphObject(spd_over_gnd_graph, 0, 35)
 # spd_over_gnd_label = create_label("Speed_over_gnd: ---- ")
 # spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", None, spd_over_gnd_graph_obj, spd_over_gnd_line, spd_over_gnd_label)
+
+spd_over_gnd_graph_obj = GraphObject("Speed Over Ground", cg.graph_y, "km/h", cg.graph_y_units, 0, 20)
+spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", None, line_colour='brown', graph=spd_over_gnd_graph_obj)
 
 # headings_graph = create_graph("IMU & Desired Headings vs Time", "degrees (°)", 0, 360)
 # imu_heading_line, = headings_graph[2].plot([], [], 'r-', linewidth=2, label="IMU heading")
@@ -357,9 +384,12 @@ def make_pretty(cmd):
 # imu_heading_label = create_label("IMU_heading: ---- ")
 # imu_heading_graph_obj = GraphObject(headings_graph, 0, 360)
 # imu_heading_obj = DataObject("IMU_heading", 3, "°", None, imu_heading_graph_obj, imu_heading_line, imu_heading_label)
-
 # desired_heading_label = create_label("Desired_heading: ---- ")
 # desired_heading_obj = DataObject("Desired_heading", 3, "°", None, None, desired_heading_line, desired_heading_label)
+
+headings_graph_obj = GraphObject("IMU & Desired Headings", cg.graph_y, "°", cg.graph_y_units, 0, 360)
+imu_heading_obj = DataObject("IMU_heading", 3, "°", None, line_colour="r", graph=headings_graph_obj)
+desired_heading_obj = DataObject("Desired_heading", 3, "°", None, line_dashed=True, line_colour="b", graph=headings_graph_obj)
 
 # imu_roll_pitch_graph = create_graph("IMU Roll & Pitch vs Time","degrees (°)", 0, 360)
 # imu_roll_line, = imu_roll_pitch_graph[2].plot([], [], 'g-', linewidth=2, label="IMU Roll")
@@ -370,6 +400,10 @@ def make_pretty(cmd):
 # imu_roll_obj = DataObject("IMU_roll", 2, "°", None, imu_roll_pitch_graph_obj, imu_roll_line, imu_roll_label)
 # imu_pitch_obj = DataObject("IMU_pitch", 2, "°", None, None, imu_pitch_line, imu_pitch_label)
 
+imu_roll_pitch_graph_obj = GraphObject("IMU Roll & Pitch", cg.graph_y, "°", cg.graph_y_units, 0, 360)
+imu_roll_obj = DataObject("IMU_roll", 2, "°", None, line_colour="g", graph=imu_roll_pitch_graph_obj)
+imu_pitch_obj = DataObject("IMU_pitch", 2, "°", None, line_colour="brown", graph=imu_roll_pitch_graph_obj)
+
 # int_der_graph = create_graph("IMU Integral & Derivative vs Time","", 0, 100)
 # der_line, = int_der_graph[2].plot([], [], 'mediumseagreen', linewidth=2, label="Derivative")
 # int_line, = int_der_graph[2].plot([], [], 'm--', linewidth=2, label="Integral")
@@ -378,6 +412,10 @@ def make_pretty(cmd):
 # der_label = create_label("IMU_derivative: ---- ")
 # integral_obj = DataObject("IMU_integral", 2, "", None, int_der_graph_obj, int_line, int_label)
 # derivative_obj = DataObject("IMU_derivative", 2, "", None, None, der_line, der_label)
+
+int_der_graph_obj = GraphObject("IMU Integral & Derivative", cg.graph_y, None, cg.graph_y_units, 0, 100)
+integral_obj = DataObject("IMU_integral", 2, None, None, line_colour="m", graph=int_der_graph_obj)
+derivative_obj = DataObject("IMU_derivative", 2, None, None, line_colour="pink", graph=int_der_graph_obj)
 
 # data_wind_spd_graph = create_graph("Data_Wind Speed vs Time", "Speed (knots)", 0, 20)
 # data_wind_spd_line, = data_wind_spd_graph[2].plot([], [], 'purple', linewidth=2, label="Wind Speed")
@@ -394,7 +432,6 @@ def make_pretty(cmd):
 # data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 
 # # all objects with data from 0x204 frame (rudder -> mainframe)
-# rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj]
 
 # all_objs = pdb_objs + rudder_objs + [desired_heading_obj] + data_wind_objs # + data_objs
 # TODO: PUT data_objs back for pH, salinity, water temp sensors
@@ -405,18 +442,23 @@ def make_pretty(cmd):
 # DataObject: parsing function, decimal places (dp), x-units
 # pH_obj = DataObject("pH", 1, "", pH_parsing_fn, graph_obj)
 
-pH_graph_obj = GraphObject("pH", "Time", None, "s", 0, 14, 0, 14)
+pH_graph_obj = GraphObject("pH", cg.graph_y, None, cg.graph_y_units, 0, 14)
 pH_obj = DataObject("pH", 1, None, pH_parsing_fn, line_colour="r", graph=pH_graph_obj)
 
-# temp_sensor_graph = create_graph("Water Temp vs Time", "Temp (°C)", 0, 100)
-# temp_sensor_line, = temp_sensor_graph[2].plot([], [], 'b-', linewidth=linewidth, label="Water Temp")
-# temp_sensor_graph_obj = GraphObject(temp_sensor_graph, 0, 1400)
-# temp_sensor_label = create_label("Water temp: ----   ")
-# temp_sensor_obj = DataObject("Water_Temp", 3, "°C", temp_sensor_parsing_fn, temp_sensor_graph_obj, temp_sensor_line, temp_sensor_label)
-
-# TODO: use initial values to setYRange initially- but first need to check if auto-adjust still works after setting range
-temp_sensor_graph_obj = GraphObject("Water Temp", "Time", "°C", "s", 0, 100, 0, 1400)
+temp_sensor_graph_obj = GraphObject("Water Temp", cg.graph_y, "°C", cg.graph_y_units, 0, 1400)
 temp_sensor_obj = DataObject("Water_Temp", 3, "°C", temp_sensor_parsing_fn, line_colour="b", graph=temp_sensor_graph_obj)
 
+# sal_graph = create_graph("Salinity vs Time", "Salinity (µS/cm)", 0, 100000)
+# sal_line, = sal_graph[2].plot([], [], 'g-', linewidth=linewidth, label="Salinity")
+# sal_graph_obj = GraphObject(sal_graph, 0, 550000)
+# sal_label = create_label("Salinity: ----    ")
+# sal_obj = DataObject("Salinity", 3, "µS/cm", sal_parsing_fn, sal_graph_obj, sal_line, sal_label)
 
-all_objs = [pH_obj, temp_sensor_obj]
+sal_graph_obj = GraphObject("Salinity", cg.graph_y, "µS/cm", cg.graph_y_units, 0, 100000)
+sal_obj = DataObject("Salinity", None, "µS/cm", sal_parsing_fn, line_colour='g', graph=sal_graph_obj)
+
+
+pdb_objs = [temp1_obj, temp2_obj , temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
+rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj]
+data_objs = [pH_obj, temp_sensor_obj, sal_obj]
+all_objs = rudder_objs # pdb_objs # + data_objs

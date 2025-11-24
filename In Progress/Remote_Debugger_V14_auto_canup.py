@@ -779,8 +779,8 @@ class CANWindow(QWidget):
         # Note: It is important that each distinct graph canvas is only added as a widget
         #       a single time, or else problems
         for obj in all_objs:
-            if (obj.graph is not None):
-                right_graphs_layout.addWidget(obj.graph.canvas)
+            if (obj.graph_obj is not None):
+                right_graphs_layout.addWidget(obj.graph_obj.canvas)
 
         container_widget = QWidget()
         container_widget.setLayout(right_graphs_layout)
@@ -1084,23 +1084,23 @@ class CANWindow(QWidget):
         # === Auto-scale and scroll X axis ===
         if len(self.time_history) > 1:
             for obj in all_objs:
-                if (obj.graph is not None):
-                    obj.graph.ax.set_xlim(max(0, current_time - scroll_window), current_time)
+                if (obj.graph_obj is not None):
+                    obj.graph_obj.ax.set_xlim(max(0, current_time - scroll_window), current_time)
         else:
             for obj in all_objs:
-                if (obj.graph is not None):
-                    obj.graph.ax.relim()
-                    obj.graph.ax.autoscale_view()
+                if (obj.graph_obj is not None):
+                    obj.graph_obj.ax.relim()
+                    obj.graph_obj.ax.autoscale_view()
 
         # === Auto Y adjustment ===
         for obj in all_objs:
-            if (obj.graph is not None):
+            if (obj.graph_obj is not None):
                 obj.adjust_ylim()
 
         # Update the canvas to reflect changes        
         for obj in all_objs:
-            if (obj.graph is not None):
-                    obj.graph.canvas.draw()
+            if (obj.graph_obj is not None):
+                    obj.graph_obj.canvas.draw()
 
     def show_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
