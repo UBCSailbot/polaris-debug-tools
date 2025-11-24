@@ -19,7 +19,7 @@ password = "sailbot"
 can_line = "can0"
 
 # Time between sent frames (in secs)
-delay = 0.005
+delay = 1
 
 # CAN Frame IDs
 temp_sensor_id = "100" # 0x10X
@@ -74,6 +74,7 @@ def generate_slope_data():
         slope *= -1
 
     slope_data += slope
+    slope_data = round(slope_data, 2)
 
     # return slope_data
     
@@ -181,10 +182,11 @@ def send_rudder_command(client):
         # print(f"imu_heading = {convert_to_hex(int((slope_data) * 360 * 100), 2)}")
         imu_heading = convert_to_little_endian(convert_to_hex(int((slope_data) * 360 * 100), 2))
         set_angle = convert_to_little_endian(convert_to_hex(int(((slope_data - 0.50) * 90 + 90) * 100), 2))
-        integral = convert_to_little_endian(convert_to_hex(int((slope_data) * 100), 2))
-        derivative = convert_to_little_endian(convert_to_hex(int((slope_data) * 100), 2))
+        integral = convert_to_little_endian(convert_to_hex(int((slope_data) * 100 + 30000), 2))
+        derivative = convert_to_little_endian(convert_to_hex(int((slope_data) * 10000) + 600, 2))
         spd_over_gnd = convert_to_little_endian(convert_to_hex(int((slope_data) * 30 * 1000), 2))
-
+        print(f"derivative: {int(derivative[2:] + derivative[0:2], 16)}")
+        # print(f"spd_over_gnd {int(spd_over_gnd, 16)}")
         can_data = actual_angle + imu_roll + imu_pitch + imu_heading + set_angle + integral + derivative + spd_over_gnd
         can_message = "cansend " + can_line + " 204##1" + can_data
         
@@ -272,19 +274,7 @@ def main():
             cycle_count += 1
             print(f"--- CYCLE {cycle_count} ---")
             
-            # Generate random pH between 0 and 14
-
-            # Note: these random data points don't really check for out of bounds stuff (eg. ph = 15), but it should be fine - just testing if graphing is smooth
-            # pH_data = round(random.uniform(current_pH - 1.5, current_pH + 1.5))
-            # temp_sensor_data = round(random.uniform(current_water_temp - 5.0, current_water_temp + 5.0), 3)
-            # sal_data = round(random.uniform(current_sal - 5000, current_sal + 5000)) # Expect data points between 35,000-60,000 µS/cm
-            # print(f"generated sal_data: {sal_data}")
-
             generate_slope_data()
-            # pH_data = round(slope_data * 15)
-            # temp_sensor_data = round((slope_data * 1100.0) + 273.15, 3)
-            # sal_data = round(slope_data * 575000, 3)
-        
 
             current_time = time.time()
             timestamp = datetime.now().strftime('%H:%M:%S')
@@ -292,23 +282,13 @@ def main():
             # Calculate total elapsed time
             total_elapsed = current_time - start_time
             print(f"[{timestamp}] Total elapsed time: {total_elapsed:.1f}s")
-            
-            # print(f"[{timestamp}] ", end="")
-
-            # success = send_sensor_command(client, sal_id, sal_data)
-            # if not success:
-            #     print("Failed to send command, continuing...")
-
-            # send_pdb_command(client)
-            # time.sleep(delay)
-
-
-            success = send_pdb_command(client)
+        
+            # success = send_pdb_command(client)
             # time.sleep(delay)
             success = send_rudder_command(client)
-            # time.sleep(delay)
-            success = send_data_wind_command(client)
-            # time.sleep(delay)
+            # # time.sleep(delay)
+            # success = send_data_wind_command(client)
+            # # time.sleep(delay)
             if not success:
                 print("Failed to send command, continuing...")
 

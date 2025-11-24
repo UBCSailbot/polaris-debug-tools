@@ -15,7 +15,7 @@ from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QPixmap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from DataObject_V2 import *
+from DataObject import *
 from utility import *
 
 # # SSH Credentials
@@ -772,10 +772,13 @@ class CANWindow(QWidget):
         right_graphs_layout = QVBoxLayout()
         # Note: It is important that each distinct graph canvas is only added as a widget
         #       a single time, or else problems
+        graphs = []
         for obj in all_objs:
-            if (obj.graph_obj is not None):
+            if (obj.graph_obj is not None and (obj.graph_obj not in graphs)):
+                # if not child 
                 right_graphs_layout.addWidget(obj.graph_obj.graph)
                 right_graphs_layout.addSpacing(4)
+                graphs.append(obj.graph_obj)
         # for obj in all_objs:
         #     if (obj.graph_obj is not None):
         #         right_graphs_layout.addWidget(obj.graph_obj.canvas)
@@ -1078,11 +1081,11 @@ class CANWindow(QWidget):
                 if (obj.graph_obj is not None):
                     obj.graph_obj.update_xlim(max(0, current_time - scroll_window), current_time)
                     # obj.graph_obj.ax.set_xlim(max(0, current_time - scroll_window), current_time)
-        else:
-            for obj in all_objs:
-                if (obj.graph_obj is not None):
-                    obj.graph_obj.ax.relim()
-                    obj.graph_obj.ax.autoscale_view()
+        # else:
+            # for obj in all_objs:
+            #     if (obj.graph_obj is not None):
+            #         obj.graph_obj.ax.relim()
+            #         obj.graph_obj.ax.autoscale_view()
 
         # === Auto Y adjustment ===
         # for obj in all_objs:
