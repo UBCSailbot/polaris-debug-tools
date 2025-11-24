@@ -35,6 +35,16 @@ class MainWindow(QtWidgets.QMainWindow):
             symbolSize=15, 
             symbolBrush="b",
         )
+
+        self.new_line = self.plot_graph.plot( # create a line for the plot; save reference to line in var self.line
+            # self.time, # x-data
+            self.temperature, # y-data
+            name="Second line", # data/line name
+            pen=pen, # brush/style used for this line
+            symbol="o", # datapoint markers
+            symbolSize=15, 
+            symbolBrush="g",
+        )
         # Add a timer to simulate new temperature measurements
         self.timer = QtCore.QTimer() # timer object
         self.timer.setInterval(300) # set timer to timeout every 300 milliseconds
