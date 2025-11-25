@@ -495,30 +495,16 @@ class CANWindow(QWidget):
         # Note: It is important that each distinct graph canvas is only added as a widget
         #       a single time, or else problems
         graphs = []
-        for obj in all_objs:
-            if (obj.graph_obj is not None and (obj.graph_obj not in graphs)):
-                # if not child 
-                right_graphs_layout.addWidget(obj.graph_obj.graph)
-                right_graphs_layout.addSpacing(4)
-                graphs.append(obj.graph_obj)
-        # for obj in all_objs:
-        #     if (obj.graph_obj is not None):
-        #         right_graphs_layout.addWidget(obj.graph_obj.canvas)
-
-        container_widget = QWidget()
-        container_widget.setLayout(right_graphs_layout)
-        container_sp = container_widget.sizePolicy()
-        container_sp.setHorizontalPolicy(QSizePolicy.Minimum)
-        container_widget.setSizePolicy(container_sp)
-        container_widget.setMinimumWidth(300)
-
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(container_widget)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn) 
+        # show a maximum of three graphs initially 
+        for i in range(0, 3):
+            if (i < len(all_objs)):
+                if (all_objs[i].graph_obj is not None and (all_objs[i].graph_obj not in graphs)):
+                    # if not child 
+                    right_graphs_layout.addWidget(all_objs[i].graph_obj.graph)
+                    right_graphs_layout.addSpacing(4)
+                    graphs.append(all_objs[i].graph_obj)
         
-        right_layout.addWidget(scroll_area)
+        right_layout.addLayout(right_graphs_layout)
 
         bottom_layout = QHBoxLayout()
         bottom_layout.addLayout(left_layout)
