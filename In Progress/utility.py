@@ -1,19 +1,3 @@
-import sys
-import multiprocessing
-import time
-import csv
-import os
-from datetime import datetime
-
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QMessageBox, QTextEdit, QHBoxLayout, QCheckBox, QGridLayout, QScrollArea,
-    QSizePolicy
-)
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QPixmap
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from DataObject import *
 from config import *
 
@@ -37,34 +21,6 @@ def convert_from_little_endian_str(hex_str):
     raw = bytes.fromhex(hex_str)
     big_endian = raw[::-1].hex()
     return int(big_endian, 16)
-
-### ---------- Creating UI Objects ---------- ###
-# Used for creating QLabels for displaying current data values
-def create_label(title, min_width=value_label_min_width, max_height=value_label_max_height):
-    label = QLabel(title)
-    label.setMinimumWidth(min_width)
-    label.setMaximumHeight(max_height)
-    label.setAlignment(Qt.AlignLeft)
-    label.setStyleSheet(value_style)
-    return label
-
-def create_graph(title, ylabel, ymin, ymax):
-    '''
-    Used for creating graphs - does not create lines\n
-    ymin : initial minimum graph y-value\n
-    ymax : initial maximum graph y-value
-    '''
-    figure = Figure(figsize=(8, 4), tight_layout=True)
-    canvas = FigureCanvas(figure)
-    canvas.setMinimumSize(graph_min_width, graph_min_height)
-    ax = figure.add_subplot(111)
-    ax.set_title(title)
-    ax.set_xlabel(graph_ylabel)
-    ax.set_ylabel(ylabel)
-    ax.set_xlim(0, 60) # Initial X range is 0-60 secs
-    ax.set_ylim(ymin, ymax) # Initial ymin and ymax
-    ax.grid(True, alpha=0.3)
-    return (figure, canvas, ax)
 
 ### ----------  Parsing Data Frames  ---------- ###
 

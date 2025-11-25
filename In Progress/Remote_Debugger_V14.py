@@ -13,8 +13,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QPixmap
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from DataObject import *
 from utility import *
 

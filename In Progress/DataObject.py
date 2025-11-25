@@ -1,12 +1,6 @@
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import (
-    QLabel
-)
+from PyQt5.QtWidgets import QLabel
 import pyqtgraph as pg
-from datetime import datetime
 import config as cg
 
 graph_margin = 0.2
@@ -25,7 +19,6 @@ def create_line(graph_obj, name, x_data, y_data, colour, line_width, line_dashed
     '''
     try:
         pen = pg.mkPen(colour, width=line_width, style=QtCore.Qt.DashLine if line_dashed else None)
-        # pen = pg.mkPen(colour, width=line_width)
 
         new_line = graph_obj.graph.plot(
             x_data,
@@ -42,6 +35,7 @@ def create_line(graph_obj, name, x_data, y_data, colour, line_width, line_dashed
 def create_graph(title, x_label, y_label, title_style = cg.graph_title_style, label_style = cg.graph_label_style):
     graph = pg.PlotWidget()
     graph.setBackground(cg.graph_bg)
+    graph.setMinimumSize(cg.graph_min_width, cg.graph_min_height)
     graph.getPlotItem().getViewBox().setMouseEnabled(False, False)
     graph.setTitle(title, color=title_style[0], size=title_style[1])
     graph.setLabel("left", y_label, **label_style)
