@@ -280,5 +280,5 @@ sal_obj = DataObject("Salinity", None, "µS/cm", sal_parsing_fn, line_colour='g'
 pdb_objs = [temp1_obj, temp2_obj , temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj] # all objects with data from 0x204 frame (rudder -> mainframe)
 data_objs = [pH_obj, temp_sensor_obj, sal_obj]
-all_objs = data_wind_objs + rudder_objs # pdb_objs # + data_objs
+all_objs = data_wind_objs # data_objs + data_wind_objs + rudder_objs # pdb_objs # + data_objs
 # TODO: PUT data_objs back for pH, salinity, water temp sensors

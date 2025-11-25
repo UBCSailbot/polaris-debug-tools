@@ -286,8 +286,8 @@ def main():
             # success = send_pdb_command(client)
             # time.sleep(delay)
             success = send_rudder_command(client)
-            # # time.sleep(delay)
-            # success = send_data_wind_command(client)
+            time.sleep(delay)
+            success = send_data_wind_command(client)
             # # time.sleep(delay)
             if not success:
                 print("Failed to send command, continuing...")
