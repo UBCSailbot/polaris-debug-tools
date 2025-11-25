@@ -3,7 +3,7 @@ Providing debug tools for testing of POLARIS's systems.
 
 Notes:
 - V13 is the most updated (working) version.
-- V12 is the most updated version tested with physical sensors.
+- V13 is the most updated version tested with physical sensors - worked on Water Testing Day!
 - V9 was also tested (more rigorously) with physical sensors.
 - Note that V10 onwards depends on DataObject.py being in the same folder as Remote_debugger (at least for now)
 - Make sure to put the can line up before using the GUI
