@@ -3,7 +3,7 @@ Providing debug tools for testing of POLARIS's systems.
 
 Notes:
 - V13 is the most updated (working) version.
-- V13 is the most updated version tested with physical sensors - worked on Water Testing Day!
+- V13 is the most updated version tested with physical sensors - worked on Water Testing Day! (yay)
 - V9 was also tested (more rigorously) with physical sensors.
 - Note that V10 onwards depends on DataObject.py being in the same folder as Remote_debugger (at least for now)
 - Make sure to put the can line up before using the GUI
@@ -23,7 +23,7 @@ Notes:
 - V11 - V10 + refactored previously existing temps/volts + refactored rudder debug frame
 - V12 - Update UI - shift live values to column in the middle + add new DRV/PWR data (new debug frames)
 - V13 - add new controls (eg. send PID values)
-- V14 - switch from matplotlib to pyqtgraph
+- V14 - switch from matplotlib to pyqtgraph & limit to 3 graphs shown at once
 
 
 
