@@ -35,5 +35,5 @@ graph_y = "Time"
 graph_y_units = "s"
 graph_ylabel = "Time (s)" # all graphs read in seconds
 graph_min_width = 275
-graph_min_height = 250
+graph_min_height = 300
 scroll_window = 60 # in seconds
