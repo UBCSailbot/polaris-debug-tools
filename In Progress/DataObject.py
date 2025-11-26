@@ -72,6 +72,18 @@ class GraphObject: # struct which keeps together objects needed for a graph
     def update_xlim(self, begin, end):
         self.graph.setXRange(begin, end)
 
+    def hide(self):
+        # TODO: stop plotting
+        pass
+
+    def show(self):
+        # TODO: allow plotting again
+        pass
+
+    def isVisible(self):
+        # TODO: return true if currently one of the visible graphs; else return false
+        pass
+
 class DataObject:
     def __init__(self, name, dp, units, parsing_fn, line_dashed = False, line_colour = None, graph: GraphObject = None):
         self.name = name
@@ -114,6 +126,7 @@ class DataObject:
     def add_datapoint(self, x, y):
         self.data[x] = y
         self.current = x
+        # TODO: Only call update_line_data() if the graph isVisible()
         self.update_line_data()
         return
     

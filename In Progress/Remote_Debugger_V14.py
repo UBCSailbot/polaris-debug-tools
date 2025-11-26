@@ -8,7 +8,7 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-    QMessageBox, QTextEdit, QHBoxLayout, QCheckBox, QGridLayout, QScrollArea,
+    QMessageBox, QTextEdit, QHBoxLayout, QCheckBox, QGridLayout, QComboBox,
     QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt
@@ -490,8 +490,28 @@ class CANWindow(QWidget):
                 labels_layout.addWidget(obj.label)
         
         labels_layout.addStretch(1)
-                
-        right_graphs_layout = QVBoxLayout()
+
+        # TODO: dropdowns go here (Top, Middle, Bottom)
+        # TODO: add functionality to select graph shown for each dropdown
+        dropdown_layout = QHBoxLayout()
+        d1 = QComboBox()
+        d2 = QComboBox()
+        d3 = QComboBox()
+        dropdowns = [d1, d2, d3]
+
+        font = d1.font()
+        font.setPointSize(18)
+        font.setBold(True)
+        
+        for d in dropdowns:
+            d.setFont(font)
+            # TODO: d.setItems
+        
+        # TODO: d.currentIndexChanged.connect(lambda function here)
+        # TODO: make the connect function to change the graph
+            # make sure it properly causes the hidden graph to stop rendering
+
+        right_graphs_layout = QGridLayout() # create GridLayout for three graphs (0, 0), (1, 0), (2, 0)
         # Note: It is important that each distinct graph canvas is only added as a widget
         #       a single time, or else problems
         graphs = []
@@ -500,8 +520,8 @@ class CANWindow(QWidget):
             if (i < len(all_objs)):
                 if (all_objs[i].graph_obj is not None and (all_objs[i].graph_obj not in graphs)):
                     # if not child 
-                    right_graphs_layout.addWidget(all_objs[i].graph_obj.graph)
-                    right_graphs_layout.addSpacing(4)
+                    right_graphs_layout.addWidget(all_objs[i].graph_obj.graph, i, 0)
+                    # right_graphs_layout.addSpacing(4)
                     graphs.append(all_objs[i].graph_obj)
         
         right_layout.addLayout(right_graphs_layout)
