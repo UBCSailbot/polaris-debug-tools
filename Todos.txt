@@ -1,13 +1,7 @@
 TODO
 - add options to modify which graphs you see - use checkboxes to limit the number of graphs that can be shown at once - limit amount of rendering
-    - You are currently working on making the dropdowns in the UI
-        - also: see/complete all the TODOs created in Remote_Debugger_V14.py & DataObject.py
-    - 1 Dropdown for each graph - 3 at the top
-    - 3 distinct "places" for graphs
-    - If checkboxes are not clicked, no graphs shown?
-    - Include a "clear" button which clears all graphs - none show at all
+    - TEST the dropdowns with CAN data, ensure that everything is still getting logged
     - make sure when they're not visible, they're not actually plotting- aiming to reduce the latency
-    - note: Do I want to have 3 distinct "places" for graphs?
 - make sure processes all close
     - test stuff to try to break the program- get processes to not close
     - .close - parent thread not closing children - use 'htop' in the terminal and check for processes
@@ -15,6 +9,7 @@ TODO
     - make sure there are no daemon threads active - make sure all child processes get killed
 - add option to candump line to save local copy of candump to file
 - Allow keyboard Ctrl+C to close the GUI - make sure it closes all processes properly
+- why the first graphed-line looks so bad - not straight compared to the others
 - Change if-else if check frame_id structure to a dictionary
 - look into multiprocessing vs multithreading
 
