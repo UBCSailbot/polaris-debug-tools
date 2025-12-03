@@ -285,7 +285,27 @@ def main():
         
             # success = send_pdb_command(client)
             # time.sleep(delay)
-            success = send_rudder_command(client)
+            # success = send_rudder_command(client)
+
+            pH_data = round(slope_data * 15)
+            temp_sensor_data = round((slope_data * 1100.0) + 273.15, 3)
+            sal_data = round(slope_data * 575000, 3)
+
+            print(f"generated pH_data = {pH_data}")
+            success = send_sensor_command(client, pH_id, pH_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
+            print(f"generated temp_sensor_data = {temp_sensor_data}")
+            success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
+            print(f"generated sal_data = {sal_data}")
+            success = send_sensor_command(client, sal_id, sal_data)
+            if not success:
+                print("Failed to send command, continuing...")
+
             time.sleep(delay)
             success = send_data_wind_command(client)
             # # time.sleep(delay)

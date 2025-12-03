@@ -219,15 +219,15 @@ def main():
             if not success:
                 print("Failed to send command, continuing...")
 
-            # print(f"generated temp_sensor_data = {temp_sensor_data}")
-            # success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
-            # if not success:
-            #     print("Failed to send command, continuing...")
+            print(f"generated temp_sensor_data = {temp_sensor_data}")
+            success = send_sensor_command(client, temp_sensor_id, temp_sensor_data)
+            if not success:
+                print("Failed to send command, continuing...")
 
-            # print(f"generated sal_data = {sal_data}")
-            # success = send_sensor_command(client, sal_id, sal_data)
-            # if not success:
-            #     print("Failed to send command, continuing...")
+            print(f"generated sal_data = {sal_data}")
+            success = send_sensor_command(client, sal_id, sal_data)
+            if not success:
+                print("Failed to send command, continuing...")
 
             # # === For combining frames randomly ===
             # rnd_cmd = random.randrange(3)
