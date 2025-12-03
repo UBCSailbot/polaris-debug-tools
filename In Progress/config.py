@@ -1,28 +1,38 @@
-
+# ==== General Setup ====
+can_line = "can0"
 
 # SSH Credentials
 hostname = "192.168.0.10"
 username = "sailbot"
 password = "sailbot"
 
-can_line = "can0"
+# ==== Window Size ====
+window_height = 450
+window_width = 1350
 
-value_label_min_width = 100
-value_label_max_height = 40
+# ==== Live Values ====
+value_label_min_width = 300
+value_label_max_height = 200
 
 value_style = """
             color: black;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: bold;
             font-family: 'Courier New', monospace;
-            padding: 1px;
+            padding: 2px;
             background-color: #f0f0f0;
             border: 2px solid #cccccc;
             border-radius: 3px;
             margin: 2px;
         """
-bold_text = "font-weight: bold;"
 
+input_label_style = "font-weight: bold;"
+
+# ==== Dropdown font ====
+d_font_type = "Comic Sans"
+d_font_size = 14
+
+# ==== Graph config ====
 linewidth = 2
 graph_bg = "w"
 graph_title_style = ["black", "10pt"]
@@ -33,7 +43,6 @@ graph_label_style = {
 
 graph_y = "Time"
 graph_y_units = "s"
-graph_ylabel = "Time (s)" # all graphs read in seconds
-graph_min_width = 275
+graph_min_width = 250
 graph_min_height = 300
 scroll_window = 60 # in seconds
