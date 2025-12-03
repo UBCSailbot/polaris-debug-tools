@@ -43,7 +43,6 @@ def create_graph(title, x_label, y_label, title_style = cg.graph_title_style, la
     # graph.setYRange(init_y_min, init_y_max)
     graph.addLegend()
     graph.showGrid(x=True, y=True)
-    # TODO: Add initial scaling?
     return graph
 
 # data is a dictionary with values = data logged, keys = time logged
@@ -61,28 +60,30 @@ class GraphObject: # struct which keeps together objects needed for a graph
         self.minn = minn # min data value expected
         self.maxn = maxn # max data value expected
         self.initialized = False # indicates if graph widget was created or not
+        self.visible = False
         return
     
     def initialize(self):
         self.graph = create_graph(f"{self.x_name} vs. {self.y_name}", f"{self.x_name} ({self.x_units})" if self.x_units else f"{self.x_name}", 
                                   f"{self.y_name} ({self.y_units})")
-        self.graph.show()
+        self.graph.hide()
         self.initialized = True 
 
     def update_xlim(self, begin, end):
         self.graph.setXRange(begin, end)
 
     def hide(self):
-        # TODO: stop plotting
-        pass
+        '''Disallow plotting & line updates'''
+        self.visible = False
+        self.graph.setVisible(False)
 
     def show(self):
-        # TODO: allow plotting again
-        pass
+        '''Allow plotting & line updates'''
+        self.visible = True
+        self.graph.setVisible(True)
 
     def isVisible(self):
-        # TODO: return true if currently one of the visible graphs; else return false
-        pass
+        return self.visible
 
 class DataObject:
     def __init__(self, name, dp, units, parsing_fn, line_dashed = False, line_colour = None, graph: GraphObject = None):
@@ -105,18 +106,6 @@ class DataObject:
             self.line = create_line(self.graph_obj, self.name, [], [], self.line_colour, cg.linewidth, self.line_dashed, symbol=False) if self.graph_obj else None # should automatically create line w/ empty data
         self.label = create_label(self.name + ": ---- ") # should automatically create label
         
-    
-    # modify ylim based on the datapoints in the graph
-    # just don't call it for pH
-    # this replaces Auto Y adjustment
-    # TODO: need to update this for pyqt5 - currently not being called - note: does pyqt5 automatically adjust y-lim?
-    def adjust_ylim(self):
-        values = self.data.values()
-        if (values):
-            maxn = max(values)
-            minn = min(values)
-            self.graph_obj.ax.set_ylim(max(minn - (self.graph_obj.maxn * graph_margin), self.graph_obj.minn), min(maxn + (self.graph_obj.maxn * graph_margin), self.graph_obj.maxn))
-
     # Return a tuple with the time:value of the most current data point collected
     def get_current(self):
         val = round(self.data.get(self.current), self.dp) if (self.current is not None) else None
@@ -126,17 +115,15 @@ class DataObject:
     def add_datapoint(self, x, y):
         self.data[x] = y
         self.current = x
-        # TODO: Only call update_line_data() if the graph isVisible()
-        self.update_line_data()
+        if (self.graph_obj.graph.isVisible()):
+            self.update_line_data()
         return
     
-    # TODO: this could be improved; Currently O(n) but mainly reusing data
     def update_line_data(self):
         if (self.line is not None):
             values = []
             for key in self.data.keys():
                 values.append(self.data[key])
-            
             self.line.setData(list(self.data.keys()), values)
         return
 
@@ -145,10 +132,10 @@ class DataObject:
         # calls add_datapoint to add data
         if (parsed_dict is not None): # for can frames which contain multiple data values
             data = round(parsed_dict[self.name], self.dp)
-        else: # for can frames which hold only a single value - salinity rounds its own value
+        else: # for can frames which hold only a single value
             raw_data = data_line.split(']')[-1].strip().split()
             data = self.parsing_fn(''.join(raw_data))
-            if self.dp is not None: # salinity has None
+            if self.dp is not None: # for values which do not have variable dp (ie. not salinity)
                 data = round(data, self.dp)
 
         self.add_datapoint(current_time, data)
@@ -156,7 +143,6 @@ class DataObject:
 
     # if there is a graph associated with this object and there are some data points outside of the graph window,
     # remove those points - make sure to log those points before calling update_data
-    # so this function should be called by log_data
     def update_data(self, current_time, scroll_window):
         keys = list(self.data.keys())
         for key in keys:

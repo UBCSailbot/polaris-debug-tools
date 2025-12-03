@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QFont
 from DataObject import *
 from utility import *
 
@@ -161,7 +161,7 @@ class CANWindow(QWidget):
         self.last_temp_update = time.time()  # Track last temperature update
 
         self.setWindowTitle("Remote Node GUI - POLARIS")
-        self.setGeometry(50, 30, 1300, 450)
+        self.setGeometry(50, 30, cg.window_width, cg.window_height)
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.time_start = time.time()
@@ -279,7 +279,7 @@ class CANWindow(QWidget):
         self.desired_heading_input = QLineEdit()
         self.desired_heading_button = QPushButton("Set Desired Heading")
         self.desired_heading_label = QLabel("Heading Angle:")
-        self.desired_heading_label.setStyleSheet(bold_text)
+        self.desired_heading_label.setStyleSheet(input_label_style)
         self.desired_heading_input_layout.addWidget(self.desired_heading_label)
         self.desired_heading_input_layout.addSpacing(small_spacing)
         self.desired_heading_input_layout.addWidget(self.desired_heading_input)
@@ -293,7 +293,7 @@ class CANWindow(QWidget):
         self.rudder_input = QLineEdit()
         self.rudder_button = QPushButton("Send Rudder")
         self.rudder_input_label = QLabel("Rudder Angle:")
-        self.rudder_input_label.setStyleSheet(bold_text)
+        self.rudder_input_label.setStyleSheet(input_label_style)
         self.rudder_input_layout.addWidget(self.rudder_input_label)
         self.rudder_input_layout.addSpacing(small_spacing)
         self.rudder_input_layout.addWidget(self.rudder_input)
@@ -309,7 +309,7 @@ class CANWindow(QWidget):
         self.trim_button.clicked.connect(self.send_trim_tab)
         self.trim_input_layout = QVBoxLayout()
         self.trim_input_label = QLabel("Trim Tab Angle:")
-        self.trim_input_label.setStyleSheet(bold_text)
+        self.trim_input_label.setStyleSheet(input_label_style)
         self.trim_input_layout.addWidget(self.trim_input_label)
         self.trim_input_layout.addSpacing(small_spacing)
         self.trim_input_layout.addWidget(self.trim_input)
@@ -334,7 +334,6 @@ class CANWindow(QWidget):
         self.pid_layout = QVBoxLayout()
         self.pid_layout.addLayout(self.pid_input_layout)
         self.pid_layout.addWidget(self.pid_input_button)
-
 
         self.output_display = QTextEdit()
         self.output_display.setReadOnly(True)
@@ -485,46 +484,53 @@ class CANWindow(QWidget):
         labels_layout = QVBoxLayout()
         labels_layout.setSpacing(0)
 
-        for obj in all_objs:
-            if (obj.label is not None):
-                labels_layout.addWidget(obj.label)
+        for graph_obj in all_objs:
+            if (graph_obj.label is not None):
+                labels_layout.addWidget(graph_obj.label)
         
         labels_layout.addStretch(1)
 
-        # TODO: dropdowns go here (Top, Middle, Bottom)
-        # TODO: add functionality to select graph shown for each dropdown
+        # Graph dropdowns (Top, Middle, Bottom)
         dropdown_layout = QHBoxLayout()
-        d1 = QComboBox()
-        d2 = QComboBox()
-        d3 = QComboBox()
-        dropdowns = [d1, d2, d3]
+        d_top = QComboBox()
+        d_mid = QComboBox()
+        d_bot = QComboBox()
+        dropdowns = [d_top, d_mid, d_bot]
 
-        font = d1.font()
-        font.setPointSize(18)
-        font.setBold(True)
-        
-        for d in dropdowns:
-            d.setFont(font)
-            # TODO: d.setItems
-        
-        # TODO: d.currentIndexChanged.connect(lambda function here)
-        # TODO: make the connect function to change the graph
-            # make sure it properly causes the hidden graph to stop rendering
-
-        right_graphs_layout = QGridLayout() # create GridLayout for three graphs (0, 0), (1, 0), (2, 0)
+        self.right_graphs_layout = QGridLayout() # create GridLayout for three graphs (0, 0), (1, 0), (2, 0)
         # Note: It is important that each distinct graph canvas is only added as a widget
         #       a single time, or else problems
-        graphs = []
+        self.visibleGraphObjs = [] # list of GraphObjs with visible graphs, in order of position descending
+
+        self.graph_titles = []
+        for obj in all_objs:
+            if ((obj.graph_obj.graph is not None) and (obj.graph_obj.x_name not in self.graph_titles)):
+                self.graph_titles.append(obj.graph_obj.x_name)
+
+        for d in dropdowns:
+            d.setFont(QFont(cg.d_font_type, cg.d_font_size))
+            d.addItems(self.graph_titles)
+            d.setVisible(False)
+            dropdown_layout.addWidget(d)
+
         # show a maximum of three graphs initially 
         for i in range(0, 3):
-            if (i < len(all_objs)):
-                if (all_objs[i].graph_obj is not None and (all_objs[i].graph_obj not in graphs)):
-                    # if not child 
-                    right_graphs_layout.addWidget(all_objs[i].graph_obj.graph, i, 0)
-                    # right_graphs_layout.addSpacing(4)
-                    graphs.append(all_objs[i].graph_obj)
+            if (i < len(self.graph_titles)):
+                graph_obj = self.getGraphObjFromXName(self.graph_titles[i])
+                if (graph_obj not in self.visibleGraphObjs):
+                    self.right_graphs_layout.addWidget(graph_obj.graph, i, 0)
+                    self.visibleGraphObjs.append(graph_obj)
+                    graph_obj.show()
+                    dropdowns[i].setCurrentText(self.graph_titles[i])
+                    dropdowns[i].setVisible(True)
+            else: break
+
+        d_top.currentTextChanged.connect(lambda text: self.setGraph(text, 0, dropdowns))
+        d_mid.currentTextChanged.connect(lambda text: self.setGraph(text, 1, dropdowns))
+        d_bot.currentTextChanged.connect(lambda text: self.setGraph(text, 2, dropdowns))
         
-        right_layout.addLayout(right_graphs_layout)
+        right_layout.addLayout(dropdown_layout)
+        right_layout.addLayout(self.right_graphs_layout)
 
         bottom_layout = QHBoxLayout()
         bottom_layout.addLayout(left_layout)
@@ -554,6 +560,31 @@ class CANWindow(QWidget):
         clipboard.setText(text)
         # Show a brief confirmation
         self.output_display.append(f"[COPIED] {text}")
+            
+    def getGraphObjFromXName(self, name):
+        for obj in all_objs:
+            if ((obj.graph_obj is not None) and (obj.graph_obj.x_name == name)):
+                return obj.graph_obj
+
+    def setGraph(self, name, spot, dropdowns):
+        '''
+        Shows given graph at spot\n
+        name = DataObj.graph_obj.x_name\n
+        spot = 0, 1, 2 (top, mid, bot)\n
+        '''
+        newGraphObj = self.getGraphObjFromXName(name) # get graph to put in spot
+        if (newGraphObj.x_name == self.visibleGraphObjs[spot].x_name):
+            return # do nothing
+        if newGraphObj in self.visibleGraphObjs: # if graph to put in spot is already visible
+            # don't allow the switch to happen - set dropdown text back to original and print error message
+            print("[ERR] Graph is already visible")
+            dropdowns[spot].setCurrentText(self.visibleGraphObjs[spot].x_name) # switch text back to original
+        else: 
+            self.right_graphs_layout.removeWidget(self.visibleGraphObjs[spot].graph) # remove graph currently in spot
+            self.visibleGraphObjs[spot].hide()
+            self.right_graphs_layout.addWidget(newGraphObj.graph, spot, 0)
+            newGraphObj.show()
+            self.visibleGraphObjs[spot] = newGraphObj  
 
     def keyPressEvent(self, event):
         if not self.keyboard_checkbox.isChecked():
@@ -819,7 +850,6 @@ class CANWindow(QWidget):
         # for obj in all_objs:
         #     if (obj.graph is not None):
         #         obj.adjust_ylim()
-        # TODO: removed auto adjust_ylim() for now
 
         # Update the canvas to reflect changes        
         # for obj in all_objs:
