@@ -238,9 +238,9 @@ volt4_obj = DataObject("Volt4", 2, "V", None, line_colour="orange", graph=pdb_vo
 
 mppt_current_graph_obj = GraphObject("MPPT Current", cg.graph_y, "A", cg.graph_y_units, 0, 5)
 mppt_hp_obj = DataObject("MPPT_curr_hull_port", 2, "A", None, line_colour="c", graph=mppt_current_graph_obj)
-mppt_sp_obj = DataObject("MPPT_curr_hull_starbd", 2, "A", None, line_colour="purple", graph=mppt_current_graph_obj)
+mppt_sp_obj = DataObject("MPPT_curr_hull_star", 2, "A", None, line_colour="purple", graph=mppt_current_graph_obj)
 mppt_hs_obj = DataObject("MPPT_curr_sail_port", 2, "A", None, line_colour="g", graph=mppt_current_graph_obj)
-mppt_ss_obj = DataObject("MPPT_curr_sail_starbd", 2, "A", None, line_colour="y", graph=mppt_current_graph_obj)
+mppt_ss_obj = DataObject("MPPT_curr_sail_star", 2, "A", None, line_colour="y", graph=mppt_current_graph_obj)
 
 rudder_graph = GraphObject("Rudder Angles", cg.graph_y, "°", cg.graph_y_units, -90, 90)
 actual_rudder_obj = DataObject("Actual_rdr_deg", 2, "°", None, line_colour="r", graph=rudder_graph) # NOTE: graph parsing function changed to None here - potential for bug/error
@@ -280,5 +280,4 @@ sal_obj = DataObject("Salinity", None, "µS/cm", sal_parsing_fn, line_colour='g'
 pdb_objs = [temp1_obj, temp2_obj , temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj] # all objects with data from 0x204 frame (rudder -> mainframe)
 data_objs = [pH_obj, temp_sensor_obj, sal_obj]
-all_objs = data_objs # data_objs + data_wind_objs + rudder_objs # pdb_objs # + data_objs
-# TODO: PUT data_objs back for pH, salinity, water temp sensors
+all_objs = data_objs + data_wind_objs + rudder_objs + pdb_objs # + data_objs
