@@ -1,4 +1,5 @@
 import sys
+import signal
 import paramiko
 import multiprocessing
 import time
@@ -104,6 +105,135 @@ def cansend_worker(cmd_queue: multiprocessing.Queue, response_queue: multiproces
         client.close()
 
 ### ---------- Background CAN Logging Process ---------- ###
+# def can_logging_process(queue: multiprocessing.Queue, log_queue: multiprocessing.Queue, timestamp):
+#     """Dedicated process for logging CAN messages without blocking graphics"""
+#     try:
+#         # Create logs directory if it doesn't exist
+#         if not os.path.exists('logs'):
+#             os.makedirs('logs')
+        
+#         # Create timestamped filename
+#         candump_log_file = os.path.join('logs', f'candump_{timestamp}.csv')
+        
+#         with open(candump_log_file, 'w', newline='') as csv_file:
+#             writer = csv.writer(csv_file)
+#             writer.writerow(['Timestamp', 'Elapsed_Time_s', 'CAN_Message'])
+#             csv_file.flush()
+            
+#             start_time = time.time()
+#             print(f"CAN Logging started: {candump_log_file}")
+            
+#             while True:
+#                 try:
+#                     # Get message from queue with timeout
+#                     if not queue.empty():
+#                         line = queue.get(timeout=1.0)
+#                         if line == "__EXIT__":
+#                             break
+#                         # Log the message
+#                         timestamp = datetime.now().isoformat()
+#                         elapsed_time = time.time() - start_time
+#                         writer.writerow([timestamp, f'{elapsed_time:.3f}', line])
+#                         csv_file.flush()
+#                         with lock:
+#                             current_time = window.get_current_time()
+#                             new_msg_to_log = False
+  
+#                         # print(f"line parsed = {line}")
+
+#                         # # Send to separate logging process (non-blocking)
+#                         # try:
+#                         #     self.can_log_queue.put_nowait(line)
+#                         # except:
+#                         #     print(f"line was not logged!")
+#                         #     pass  # Queue full, skip logging this message to avoid blocking
+
+#                         if line.startswith(can_line):
+#                             new_msg_to_log = True
+#                             parts = line.split()
+#                             if len(parts) > 2:
+#                                 frame_id = parts[1].lower()
+#                                 self.time_history.append(current_time)
+                                
+#                                 # TODO: Turn the if-else-if-else statement into a dictionary with frame id:function - just runs the function associated with frame id
+#                                 # Handle 0x206 frame (temperature and voltage data)
+#                                 match frame_id:
+#                                     case "041": # Data_Wind frame
+#                                         try:
+#                                             raw_data = line.split(']')[-1].strip().split()
+#                                             parsed = parse_0x041_frame(''.join(raw_data))
+#                                             for obj in data_wind_objs:
+#                                                 obj.parse_frame(current_time, None, parsed)
+#                                                 obj.update_label()
+#                                         except Exception as e:
+#                                             self.output_display.append(f"[PARSE ERROR 0x041] {str(e)}")
+
+#                                     case "100": # water_temp sensor frame
+#                                         try:
+#                                             temp_sensor_obj.parse_frame(current_time, line)
+#                                             temp_sensor_obj.update_label()
+#                                         except Exception as e:
+#                                             self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
+                                
+#                                     case "110": # pH sensor frame
+#                                         try:               
+#                                             pH_obj.parse_frame(current_time, line)
+#                                             pH_obj.update_label()
+#                                         except Exception as e:
+#                                             self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
+
+#                                     case "120": # salinity sensor frame
+#                                         try: 
+#                                             sal_obj.parse_frame(current_time, line)
+#                                             sal_obj.update_label()                                            
+#                                         except Exception as e:
+#                                             self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
+
+#                                     case "204": # Handle 0x204 frame (actual rudder angle)
+
+#                                         try:
+#                                             raw_data = line.split(']')[-1].strip().split()
+#                                             parsed = parse_0x204_frame(''.join(raw_data))
+#                                             for obj in rudder_objs:
+#                                                 obj.parse_frame(current_time, None, parsed)
+#                                                 obj.update_label()
+#                                         except Exception as e:
+#                                             self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
+                                    
+#                                     case "206":
+#                                         try:
+#                                             raw_data = line.split(']')[-1].strip().split()
+#                                             parsed = parse_0x206_frame(''.join(raw_data))
+#                                             for obj in pdb_objs:
+#                                                 obj.parse_frame(current_time, None, parsed)                           
+#                                                 obj.update_label()
+#                                         except Exception as e:
+#                                             self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
+                    
+#                                     case _:
+#                                         print(f"Frame id not recognized: {frame_id}")
+
+#                             # Log current values
+#                             if (new_msg_to_log and (len(self.time_history) > 0)):
+#                                 # actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
+#                                 self._log_values()
+
+#                     # trim values no longer being graphed
+#                     for obj in all_objs:
+#                         obj.update_data(current_time, scroll_window)
+                            
+#                 # except queue.empty as empty:
+#                 #     print(f"CAN logging queue empty")
+#                 except Exception as e:
+#                     print(f"Error in CAN logging: {e}")
+#                     continue
+                    
+#     except Exception as e:
+#         print(f"Failed to initialize CAN logging: {e}")
+    
+#     print("CAN logging process terminated")
+
+# OG
 def can_logging_process(queue: multiprocessing.Queue, log_queue: multiprocessing.Queue, timestamp):
     """Dedicated process for logging CAN messages without blocking graphics"""
     try:
@@ -172,10 +302,9 @@ class CANWindow(QWidget):
 
         self.init_ui()
 
-        # Change timer to 100ms for faster updates
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_status)
-        self.timer.start(100)  # Changed from 500ms to 100ms
+        self.timer.start(update_freq) # Updates every update_freq milliseconds
 
     def _init_logging(self):
         """Initialize CSV logging files with timestamped names"""
@@ -693,6 +822,9 @@ class CANWindow(QWidget):
             print(f"Exception thrown from send_pid: {e}")
             self.show_error(f"Exception thrown from send_pid: {e}")
 
+    # def get_current_time(self):
+    #     return time.time() - self.time_start
+
     def update_status(self):
         # Update time independently of CAN messages
         current_time = time.time() - self.time_start
@@ -700,7 +832,7 @@ class CANWindow(QWidget):
         # Process any new CAN messages
         while not self.queue.empty():
             line = self.queue.get()
-            self.output_display.append(line)
+            # self.output_display.append(line) # TODO: Note - what does this do?
 
             new_msg_to_log = False
   
@@ -775,85 +907,19 @@ class CANWindow(QWidget):
                             except Exception as e:
                                 self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
         
-                        
-
-                    # if frame_id == "206":
-                    #     try:
-                    #         raw_data = line.split(']')[-1].strip().split()
-                    #         parsed = parse_0x206_frame(''.join(raw_data))
-                    #         for obj in pdb_objs:
-                    #             obj.parse_frame(current_time, None, parsed)                           
-                    #             obj.update_label()
-                    #     except Exception as e:
-                    #         self.output_display.append(f"[PARSE ERROR 0x206] {str(e)}")
-                    
-                    # # Handle 0x204 frame (actual rudder angle)
-                    # elif frame_id == "204":
-                    #     try:
-                    #         raw_data = line.split(']')[-1].strip().split()
-                    #         parsed = parse_0x204_frame(''.join(raw_data))
-
-                    #         for obj in rudder_objs:
-                    #             obj.parse_frame(current_time, None, parsed)
-                    #             obj.update_label()
-
-                    #     except Exception as e:
-                    #         self.output_display.append(f"[PARSE ERROR 0x204] {str(e)}")
-
-                    # # Handle Data_wind frame
-                    # elif frame_id == "041":
-                    #     try:
-                    #         raw_data = line.split(']')[-1].strip().split()
-                    #         parsed = parse_0x041_frame(''.join(raw_data))
-
-                    #         for obj in data_wind_objs:
-                    #             obj.parse_frame(current_time, None, parsed)
-                    #             obj.update_label()
-
-                    #     except Exception as e:
-                    #         self.output_display.append(f"[PARSE ERROR 0x041] {str(e)}")
-
-                    # # Handle temp_sensor frame
-                    # elif frame_id == "100":
-                    #     try:
-                    #         temp_sensor_obj.parse_frame(current_time, line)
-                    #         temp_sensor_obj.update_label()
-                    #     except Exception as e:
-                    #         self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
-                    #         print(f"line parsed: {line}\n--- end of line ---")
-                       
-                    # # Handle pH sensor frame
-                    # elif frame_id == "110":
-                    #     try:               
-                    #         pH_obj.parse_frame(current_time, line)
-                    #         pH_obj.update_label()
-
-                    #     except Exception as e:
-                    #         self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
-                    #         print(f"line parsed: {line}\n--- end of line ---")
-                    
-                    # # Handle salinity sensor frame
-                    # elif frame_id == "120":
-                    #     try: 
-                    #         sal_obj.parse_frame(current_time, line)
-                    #         sal_obj.update_label()
-                                                
-                    #     except Exception as e:
-                    #         self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
-                    #         print(f"line parsed: {line}\n--- end of line ---")
-                    #         print(f"parts = {parts}")
-                    #         print(f"frame_id = {frame_id}")
+                        case _:
+                            print(f"Frame id not recognized: {frame_id}")
 
                 # Log current values
                 if (new_msg_to_log and (len(self.time_history) > 0)):
                     # actual_rudder = self.actual_rudder_history[-1] if self.actual_rudder_history else None
                     self._log_values()
 
-                    # trim values no longer being graphed
-                    for obj in all_objs:
-                        obj.update_data(current_time, scroll_window)
-                                  
-        # Always update plots every timer cycle (independent of CAN messages)
+        # trim values no longer being graphed
+        for obj in all_objs:
+            obj.update_data(current_time, scroll_window)
+                        
+        # Always update plots every timer cycle (independent of CAN messages) # TODO: Modify this - batch plot updates?
         if len(self.time_history) > 0:
             self._update_plot_ranges(current_time)
 
@@ -890,28 +956,52 @@ class CANWindow(QWidget):
             for obj in all_objs:
                 if (obj.graph_obj is not None):
                     obj.graph_obj.update_xlim(max(0, current_time - scroll_window), current_time)
-                    # obj.graph_obj.ax.set_xlim(max(0, current_time - scroll_window), current_time)
-        # else:
-            # for obj in all_objs:
-            #     if (obj.graph_obj is not None):
-            #         obj.graph_obj.ax.relim()
-            #         obj.graph_obj.ax.autoscale_view()
-
-        # === Auto Y adjustment ===
-        # for obj in all_objs:
-        #     if (obj.graph is not None):
-        #         obj.adjust_ylim()
-
-        # Update the canvas to reflect changes        
-        # for obj in all_objs:
-        #     if (obj.graph_obj is not None):
-        #             obj.graph_obj.canvas.draw()
 
     def show_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
 
+def key_interrupt_cleanup(a, b):
+    sys.exit(app.exec_())
+    cleanup()
+
+def cleanup():
+    print("Cleaning up...")
+        
+    # Close window and log files
+    try:
+        window.closeEvent(None)
+    except:
+        pass
+    
+    # Clean up processes
+    cmd_queue.put("__EXIT__")
+    can_log_queue.put("__EXIT__")
+    
+    candump_proc.terminate()
+    temp_proc.terminate()
+    cansend_proc.terminate()
+    can_logging_proc.terminate()
+
+    candump_proc.join(timeout=2)
+    temp_proc.join(timeout=2)
+    cansend_proc.join(timeout=2)
+    can_logging_proc.join(timeout=2)
+
+    parent_conn.close()
+    child_conn.close()
+
+    # Optional but safe:
+    queue.close()
+    response_queue.close()
+    cmd_queue.close()
+    can_log_queue.close()
+    
+    print("Cleanup complete.")
+
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn")
+
+    # lock = multiprocessing.Lock()
 
     queue = multiprocessing.Queue()
     parent_conn, child_conn = multiprocessing.Pipe()
@@ -930,6 +1020,8 @@ if __name__ == "__main__":
     cansend_proc.start()
     can_logging_proc.start()
 
+    signal.signal(signal.SIGINT, key_interrupt_cleanup)
+
     app = QApplication(sys.argv)
     for obj in all_objs:
         obj.initialize() # create QWidgets
@@ -938,40 +1030,9 @@ if __name__ == "__main__":
 
     try:
         sys.exit(app.exec_())
-    except KeyboardInterrupt:
+    except KeyboardInterrupt: # note: Ctrl+C doesn't work due to QT loop taking over
         print("\nKeyboard interrupt received, shutting down...")
     except Exception as e:
         print(f"Unexpected error: {e}")
     finally:
-        print("Cleaning up...")
-        
-        # Close window and log files
-        try:
-            window.closeEvent(None)
-        except:
-            pass
-        
-        # Clean up processes
-        cmd_queue.put("__EXIT__")
-        can_log_queue.put("__EXIT__")
-        
-        candump_proc.terminate()
-        temp_proc.terminate()
-        cansend_proc.terminate()
-        can_logging_proc.terminate()
-
-        candump_proc.join(timeout=2)
-        temp_proc.join(timeout=2)
-        cansend_proc.join(timeout=2)
-        can_logging_proc.join(timeout=2)
-
-        parent_conn.close()
-        child_conn.close()
-
-        # Optional but safe:
-        queue.close()
-        response_queue.close()
-        cmd_queue.close()
-        can_log_queue.close()
-        
-        print("Cleanup complete.")
+        cleanup()
