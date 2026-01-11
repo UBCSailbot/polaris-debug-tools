@@ -1,37 +1,38 @@
 TODO
-- add options to modify which graphs you see - use checkboxes to limit the number of graphs that can be shown at once - limit amount of rendering
-    - TEST the dropdowns with CAN data, ensure that everything is still getting logged
-    - make sure when they're not visible, they're not actually plotting- aiming to reduce the latency
-- make sure processes all close
-    - test stuff to try to break the program- get processes to not close
-    - .close - parent thread not closing children - use 'htop' in the terminal and check for processes
-        - disable daemons, etc. -> check multiprocessing lectures
-    - make sure there are no daemon threads active - make sure all child processes get killed
-- add option to candump line to save local copy of candump to file
-- Allow keyboard Ctrl+C to close the GUI - make sure it closes all processes properly
-- why the first graphed-line looks so bad - not straight compared to the others
-- Change if-else if check frame_id structure to a dictionary
-- look into multiprocessing vs multithreading
+- Separate data processing & UI rendering- redraw graphs at a different rate (~10-20 Hz) than data is being received
+    - So each time it refreshes, we get multiple new data points
+    - Currently modifying can_logging_process() to handle the data parsing - becomes can_parsing_process()
+    - note: can_parsing_process and main QT loop both need access to shared data - dataobjects
+    - may need to switch to threads instead of processes: this would be a large overhaul
+    - Wait: can I use QThread?
+- add status indicator - "voltage is too low", "current too high", etc. - warnings to show something is wrong
+- look into socketCAN
 
+
+- look into multiprocessing vs multithreading
 - iperf - calculate maximum thoroughput 
 - could ping my laptop from the raspberry pi to calculate latency - apparently the command 
 - config file for steering; 
 - check out ways to "profile" the script -> examine what processes are running and how long they take
 - add libraries file to automatically import all libraries
-- status indicator - "voltage is too low", "current too high", etc. - warnings to show something is wrong
-
 
 High-level priorities:
 - make GUI faster & more optimized - low latency and frame rate --> trying to improve frame rate (aim for 2-10fps (min 2 fps))
     - ensure it stays responsive as we add more graphs - also reduce latency 
-    - ask chatgpt how to optimize
-    - modify how you see graphs- see below
-    - switch graphs to PyQt5
-        - note: the implementation should really all be internal, and DataObject provides the 
-            whole interface for interacting with graphs; that way it doesn't matter to external user
-            whether its implemented with PyQt5 or matplotlib
-- try to split up into multiple python files
-    - make it modular, reusable - config files for objects, settings, etc.?
+    - Separate data processing & UI rendering- redraw graphs at a different rate (~10-20 Hz) than data is being received
+        - So each time it refreshes, we get multiple new data points
+    - try to split up into multiple python files
+        - make it modular, reusable - config files for objects, settings, etc.?
+
+Testing:
+- make sure when graphs are not visible, they're not actually plotting- aiming to reduce the latency
+        - how can I test performance between versions? CPU/memory usage?
+- make sure processes all close
+    - test stuff to try to break the program- get processes to not close
+    - .close - parent thread not closing children - use 'htop' in the terminal and check for processes
+        - disable daemons, etc. -> check multiprocessing lectures
+    - make sure there are no daemon threads active - make sure all child processes get killed
+
 
 Later:
 - adding functionality to call the canup.sh bash script through a button
@@ -41,6 +42,7 @@ Later:
 - interesting note: can_log_process intentionally sleeps for 0.1 secs... do I need that? Why is that there?
 - Look into why some graphs seem straighter than others; is the time value wrong for some graphs?
 - Find a way to set initial range that doesn't prevent auto-adjust
+- add option to candump line to save local copy of candump to file (-l)
 
 - Test program with a variety of sent CAN frames of all types
 - Performance - Make the UI faster - right now graphs and scrolling is slow to respond - switch to pyqt graphs
@@ -52,33 +54,6 @@ Later:
 - For logging method, put last value logged unless its been too long, in which case will put "--"
             - log values should still be in Remote_Debugger program, not internal function
 - Double-check/update Test Script program and DataObjects with correct ranges and rounding for new data (rudder_objs, )
-
-
-Regarding GUI diagnostics we will need the following real time values in some format (in addition to all information we had last test):
-1. All of the data in frame 0x204
-2. All of the data in frame 0x206 (except we will only have at most one MPPT connected, not sure which one)
-3. All of the data in frame 0x041
-4. The ability to send coefficients for message 0x200
-Lots of graphs would be good, but I'll list in order of priority:
-4. IMU heading and DESIRED HEADING vs. time (0x204)
-
-
-8. MPPT current vs. time (0x206)
-9. IMU roll and pitch vs time (0x204)
-10. Rudder controller integral and derivative term vs. time (0x204)
-I'd say we really need 1-7 but 8-11 are a little more quality of life. 
-At some point as we add more diagnostics we will have to consider how we display things 
-(i.e. if I'm tunning the rudder I might want to see only 3,4,7 or something so having some configurability would be cool)
-
-Finished graphs
-1. Battery temperatures vs time (0x206)
-2. Cell voltages vs time (0x206)
-3. Desired rudder angle and actual rudder angle vs time ( 0x204)
-4. IMU heading (w/o desired) vs. time (0x204)
-5. Wind speed vs. time (0x041)
-6. Wind direction vs. time (0x041)
-7. Speed over ground vs time (0x204)
-11. Data sensors x3 vs time (0x10X-0x12X)
 
 
 Lower priority issues:
@@ -214,7 +189,28 @@ DONE
     - So much easier to make a new object/graph now
 - Fixed bug with calculating derivative
     - check both sides; test script creating & encrypting data, receiving GUI receiving & parsing data
+- Real time values (in addition to all information we had last test):
+    1. All of the data in frame 0x204
+    2. All of the data in frame 0x206 (except we will only have at most one MPPT connected, not sure which one)
+    3. All of the data in frame 0x041
+    4. The ability to send coefficients for message 0x200
+- Finished graphs
+    1. Battery temperatures vs time (0x206)
+    2. Cell voltages vs time (0x206)
+    3. Desired rudder angle and actual rudder angle vs time ( 0x204)
+    4. IMU heading and desired heading vs. time (0x204)
+    5. Wind speed vs. time (0x041)
+    6. Wind direction vs. time (0x041)
+    7. Speed over ground vs time (0x204)
+    8. MPPT current vs. time (0x206)
+    9. IMU roll and pitch vs time (0x204)
+    10. Rudder controller integral and derivative term vs. time (0x204)
+    11. Data sensors x3 vs time (0x10X-0x12X)
 - switched from using matplotlib to PyQt5 graphs to improve performance
+- Removed scrolling, added dropdowns to choose up to 3 graphs to view at once
+- Replaced large if-else if-else with switch (match) statement
+
+
 
 Bug Tracker
 - Problem with receiving CAN frames with V6 
@@ -224,6 +220,8 @@ Bug Tracker
 For fixing the "only plots when pdb plots" problem:
     - Literally only plots when pdb canframe is sent
     - Also, only starts plotting after receiving two pdb canframes
+
+- Note: pH graph line when tested doesn't appear as straight as the others since its rounded a lot more
 
 
 Testing Checklist:
