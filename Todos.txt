@@ -240,3 +240,11 @@ Testing Checklist:
     - Are graph titles/units correct?
     - Is the graph window moving correctly (over time)?
     - Are the graph axes appropriate?
+
+
+SOFT-ELEC Integration
+- pytest-qt for unit testing
+- separate logical components/units into separate files
+    - group widgets & their functionalities together
+- 'profile' the program
+    - or turn ssh off, compare before & after on htop
