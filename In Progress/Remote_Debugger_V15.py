@@ -501,7 +501,7 @@ class CANWindow(QWidget):
 
         self.graph_titles = []
         for obj in all_objs:
-            if ((obj.graph_obj.graph is not None) and (obj.graph_obj.x_name not in self.graph_titles)):
+            if ((obj.graph_obj is not None) and (obj.graph_obj.x_name not in self.graph_titles)):
                 self.graph_titles.append(obj.graph_obj.x_name)
 
         for d in dropdowns:
@@ -703,7 +703,7 @@ class CANWindow(QWidget):
         # Process any new CAN messages
         while not self.queue.empty():
             line = self.queue.get()
-            # self.output_display.append(line) # TODO: Note - what does this do?
+            # self.output_display.append(line)
 
             new_msg_to_log = False
   
@@ -723,8 +723,8 @@ class CANWindow(QWidget):
                     frame_id = parts[1].lower()
                     self.time_history.append(current_time)
                     
-                    # TODO: Turn the if-else-if-else statement into a dictionary with frame id:function - just runs the function associated with frame id
-                    # Handle 0x206 frame (temperature and voltage data)
+                    # TODO: Use a dictionary with frame id:function - just runs the function associated with frame id?
+                    # There's definitely some abstraction that can be done here
                     match frame_id:
                         case "041": # Data_Wind frame
                             try:
@@ -736,26 +736,33 @@ class CANWindow(QWidget):
                             except Exception as e:
                                 self.output_display.append(f"[PARSE ERROR 0x041] {str(e)}")
 
+                        case "070":
+                                try:
+                                    gps_obj.parse_frame(current_time, line)
+                                    gps_obj.update_label()
+                                except Exception as e:
+                                    self.output_display.append(f"[PARSE ERROR 0x070] {str(e)}")
+
                         case "100": # water_temp sensor frame
                             try:
                                 temp_sensor_obj.parse_frame(current_time, line)
                                 temp_sensor_obj.update_label()
                             except Exception as e:
-                                self.output_display.append(f"[PARSE ERROR 0x10X] {str(e)}")
+                                self.output_display.append(f"[PARSE ERROR 0x100] {str(e)}")
                        
                         case "110": # pH sensor frame
                             try:               
                                 pH_obj.parse_frame(current_time, line)
                                 pH_obj.update_label()
                             except Exception as e:
-                                self.output_display.append(f"[PARSE ERROR 0x11X] {str(e)}")
+                                self.output_display.append(f"[PARSE ERROR 0x110] {str(e)}")
 
                         case "120": # salinity sensor frame
                             try: 
                                 sal_obj.parse_frame(current_time, line)
                                 sal_obj.update_label()                                            
                             except Exception as e:
-                                self.output_display.append(f"[PARSE ERROR 0x12X] {str(e)}") 
+                                self.output_display.append(f"[PARSE ERROR 0x120] {str(e)}") 
 
                         case "204": # Handle 0x204 frame (actual rudder angle)
 

@@ -204,6 +204,10 @@ def temp_sensor_parsing_fn(data_hex):
     
     return actual
 
+def gps_parsing_fn(data_hex):
+    # TODO
+    pass
+
 def make_pretty(cmd):
     '''
     Helper function for putting cansend commands into the same format as candump received messages\n
@@ -278,6 +282,9 @@ data_wind_dir_obj = DataObject("Data_Wind_dir", 0, "°", None, line_colour="oran
 
 data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 
+# GPS
+gps_obj = DataObject("gps_pos", 4, "DD", gps_parsing_fn, graph=None)
+
 # General sensors (pH, water temp, salinity)
 pH_graph_obj = GraphObject("pH", cg.graph_y, None, cg.graph_y_units, 0, 14)
 pH_obj = DataObject("pH", 1, None, pH_parsing_fn, line_colour="r", graph=pH_graph_obj)
@@ -293,3 +300,4 @@ pdb_objs = [temp1_obj, temp2_obj , temp3_obj, volt1_obj, volt2_obj, volt3_obj, v
 rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj] # all objects with data from 0x204 frame (rudder -> mainframe)
 data_objs = [pH_obj, temp_sensor_obj, sal_obj]
 all_objs = data_objs + data_wind_objs + rudder_objs + pdb_objs # + data_objs
+all_objs.append(gps_obj)
