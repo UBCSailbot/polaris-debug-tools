@@ -738,8 +738,11 @@ class CANWindow(QWidget):
 
                         case "070":
                                 try:
-                                    gps_obj.parse_frame(current_time, line)
-                                    gps_obj.update_label()
+                                    raw_data = line.split(']')[-1].strip().split()
+                                    parsed = parse_0x070_frame(''.join(raw_data))
+                                    for obj in gps_objs:
+                                        obj.parse_frame(current_time, None, parsed)
+                                        obj.update_label()
                                 except Exception as e:
                                     self.output_display.append(f"[PARSE ERROR 0x070] {str(e)}")
 

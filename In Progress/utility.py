@@ -50,8 +50,8 @@ def parse_0x204_frame(data_hex):
         raise ValueError("Incorrect data length (num bytes): ID 0x204")
     
     val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
-    print(f"derivative_obj: {(val(12, 14, 1.0) - 300) / 100.0}")
-    print(f"spd_over_gnd_obj: {val(14, 16, 100.0)}")
+    # print(f"derivative_obj: {(val(12, 14, 1.0) - 300) / 100.0}")
+    # print(f"spd_over_gnd_obj: {val(14, 16, 100.0)}")
     return {
         actual_rudder_obj.name: val(0, 2, 100.0) - 90,
         imu_roll_obj.name: val(2, 4, 100.0) - 180,
@@ -204,9 +204,20 @@ def temp_sensor_parsing_fn(data_hex):
     
     return actual
 
-def gps_parsing_fn(data_hex):
-    # TODO
-    pass
+def parse_0x070_frame(data_hex):
+    raw_bytes = bytes.fromhex(data_hex)
+    if len(raw_bytes) != 20:
+        raise ValueError("Incorrect data length (num bytes): ID 0x10X")
+    
+    # temp is in format of temp * 1000
+    val = lambda s, e, div: int.from_bytes(raw_bytes[s:e], 'little') / div
+
+    return {
+        # actual_rudder_obj.name: val(0, 2, 100.0) - 90,
+        gps_lat_obj.name: val(0, 4, 1000000) - 90,
+        gps_lon_obj.name: val(4, 8, 1000000) - 90,
+        spd_over_gnd_obj.name: val(16, 20, 1000)
+    }
 
 def make_pretty(cmd):
     '''
@@ -283,7 +294,8 @@ data_wind_dir_obj = DataObject("Data_Wind_dir", 0, "°", None, line_colour="oran
 data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 
 # GPS
-gps_obj = DataObject("gps_pos", 4, "DD", gps_parsing_fn, graph=None)
+gps_lat_obj = DataObject("gps_lat", 4, "DD", None, graph=None)
+gps_lon_obj = DataObject("gps_lon", 4, "DD", None, graph=None)
 
 # General sensors (pH, water temp, salinity)
 pH_graph_obj = GraphObject("pH", cg.graph_y, None, cg.graph_y_units, 0, 14)
@@ -299,5 +311,5 @@ sal_obj = DataObject("Salinity", None, "µS/cm", sal_parsing_fn, line_colour='g'
 pdb_objs = [temp1_obj, temp2_obj , temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj] # all objects with data from 0x204 frame (rudder -> mainframe)
 data_objs = [pH_obj, temp_sensor_obj, sal_obj]
-all_objs = data_objs + data_wind_objs + rudder_objs + pdb_objs # + data_objs
-all_objs.append(gps_obj)
+gps_objs = [gps_lat_obj, gps_lon_obj]
+all_objs = gps_objs + data_objs + data_wind_objs + rudder_objs + pdb_objs # + data_objs
