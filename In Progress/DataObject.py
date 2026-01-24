@@ -104,6 +104,8 @@ class DataObject:
         if self.graph_obj:
             if not self.graph_obj.initialized: self.graph_obj.initialize()
             self.line = create_line(self.graph_obj, self.name, [], [], self.line_colour, cg.linewidth, self.line_dashed, symbol=False) if self.graph_obj else None # should automatically create line w/ empty data
+        else:
+            self.line = None
         self.label = create_label(self.name + ": ---- ") # should automatically create label
         
     # Return a tuple with the time:value of the most current data point collected
