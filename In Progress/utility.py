@@ -225,42 +225,52 @@ def make_pretty(cmd):
     return msg
 
 ### ---------- Data Objects ---------- ###
+
+# Battery Temps
 pdb_temp_graph_obj = GraphObject("Temperature", cg.graph_y, "°C", cg.graph_y_units, 0, 127.0)
 temp1_obj = DataObject("Temp1", 2, "°C", None, line_colour="r", graph=pdb_temp_graph_obj)
 temp2_obj = DataObject("Temp2", 2, "°C", None, line_colour="g", graph=pdb_temp_graph_obj)
 temp3_obj = DataObject("Temp3", 2, "°C", None, line_colour="y", graph=pdb_temp_graph_obj)
 
+# Cell voltages
 pdb_volt_graph_obj = GraphObject("Cell Voltages", cg.graph_y, "V", cg.graph_y_units, 0, 5)
 volt1_obj = DataObject("Volt1", 2, "V", None, line_colour="b", graph=pdb_volt_graph_obj)
 volt2_obj = DataObject("Volt2", 2, "V", None, line_colour="c", graph=pdb_volt_graph_obj)
 volt3_obj = DataObject("Volt3", 2, "V", None, line_colour="m", graph=pdb_volt_graph_obj)
 volt4_obj = DataObject("Volt4", 2, "V", None, line_colour="orange", graph=pdb_volt_graph_obj)
 
+# MPPT currents
 mppt_current_graph_obj = GraphObject("MPPT Current", cg.graph_y, "A", cg.graph_y_units, 0, 5)
 mppt_hp_obj = DataObject("MPPT_curr_hull_port", 2, "A", None, line_colour="c", graph=mppt_current_graph_obj)
 mppt_sp_obj = DataObject("MPPT_curr_hull_star", 2, "A", None, line_colour="purple", graph=mppt_current_graph_obj)
 mppt_hs_obj = DataObject("MPPT_curr_sail_port", 2, "A", None, line_colour="g", graph=mppt_current_graph_obj)
 mppt_ss_obj = DataObject("MPPT_curr_sail_star", 2, "A", None, line_colour="y", graph=mppt_current_graph_obj)
 
+# Rudder angles (set & actual)
 rudder_graph = GraphObject("Rudder Angles", cg.graph_y, "°", cg.graph_y_units, -90, 90)
 actual_rudder_obj = DataObject("Actual_rdr_deg", 2, "°", None, line_colour="r", graph=rudder_graph) # NOTE: graph parsing function changed to None here - potential for bug/error
 set_rudder_obj = DataObject("Set_rdr_deg", 2, "°", None, line_dashed=True, line_colour="b", graph=rudder_graph) # NOTE: graph parsing function changed to None here
 
+# Speed over ground (from debug frame 0x204)
 spd_over_gnd_graph_obj = GraphObject("Speed Over Ground", cg.graph_y, "km/h", cg.graph_y_units, 0, 20)
 spd_over_gnd_obj = DataObject("Speed_over_gnd", 3, "km/h", None, line_colour='brown', graph=spd_over_gnd_graph_obj)
 
+# Headings (IMU & Desired)
 headings_graph_obj = GraphObject("IMU & Desired Headings", cg.graph_y, "°", cg.graph_y_units, 0, 360)
 imu_heading_obj = DataObject("IMU_heading", 3, "°", None, line_colour="r", graph=headings_graph_obj)
 desired_heading_obj = DataObject("Desired_heading", 3, "°", None, line_dashed=True, line_colour="b", graph=headings_graph_obj)
 
+# IMU roll & pitch
 imu_roll_pitch_graph_obj = GraphObject("IMU Roll & Pitch", cg.graph_y, "°", cg.graph_y_units, 0, 360)
 imu_roll_obj = DataObject("IMU_roll", 2, "°", None, line_colour="g", graph=imu_roll_pitch_graph_obj)
 imu_pitch_obj = DataObject("IMU_pitch", 2, "°", None, line_colour="brown", graph=imu_roll_pitch_graph_obj)
 
+# Integral + Derivative
 int_der_graph_obj = GraphObject("IMU Integral & Derivative", cg.graph_y, None, cg.graph_y_units, 0, 100)
 integral_obj = DataObject("IMU_integral", 2, None, None, line_colour="m", graph=int_der_graph_obj)
 derivative_obj = DataObject("IMU_derivative", 2, None, None, line_colour="pink", graph=int_der_graph_obj)
 
+# Data Wind Sensor
 data_wind_spd_graph_obj = GraphObject("Data_Wind Speed", cg.graph_y, "knots", cg.graph_y_units, 0, 20)
 data_wind_spd_obj = DataObject("Data_Wind_spd", 0, "knots", None, line_colour="turquoise", graph=data_wind_spd_graph_obj)
 data_wind_dir_graph_obj = GraphObject("Data_Wind Direction", cg.graph_y, "°", cg.graph_y_units, 0, 360)
@@ -268,6 +278,7 @@ data_wind_dir_obj = DataObject("Data_Wind_dir", 0, "°", None, line_colour="oran
 
 data_wind_objs = [data_wind_spd_obj, data_wind_dir_obj]
 
+# General sensors (pH, water temp, salinity)
 pH_graph_obj = GraphObject("pH", cg.graph_y, None, cg.graph_y_units, 0, 14)
 pH_obj = DataObject("pH", 1, None, pH_parsing_fn, line_colour="r", graph=pH_graph_obj)
 
@@ -277,6 +288,7 @@ temp_sensor_obj = DataObject("Water_Temp", 3, "°C", temp_sensor_parsing_fn, lin
 sal_graph_obj = GraphObject("Salinity", cg.graph_y, "µS/cm", cg.graph_y_units, 0, 100000)
 sal_obj = DataObject("Salinity", None, "µS/cm", sal_parsing_fn, line_colour='g', graph=sal_graph_obj)
 
+# Lists (typically organized by frame)
 pdb_objs = [temp1_obj, temp2_obj , temp3_obj, volt1_obj, volt2_obj, volt3_obj, volt4_obj, mppt_hp_obj, mppt_hs_obj, mppt_sp_obj, mppt_ss_obj]
 rudder_objs = [actual_rudder_obj, set_rudder_obj, spd_over_gnd_obj, imu_roll_obj, imu_pitch_obj, integral_obj, derivative_obj, imu_heading_obj] # all objects with data from 0x204 frame (rudder -> mainframe)
 data_objs = [pH_obj, temp_sensor_obj, sal_obj]
