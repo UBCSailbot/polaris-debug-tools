@@ -1,4 +1,50 @@
 TODO
+- GPS values
+    - just live values of latitude & longitude in decimal degrees minutes
+
+- AIS values & graphs
+    - no live value - only graph
+    Specs:
+    - overview: plot each ship as a point on a graph
+        - longitude on x-axis (-180° to 180°), latitude on y-axis (-90° to 90°)
+            - in Decimal Degrees
+        - Coordinate Signs: North and East are positive, South and West are negative
+        - Different colours for POLARIS vs. other ships
+            - BLUE for POLARIS, RED for all other ships
+        - Extra 1: Each point has an arrow indicating its direction vector (course over ground)
+            - To produce a circle at the base of the arrow, may need to plot two points on top of each other, with different symbols
+            - Extra 3: Arrow length is scaled to indicate relative speeds
+        - Extra 2: hovering over each point gives a text display of its longitude/latitude
+
+GPS
+- create object & live values
+    - do parsing function (after creating tests)
+- create testing script & test it with the pi
+
+AIS
+- Use pyqtgraph, and input all the points; no lines
+    - Also create test helper functions for this - can I create a test script so that I don't have to ssh into the pi every time I want to test receiving data?
+    - figure out how I'm going to translate AIS info (latitude and longitude) into coordinates on a plot (make a confluence explanation for this)
+        - I think I can configure units and all in the same way that I did the other graphs - just need special calculations in its special parsing fn
+
+For the AIS the general idea is it will send the message 0x060 for every single ship detected by the AIS. 
+This is done in batches where every minute the AIS sends all detected ships over CANBUS, where each ship gets it's own message 0x060. 
+If there are over 127 ships detected in one minute it will send batches of 127 ships. There is no radius, although that is implicit 
+since the AIS relies on radio messages from other ships which have an effective max range. The GPS gives the 
+latitude, longitude, UTC timestamp and SOG.For displaying this what would be nice would be to have essentially a map around 
+the ship. Maybe POLARIS is a circle or something centered in the middle of the map with other ships illustrated with 
+rectangles representative of their size and orientation. Maybe with a vector showing the other ships course / speed 
+over ground. To start though maybe just illustrate all the other ships with circles and see about making things more 
+advanced after. 
+
+For GPS of POLARIS just a window showing latitude and longitude in degrees, minutes and seconds is 
+probably sufficient. 
+
+For 0x70 and 0x204 they "should" give similar values since they are mounted on the same boat. 
+That being said just due to sensor variations they will give slightly different values. Just pick one for your uses to display, 
+but make sure both are logged. Make sure it is easy to change which frame is being used for the graphics though 
+(right now we only have 0x204 implemented, but this will be taken over by 0x70 and the frame 0x204 will be removed.) 
+
 - Separate data processing & UI rendering- redraw graphs at a different rate (~10-20 Hz) than data is being received
     - So each time it refreshes, we get multiple new data points
     - Currently modifying can_logging_process() to handle the data parsing - becomes can_parsing_process()
@@ -7,7 +53,11 @@ TODO
     - Wait: can I use QThread?
 - add status indicator - "voltage is too low", "current too high", etc. - warnings to show something is wrong
 - look into socketCAN
-
+- Note: it is noted that performance can be significantly improved if we turn off auto-range, and set a fixed range
+    - but not sure what exactly this range should be
+- Sail encoder - graph?
+- wind sensor #2
+- COG - course over ground - live value - polar plot
 
 - look into multiprocessing vs multithreading
 - iperf - calculate maximum thoroughput 
@@ -75,6 +125,12 @@ Lower priority issues:
 
 
 - I'm thinking in the future I might have a separate log file for each thing/can message/data sensor?
+- Note: Currently, to add a new piece of data to log/graph/see, you create a DataObject and possibly a GraphObject in utility.py, 
+        add it to the list of all_objs (this auto-adds label to graph) and possibly the list corresponding to its frame, 
+        then add a case for its id in Remote_Debugger (this enables the program to process CAN frames with its id correctly)
+        - trying to see if I can get rid of having to update Remote_Debugger at all - change the switch statement
+        
+
 
 Current problems:
 
@@ -209,7 +265,7 @@ DONE
 - switched from using matplotlib to PyQt5 graphs to improve performance
 - Removed scrolling, added dropdowns to choose up to 3 graphs to view at once
 - Replaced large if-else if-else with switch (match) statement
-
+- Graphs only redraw (setData) when visible
 
 
 Bug Tracker

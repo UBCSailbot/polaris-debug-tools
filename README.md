@@ -24,7 +24,7 @@ Notes:
 - V12 - Update UI - shift live values to column in the middle + add new DRV/PWR data (new debug frames)
 - V13 - add new controls (eg. send PID values)
 - V14 - switch from matplotlib to pyqtgraph & limit to 3 graphs shown at once
-
+- V15 - Add AIS + GPS values/graphs
 
 
 ### Important usage notes
