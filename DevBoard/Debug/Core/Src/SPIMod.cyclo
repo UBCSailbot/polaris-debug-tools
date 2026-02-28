@@ -1,0 +1,5 @@
+../Core/Src/SPIMod.c:97:20:cs_pulse_begin	2
+../Core/Src/SPIMod.c:98:20:cs_pulse_end	2
+../Core/Src/SPIMod.c:100:6:SPIMod_Init	1
+../Core/Src/SPIMod.c:108:6:SPIMod_OnUartByte	1
+../Core/Src/SPIMod.c:118:6:SPIMod_ReadWrite	5

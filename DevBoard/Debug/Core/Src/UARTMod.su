@@ -1,0 +1,4 @@
+../Core/Src/UARTMod.c:66:6:UARTMod_Init	16	static
+../Core/Src/UARTMod.c:75:6:UARTMod_OnUart1Byte	16	static
+../Core/Src/UARTMod.c:76:6:UARTMod_OnUart2Byte	16	static
+../Core/Src/UARTMod.c:79:6:UARTMod_Task	16	static
