@@ -296,6 +296,7 @@ void Dev_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     else if (huart == &huart2)
     {
         ring_push(&rb_u2_rx, isr_u2_byte);
+        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin); // blink on every received byte regardless of mode
         HAL_UART_Receive_IT(&huart2, &isr_u2_byte, 1); 
     }
 }
