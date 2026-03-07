@@ -80,7 +80,7 @@ static uint32_t spi_last_poll = 0;
 
 #define SPI_IDLE_BYTE  0x00
 
-#define TX_TIMEOUT_MS  5U
+#define TX_TIMEOUT_MS  50U
 
 static void dwt_init(void)
 {

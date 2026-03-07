@@ -35,13 +35,13 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  15 .debug_line   0001b460  00000000  00000000  0002e833  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_str    0014960a  00000000  00000000  00049c93  2**0
+ 16 .debug_str    0014960b  00000000  00000000  00049c93  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .comment      00000043  00000000  00000000  0019329d  2**0
+ 17 .comment      00000043  00000000  00000000  0019329e  2**0
                   CONTENTS, READONLY
- 18 .debug_frame  00005cf4  00000000  00000000  001932e0  2**2
+ 18 .debug_frame  00005cf4  00000000  00000000  001932e4  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .debug_line_str 00000066  00000000  00000000  00198fd4  2**0
+ 19 .debug_line_str 00000066  00000000  00000000  00198fd8  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -529,7 +529,7 @@ static inline int ring_pop(RingBuf_t *r, uint8_t *out)
 080006c8 <dwt_init>:
 #define SPI_IDLE_BYTE  0x00
 
-#define TX_TIMEOUT_MS  5U
+#define TX_TIMEOUT_MS  50U
 
 static void dwt_init(void)
 {
@@ -656,7 +656,7 @@ static void print(const char *s)
  800078a:	f7ff fd75 	bl	8000278 <strlen>
  800078e:	4603      	mov	r3, r0
  8000790:	b29a      	uxth	r2, r3
- 8000792:	2305      	movs	r3, #5
+ 8000792:	2332      	movs	r3, #50	@ 0x32
  8000794:	6879      	ldr	r1, [r7, #4]
  8000796:	4803      	ldr	r0, [pc, #12]	@ (80007a4 <print+0x24>)
  8000798:	f006 fd24 	bl	80071e4 <HAL_UART_Transmit>
@@ -754,13 +754,13 @@ static void dev_uart_task(void)
 
         HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
  800080c:	1df9      	adds	r1, r7, #7
- 800080e:	2305      	movs	r3, #5
+ 800080e:	2332      	movs	r3, #50	@ 0x32
  8000810:	2201      	movs	r2, #1
  8000812:	4816      	ldr	r0, [pc, #88]	@ (800086c <dev_uart_task+0x80>)
  8000814:	f006 fce6 	bl	80071e4 <HAL_UART_Transmit>
         HAL_UART_Transmit(&huart2, &b, 1, TX_TIMEOUT_MS);
  8000818:	1df9      	adds	r1, r7, #7
- 800081a:	2305      	movs	r3, #5
+ 800081a:	2332      	movs	r3, #50	@ 0x32
  800081c:	2201      	movs	r2, #1
  800081e:	4814      	ldr	r0, [pc, #80]	@ (8000870 <dev_uart_task+0x84>)
  8000820:	f006 fce0 	bl	80071e4 <HAL_UART_Transmit>
@@ -786,7 +786,7 @@ static void dev_uart_task(void)
         
         HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
  800083e:	1df9      	adds	r1, r7, #7
- 8000840:	2305      	movs	r3, #5
+ 8000840:	2332      	movs	r3, #50	@ 0x32
  8000842:	2201      	movs	r2, #1
  8000844:	4809      	ldr	r0, [pc, #36]	@ (800086c <dev_uart_task+0x80>)
  8000846:	f006 fccd 	bl	80071e4 <HAL_UART_Transmit>
@@ -856,7 +856,7 @@ static void dev_spi_task(void)
  80008b6:	d009      	beq.n	80008cc <dev_spi_task+0x48>
             HAL_UART_Transmit(&huart1, &rx, 1, TX_TIMEOUT_MS);
  80008b8:	1c79      	adds	r1, r7, #1
- 80008ba:	2305      	movs	r3, #5
+ 80008ba:	2332      	movs	r3, #50	@ 0x32
  80008bc:	2201      	movs	r2, #1
  80008be:	4821      	ldr	r0, [pc, #132]	@ (8000944 <dev_spi_task+0xc0>)
  80008c0:	f006 fc90 	bl	80071e4 <HAL_UART_Transmit>
@@ -921,7 +921,7 @@ static void dev_spi_task(void)
  8000922:	d009      	beq.n	8000938 <dev_spi_task+0xb4>
             HAL_UART_Transmit(&huart1, &rx, 1, TX_TIMEOUT_MS);
  8000924:	1c79      	adds	r1, r7, #1
- 8000926:	2305      	movs	r3, #5
+ 8000926:	2332      	movs	r3, #50	@ 0x32
  8000928:	2201      	movs	r2, #1
  800092a:	4806      	ldr	r0, [pc, #24]	@ (8000944 <dev_spi_task+0xc0>)
  800092c:	f006 fc5a 	bl	80071e4 <HAL_UART_Transmit>
@@ -1158,7 +1158,7 @@ void Dev_Poll(void)
                 }
                 HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
  8000ab2:	1df9      	adds	r1, r7, #7
- 8000ab4:	2305      	movs	r3, #5
+ 8000ab4:	2332      	movs	r3, #50	@ 0x32
  8000ab6:	2201      	movs	r2, #1
  8000ab8:	480d      	ldr	r0, [pc, #52]	@ (8000af0 <Dev_Poll+0x80>)
  8000aba:	f006 fb93 	bl	80071e4 <HAL_UART_Transmit>

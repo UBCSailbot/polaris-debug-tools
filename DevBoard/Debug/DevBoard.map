@@ -6398,29 +6398,29 @@ LOAD C:/ST/STM32CubeIDE_1.19.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.ext
  .debug_line    0x00017017     0x3542 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.o
  .debug_line    0x0001a559      0xf07 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart_ex.o
 
-.debug_str      0x00000000   0x14960a
- .debug_str     0x00000000   0x14960a ./Core/Src/dev.o
-                             0x140f1f (size before relaxing)
- .debug_str     0x0014960a   0x1408f8 ./Core/Src/main.o
- .debug_str     0x0014960a   0x14081e ./Core/Src/stm32u5xx_hal_msp.o
- .debug_str     0x0014960a   0x140959 ./Core/Src/stm32u5xx_hal_timebase_tim.o
- .debug_str     0x0014960a   0x1402fa ./Core/Src/stm32u5xx_it.o
- .debug_str     0x0014960a   0x13fbb7 ./Core/Src/system_stm32u5xx.o
- .debug_str     0x0014960a       0x82 ./Core/Startup/startup_stm32u575zitxq.o
- .debug_str     0x0014960a   0x140a24 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal.o
- .debug_str     0x0014960a   0x1407f3 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_cortex.o
- .debug_str     0x0014960a   0x13ff32 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_dma.o
- .debug_str     0x0014960a   0x13fbd3 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gpio.o
- .debug_str     0x0014960a   0x13fed0 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_icache.o
- .debug_str     0x0014960a   0x1402ee ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr_ex.o
- .debug_str     0x0014960a   0x1412a3 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc.o
- .debug_str     0x0014960a   0x142506 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc_ex.o
- .debug_str     0x0014960a   0x1404a2 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi.o
- .debug_str     0x0014960a   0x140012 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi_ex.o
- .debug_str     0x0014960a   0x140ff1 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_tim.o
- .debug_str     0x0014960a   0x140e69 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_tim_ex.o
- .debug_str     0x0014960a   0x140875 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.o
- .debug_str     0x0014960a   0x140327 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart_ex.o
+.debug_str      0x00000000   0x14960b
+ .debug_str     0x00000000   0x14960b ./Core/Src/dev.o
+                             0x140f20 (size before relaxing)
+ .debug_str     0x0014960b   0x1408f8 ./Core/Src/main.o
+ .debug_str     0x0014960b   0x14081e ./Core/Src/stm32u5xx_hal_msp.o
+ .debug_str     0x0014960b   0x140959 ./Core/Src/stm32u5xx_hal_timebase_tim.o
+ .debug_str     0x0014960b   0x1402fa ./Core/Src/stm32u5xx_it.o
+ .debug_str     0x0014960b   0x13fbb7 ./Core/Src/system_stm32u5xx.o
+ .debug_str     0x0014960b       0x82 ./Core/Startup/startup_stm32u575zitxq.o
+ .debug_str     0x0014960b   0x140a24 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal.o
+ .debug_str     0x0014960b   0x1407f3 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_cortex.o
+ .debug_str     0x0014960b   0x13ff32 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_dma.o
+ .debug_str     0x0014960b   0x13fbd3 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_gpio.o
+ .debug_str     0x0014960b   0x13fed0 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_icache.o
+ .debug_str     0x0014960b   0x1402ee ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_pwr_ex.o
+ .debug_str     0x0014960b   0x1412a3 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc.o
+ .debug_str     0x0014960b   0x142506 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_rcc_ex.o
+ .debug_str     0x0014960b   0x1404a2 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi.o
+ .debug_str     0x0014960b   0x140012 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_spi_ex.o
+ .debug_str     0x0014960b   0x140ff1 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_tim.o
+ .debug_str     0x0014960b   0x140e69 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_tim_ex.o
+ .debug_str     0x0014960b   0x140875 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.o
+ .debug_str     0x0014960b   0x140327 ./Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart_ex.o
 
 .comment        0x00000000       0x43
  .comment       0x00000000       0x43 ./Core/Src/dev.o
