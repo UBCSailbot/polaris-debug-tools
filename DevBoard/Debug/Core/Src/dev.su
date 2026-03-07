@@ -14,4 +14,4 @@
 ../Core/Src/dev.c:233:6:Dev_Init	8	static
 ../Core/Src/dev.c:257:6:Dev_Poll	16	static
 ../Core/Src/dev.c:289:6:Dev_UART_RxCpltCallback	16	static
-../Core/Src/dev.c:303:6:Dev_UART_ErrorCallback	16	static
+../Core/Src/dev.c:304:6:Dev_UART_ErrorCallback	16	static
