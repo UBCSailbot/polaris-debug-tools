@@ -513,33 +513,19 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "UARTMod.h"
-#include "SPIMod.h"
-#include <string.h>
+#include "dev.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef enum {
-  MODE_MENU = 0,
-  MODE_UART = 1,
-  MODE_SPI  = 2
-} CommMode_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-/* Map your SPI chip-select (CS) here.
-   If you used PA4 for slave NSS, configure PA4 as a *GPIO Output* in CubeMX
-   and keep these defines. Change if you picked another pin. */
-#define SPI1_CS_GPIO_Port   GPIOA
-#define SPI1_CS_Pin         GPIO_PIN_4
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define CS_LOW()   HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET)
-#define CS_HIGH()  HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -549,9 +535,6 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-static volatile CommMode_t g_mode = MODE_MENU;
-static uint8_t rx1_data = 0;   // UART1 byte in (PC / PuTTY)
-static uint8_t rx2_data = 0;   // UART2 byte in (board-to-board)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -563,31 +546,10 @@ static void MX_USART2_UART_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
-static void PrintMenu(void);
-static void AnnounceMode(CommMode_t m);
-static void MX_NVIC_UserInit(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void PrintMenu(void)
-{
-  const char *menu =
-    "\r\n=== Comm Test Menu (MASTER) ===\r\n"
-    "1) UART bridge (USART1 <-> USART2 PD5/PD6)\r\n"
-    "2) SPI test (UART1 -> SPI1 MASTER)\r\n"
-    "m) Show this menu\r\n"
-    "Select: ";
-  HAL_UART_Transmit(&huart1, (uint8_t*)menu, strlen(menu), HAL_MAX_DELAY);
-}
-
-static void AnnounceMode(CommMode_t m)
-{
-  const char *msg = (m == MODE_UART)
-    ? "\r\n[Mode] UART bridge.\r\nType on PuTTY to send across USART2 (PD5/PD6).\r\n'm' for menu.\r\n"
-    : "\r\n[Mode] SPI MASTER.\r\nType on PuTTY; each byte clocks one SPI transfer (CS pulsed). 'm' for menu.\r\n";
-  HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-}
 /* USER CODE END 0 */
 
 /**
@@ -621,48 +583,14 @@ int main(void)
   MX_USART1_UART_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  /* Drive CS high idle */
-  CS_HIGH();
-
-  /* Initialize modules (banners on UART1) */
-  UARTMod_Init();
-  SPIMod_Init();   // master-side init message
-
-  /* NVIC enables for UART IRQs */
-  MX_NVIC_UserInit();
-
-  /* Arm 1-byte RX interrupts on both UARTs */
-  HAL_UART_Receive_IT(&huart1, &rx1_data, 1);  // PuTTY -> board
-  HAL_UART_Receive_IT(&huart2, &rx2_data, 1);  // Board <-> Board
-
-  /* Show menu */
-  const char *menu =
-    "\r\n=== Comm Test Menu (MASTER) ===\r\n"
-    "1) UART bridge (USART1 <-> USART2 PD5/PD6)\r\n"
-    "2) SPI test (UART1 -> SPI1 MASTER)\r\n"
-    "m) Show this menu\r\n"
-    "Select: ";
-  HAL_UART_Transmit(&huart1, (uint8_t*)menu, strlen(menu), HAL_MAX_DELAY);
+  Dev_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    switch (g_mode)
-    {
-      case MODE_MENU:
-        /* idle; bytes handled in RxCplt */
-        break;
-
-      case MODE_UART:
-        UARTMod_Task();      // non-blocking
-        break;
-
-      case MODE_SPI:
-        SPIMod_ReadWrite();  // master clocks bytes as needed (non-blocking)
-        break;
-    }
+    Dev_Poll();
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -877,57 +805,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-static void MX_NVIC_UserInit(void)
-{
-  HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(USART1_IRQn);
-
-  HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(USART2_IRQn);
-}
-
-/* UART RX complete: menu + data plumbing */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  if (huart == &huart1)
-  {
-    uint8_t b = rx1_data;
-
-    if (g_mode == MODE_MENU)
-    {
-      if (b == '1')      { g_mode = MODE_UART; AnnounceMode(g_mode); }
-      else if (b == '2') { g_mode = MODE_SPI;  AnnounceMode(g_mode); }
-      else if (b == 'm' || b == 'M') { PrintMenu(); }
-      else {
-        const char *msg = "\r\nInvalid.\r\n";
-        HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
-        PrintMenu();
-      }
-    }
-    else if (g_mode == MODE_UART)
-    {
-      UARTMod_OnUart1Byte(b);
-      if (b == 'm' || b == 'M') { g_mode = MODE_MENU; PrintMenu(); }
-    }
-    else if (g_mode == MODE_SPI)
-    {
-      SPIMod_OnUartByte(b);  // queue for next SPI master transfer
-      if (b == 'm' || b == 'M') { g_mode = MODE_MENU; PrintMenu(); }
-    }
-
-    HAL_UART_Receive_IT(&huart1, &rx1_data, 1);  // re-arm
-  }
-  else if (huart == &huart2)
-  {
-    UARTMod_OnUart2Byte(rx2_data);
-    HAL_UART_Receive_IT(&huart2, &rx2_data, 1);  // re-arm
-  }
+  Dev_UART_RxCpltCallback(huart);
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-  if (huart == &huart1) HAL_UART_Receive_IT(&huart1, &rx1_data, 1);
-  if (huart == &huart2) HAL_UART_Receive_IT(&huart2, &rx2_data, 1);
+  Dev_UART_ErrorCallback(huart);
 }
 /* USER CODE END 4 */
 
