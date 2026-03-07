@@ -796,11 +796,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USER_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  GPIO_InitStruct.Pin = LED_RED_Pin|LED_GREEN_Pin|LED_BLUE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_RED_GPIO_Port, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = LED_RED_Pin;
+  HAL_GPIO_Init(LED_RED_GPIO_Port, &GPIO_InitStruct);   // PG2
+
+  GPIO_InitStruct.Pin = LED_GREEN_Pin;
+  HAL_GPIO_Init(LED_GREEN_GPIO_Port, &GPIO_InitStruct); // PC7
+
+  GPIO_InitStruct.Pin = LED_BLUE_Pin;
+  HAL_GPIO_Init(LED_BLUE_GPIO_Port, &GPIO_InitStruct);  // PB7
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* USER CODE END MX_GPIO_Init_2 */
