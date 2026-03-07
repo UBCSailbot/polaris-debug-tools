@@ -1,0 +1,17 @@
+../Core/Src/dev.c:22:20:ring_init	1
+../Core/Src/dev.c:28:19:ring_push	2
+../Core/Src/dev.c:37:19:ring_pop	2
+../Core/Src/dev.c:85:13:dwt_init	1
+../Core/Src/dev.c:96:13:delay_us	2
+../Core/Src/dev.c:104:20:cs_low	1
+../Core/Src/dev.c:110:20:cs_high	1
+../Core/Src/dev.c:116:13:print	1
+../Core/Src/dev.c:121:13:print_menu	1
+../Core/Src/dev.c:132:13:announce_mode	2
+../Core/Src/dev.c:142:13:dev_uart_task	5
+../Core/Src/dev.c:171:13:dev_spi_task	7
+../Core/Src/dev.c:208:13:dev_menu_task	6
+../Core/Src/dev.c:233:6:Dev_Init	1
+../Core/Src/dev.c:257:6:Dev_Poll	8
+../Core/Src/dev.c:289:6:Dev_UART_RxCpltCallback	3
+../Core/Src/dev.c:303:6:Dev_UART_ErrorCallback	3

@@ -13,10 +13,10 @@
 //static uint8_t uartRx = 0x00;
 //static uint8_t txPending = 0;
 //
-#define SPI_CS_PORT GPIOA
-#define SPI_CS_PIN  GPIO_PIN_4
-#define CS_LOW()   HAL_GPIO_WritePin(SPI_CS_PORT, SPI_CS_PIN, GPIO_PIN_RESET)
-#define CS_HIGH()  HAL_GPIO_WritePin(SPI_CS_PORT, SPI_CS_PIN, GPIO_PIN_SET)
+//#define SPI_CS_PORT GPIOA
+//#define SPI_CS_PIN  GPIO_PIN_4
+//#define CS_LOW()   HAL_GPIO_WritePin(SPI_CS_PORT, SPI_CS_PIN, GPIO_PIN_RESET)
+//#define CS_HIGH()  HAL_GPIO_WritePin(SPI_CS_PORT, SPI_CS_PIN, GPIO_PIN_SET)
 //
 //void SPIMod_Init(void)
 //{

@@ -60,8 +60,8 @@ all: main-build
 main-build: DevBoard.elf secondary-outputs
 
 # Tool invocations
-DevBoard.elf DevBoard.map: $(OBJS) $(USER_OBJS) C:\Users\aayus\Desktop\UBC\ Sailbot\Onboarding\DevBoard\STM32U575ZITXQ_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "DevBoard.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m33 -T"C:\Users\aayus\Desktop\UBC Sailbot\Onboarding\DevBoard\STM32U575ZITXQ_FLASH.ld" --specs=nosys.specs -Wl,-Map="DevBoard.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+DevBoard.elf DevBoard.map: $(OBJS) $(USER_OBJS) C:\Users\aayus\Desktop\UBC\ Sailbot\polaris-debug-tools\DevBoard\STM32U575ZITXQ_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "DevBoard.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m33 -T"C:\Users\aayus\Desktop\UBC Sailbot\polaris-debug-tools\DevBoard\STM32U575ZITXQ_FLASH.ld" --specs=nosys.specs -Wl,-Map="DevBoard.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

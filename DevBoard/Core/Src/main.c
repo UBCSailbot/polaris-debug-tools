@@ -522,6 +522,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define SPI1_CS_GPIO_Port   GPIOA
+#define SPI1_CS_Pin         GPIO_PIN_4
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
