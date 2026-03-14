@@ -8,6 +8,7 @@
 
 #include "dev.h"
 #include "main.h"
+#include "can.h"
 #include <string.h>
 
 #define RING_SIZE  256U
@@ -50,6 +51,7 @@ static inline uint16_t ring_count(const RingBuf_t *r)
 extern SPI_HandleTypeDef  hspi1;
 extern UART_HandleTypeDef huart1; 
 extern UART_HandleTypeDef huart2; 
+extern FDCAN_HandleTypeDef hfdcan1;
 
 static RingBuf_t rb_u1_rx;
 static RingBuf_t rb_u2_rx;
@@ -62,7 +64,8 @@ static uint8_t isr_u2_byte;
 typedef enum {
     DEV_MODE_MENU = 0,
     DEV_MODE_UART = 1,
-    DEV_MODE_SPI  = 2
+    DEV_MODE_SPI  = 2,
+    DEV_MODE_CAN  = 3
 } DevMode_t;
 
 static volatile DevMode_t g_mode = DEV_MODE_MENU;
@@ -124,6 +127,7 @@ static void print_menu(void)
         "\r\n=== Comm Test Menu (MASTER) ===\r\n"
         "1) UART bridge (USART1 <-> USART2 PD5/PD6)\r\n"
         "2) SPI test (UART1 -> SPI1 MASTER)\r\n"
+        "3) CAN test (UART1 <-> FDCAN1)\r\n"
         "m) Show this menu\r\n"
         "Select: "
     );
@@ -134,9 +138,12 @@ static void announce_mode(DevMode_t m)
     if (m == DEV_MODE_UART)
         print("\r\n[Mode] UART bridge.\r\n"
               "Type on PuTTY to send across USART2 (PD5/PD6). 'm' for menu.\r\n");
-    else
+    else if (m == DEV_MODE_SPI)
         print("\r\n[Mode] SPI MASTER.\r\n"
               "Type on PuTTY; each byte clocks one SPI transfer. 'm' for menu.\r\n");
+    else if (m == DEV_MODE_CAN)
+        print("\r\n[Mode] CAN bridge.\r\n"
+              "Type on PuTTY to transmit via FDCAN1. 'm' for menu.\r\n");
 }
 
 static void dev_uart_task(void)
@@ -205,6 +212,33 @@ static void dev_spi_task(void)
     }
 }
 
+static void dev_can_task(void)
+{
+    uint8_t b;
+    CAN_Frame frame;
+
+    while (ring_pop(&rb_u1_rx, &b) == 0)
+    {
+        if (b == 'm' || b == 'M') {
+            g_mode = DEV_MODE_MENU;
+            print_menu();
+            return;
+        }
+
+        HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
+        CAN_Transmit(0x123, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_1, &b, &hfdcan1);
+        HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
+    }
+
+    while (CAN_Receive(&frame) == HAL_OK)
+    {
+        for (uint8_t i = 0; i < frame.RxData1_BufferLength; i++) {
+            HAL_UART_Transmit(&huart1, &frame.RxData1[i], 1, TX_TIMEOUT_MS);
+        }
+        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+    }
+}
+
 static void dev_menu_task(void)
 {
     uint8_t b;
@@ -217,6 +251,11 @@ static void dev_menu_task(void)
         }
         else if (b == '2') {
             g_mode = DEV_MODE_SPI;
+            announce_mode(g_mode);
+            return;
+        }
+        else if (b == '3') {
+            g_mode = DEV_MODE_CAN;
             announce_mode(g_mode);
             return;
         }
@@ -251,6 +290,7 @@ void Dev_Init(void)
     print("\r\n=== Dev Library Initialised ===\r\n");
     print("[UART bridge ready - MASTER]\r\n");
     print("[SPI  MASTER ready]\r\n");
+    print("[CAN  bridge ready]\r\n");
     print_menu();
 }
 
@@ -283,6 +323,10 @@ void Dev_Poll(void)
             dev_spi_task();
             break;
         }
+
+        case DEV_MODE_CAN:
+            dev_can_task();
+            break;
     }
 }
 
