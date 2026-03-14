@@ -253,6 +253,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			/* HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, GPIO_PIN_SET); */ //debug
 		} /* else HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7); */ // debug
 	}
+	if (htim->Instance == TIM17) {
+	    HAL_IncTick();
+	}
 }
 
 /* DLC to bytes lookup */

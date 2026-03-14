@@ -1,0 +1,8 @@
+../Core/Src/can.c:57:6:CAN_Init	7
+../Core/Src/can.c:132:19:CAN_Transmit	1
+../Core/Src/can.c:154:19:CAN_Receive	2
+../Core/Src/can.c:184:6:HAL_FDCAN_RxFifo0Callback	3
+../Core/Src/can.c:213:13:CAN_EnqueueFrame	2
+../Core/Src/can.c:233:12:CAN_DequeueFrame	2
+../Core/Src/can.c:247:6:HAL_TIM_PeriodElapsedCallback	4
+../Core/Src/can.c:262:9:dlc_to_bytes	1

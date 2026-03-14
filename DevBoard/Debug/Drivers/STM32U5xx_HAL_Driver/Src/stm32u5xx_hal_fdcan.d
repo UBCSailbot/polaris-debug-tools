@@ -1,5 +1,5 @@
-Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.o: \
- ../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_uart.c \
+Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_fdcan.o: \
+ ../Drivers/STM32U5xx_HAL_Driver/Src/stm32u5xx_hal_fdcan.c \
  ../Drivers/STM32U5xx_HAL_Driver/Inc/stm32u5xx_hal.h \
  ../Core/Inc/stm32u5xx_hal_conf.h \
  ../Drivers/STM32U5xx_HAL_Driver/Inc/stm32u5xx_hal_rcc.h \
