@@ -156,8 +156,8 @@ HAL_StatusTypeDef CAN_Transmit(uint32_t Identifier, uint32_t IdType, uint32_t Da
  * @note    Called from application context (not ISR).
  */
 HAL_StatusTypeDef CAN_Receive(CAN_Frame *frame) {
-    if (CAN_DequeueFrame(frame) == 0) return HAL_ERROR;
-    return HAL_OK;
+    if (CAN_DequeueFrame(frame) == 1) return HAL_OK;
+    return HAL_ERROR;
 }
 
 /**
@@ -197,7 +197,6 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         }
 
 		CAN_EnqueueFrame(RxHeader.Identifier, dlc_to_bytes((uint8_t)(RxHeader.DataLength >> 16)), tmp);
-		HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
     }
 }
 
