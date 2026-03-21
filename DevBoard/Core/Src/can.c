@@ -141,8 +141,11 @@ HAL_StatusTypeDef CAN_Transmit(uint32_t Identifier, uint32_t IdType, uint32_t Da
     TxHeader.TxFrameType = FDCAN_DATA_FRAME;
     TxHeader.DataLength = DataLength;
     TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    TxHeader.BitRateSwitch = FDCAN_BRS_ON;
-    TxHeader.FDFormat = FDCAN_FD_CAN;
+    /* Classic frame format: BRS and FD format bits must be OFF.
+     * HAL_FDCAN_AddMessageToTxFifoQ returns HAL_ERROR if FDFormat=FDCAN_FD_CAN
+     * when hfdcan.Init.FrameFormat = FDCAN_FRAME_CLASSIC. */
+    TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+    TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
     TxHeader.TxEventFifoControl = FDCAN_STORE_TX_EVENTS;
 
     return HAL_FDCAN_AddMessageToTxFifoQ(hfdcan1, &TxHeader, DataBuffer);

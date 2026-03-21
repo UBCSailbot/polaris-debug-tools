@@ -255,21 +255,37 @@ static void MX_FDCAN1_Init(void)
   }
   /* USER CODE BEGIN FDCAN1_Init 2 */
   /* CubeMX defaults (above) are broken — DeInit and re-Init with correct values.
-   * These settings survive future CubeMX regenerations because they are in a USER CODE block. */
+   * These settings survive future CubeMX regenerations because they are in a USER CODE block.
+   *
+   * Clock path: FDCAN kernel = PLL1Q = 258 MHz (set in HAL_FDCAN_MspInit).
+   * ClockDivider = DIV1 -> CAN clock = 258 MHz.
+   * NominalPrescaler = 43 -> TQ clock = 258/43 = 6.000 MHz (exact integer).
+   * Bit = 1 (sync) + 8 (Seg1) + 3 (Seg2) = 12 TQ -> 6 MHz / 12 = 500 kbit/s exact.
+   * Sample point = (1+8)/12 = 75% — within CiA 601 recommendation.
+   * SJW = 3 = min(Seg1=8, Seg2=3) — maximally robust resync within spec.
+   *
+   * Classic frame format: no BRS data phase, simpler and more robust for short
+   * debug wires with no termination. AutoRetransmission re-enabled now that
+   * Bus-Off recovery is in place — silent frame drops are eliminated. */
   HAL_FDCAN_DeInit(&hfdcan1);
-  hfdcan1.Init.ClockDivider         = FDCAN_CLOCK_DIV4;
-  hfdcan1.Init.FrameFormat          = FDCAN_FRAME_FD_BRS;
-  hfdcan1.Init.AutoRetransmission   = DISABLE;  /* FIFO fills instantly if no ACK when ENABLE; disable for debug */
-  hfdcan1.Init.NominalPrescaler     = 4;
-  hfdcan1.Init.NominalSyncJumpWidth = 3;
-  hfdcan1.Init.NominalTimeSeg1      = 16;
-  hfdcan1.Init.NominalTimeSeg2      = 3;
+  hfdcan1.Init.ClockDivider         = FDCAN_CLOCK_DIV1;
+  hfdcan1.Init.FrameFormat          = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.AutoRetransmission   = ENABLE;
+  hfdcan1.Init.TransmitPause        = DISABLE;
+  hfdcan1.Init.ProtocolException    = DISABLE;
+  hfdcan1.Init.NominalPrescaler     = 43;   /* 258 MHz / 43 = 6 MHz TQ clock */
+  hfdcan1.Init.NominalSyncJumpWidth = 3;    /* SJW = 3 TQ (= TimeSeg2, max allowed) */
+  hfdcan1.Init.NominalTimeSeg1      = 8;    /* prop + phase1 segments */
+  hfdcan1.Init.NominalTimeSeg2      = 3;    /* phase2 segment */
+  /* Data phase fields are ignored in CLASSIC mode; set to minimum valid values
+   * to satisfy HAL parameter checks. */
   hfdcan1.Init.DataPrescaler        = 1;
-  hfdcan1.Init.DataSyncJumpWidth    = 16;
-  hfdcan1.Init.DataTimeSeg1         = 23;
-  hfdcan1.Init.DataTimeSeg2         = 16;
+  hfdcan1.Init.DataSyncJumpWidth    = 1;
+  hfdcan1.Init.DataTimeSeg1         = 1;
+  hfdcan1.Init.DataTimeSeg2         = 1;
   hfdcan1.Init.StdFiltersNbr        = 1;   /* must be >0 or HAL_FDCAN_ConfigFilter fails */
   hfdcan1.Init.ExtFiltersNbr        = 1;
+  hfdcan1.Init.TxFifoQueueMode      = FDCAN_TX_FIFO_OPERATION;
   if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
   {
     Error_Handler();
