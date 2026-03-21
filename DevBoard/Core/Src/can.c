@@ -192,7 +192,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
             HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, GPIO_PIN_SET);
         }
 
-		CAN_EnqueueFrame(RxHeader.Identifier, dlc_to_bytes(RxHeader.DataLength), tmp);
+		CAN_EnqueueFrame(RxHeader.Identifier, dlc_to_bytes((uint8_t)(RxHeader.DataLength >> 16)), tmp);
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
     }
     /* added for debug */

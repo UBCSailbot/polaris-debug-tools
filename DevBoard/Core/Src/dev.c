@@ -226,8 +226,12 @@ static void dev_can_task(void)
         }
 
         HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
-        CAN_Transmit(0x123, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_1, &b, &hfdcan1);
-        HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
+        if (CAN_Transmit(0x123, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_1, &b, &hfdcan1) == HAL_OK) {
+            HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
+        } else {
+            print("[CAN TX ERR]\r\n");
+            HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port, LED_BLUE_Pin);
+        }
     }
 
     while (CAN_Receive(&frame) == HAL_OK)

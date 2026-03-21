@@ -545,11 +545,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-//  /* User can add his own implementation to report the HAL error return state */
-//  __disable_irq();
-//  while (1)
-//  {
-//  }
+  HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
   /* USER CODE END Error_Handler_Debug */
 }
 #ifdef USE_FULL_ASSERT
