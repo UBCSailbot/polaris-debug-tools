@@ -34,6 +34,7 @@ HAL_StatusTypeDef CanStartStatus; 					/* Status of FDCAN start operation */
 
 /* Bus-Off recovery flag — written in ISR, read and cleared in application context */
 volatile uint8_t g_can_busoff_pending = 0;
+volatile uint8_t g_heartbeat_pending  = 0;
 
 /* Static Functions -----------------------------------------------------------*/
 static int CAN_DequeueFrame(CAN_Frame *frame);
@@ -196,10 +197,8 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         }
 
 		CAN_EnqueueFrame(RxHeader.Identifier, dlc_to_bytes((uint8_t)(RxHeader.DataLength >> 16)), tmp);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+		HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
     }
-    /* added for debug */
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
 }
 
 /**
@@ -321,10 +320,9 @@ static int CAN_DequeueFrame(CAN_Frame *frame) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if (htim->Instance == TIM7) {
-		uint8_t tx_heart = 0;
-		/* Heartbeat TX failure is tolerated — Bus-Off recovery in CAN_ServiceBusOff
-		 * will restore TX capability. Do NOT call Error_Handler here. */
-		CAN_Transmit(heartbeat_id, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_0, &tx_heart, &hfdcan1);
+		/* Set flag — actual CAN_Transmit happens in application context
+		 * (dev_can_task) to avoid TX FIFO races with the main loop. */
+		g_heartbeat_pending = 1;
 	}
 	if (htim->Instance == TIM17) {
 	    HAL_IncTick();
@@ -337,4 +335,14 @@ uint8_t dlc_to_bytes(uint8_t dlc) {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64
     };
     return dlc_lut[dlc & 0x0F];
+}
+
+/**
+ * @brief  Send a heartbeat frame using the ID configured in CAN_Init().
+ * @note   Call from application context only (not ISR).
+ */
+void CAN_SendHeartbeat(void)
+{
+    uint8_t tx_heart = 0;
+    CAN_Transmit(heartbeat_id, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_0, &tx_heart, &hfdcan1);
 }

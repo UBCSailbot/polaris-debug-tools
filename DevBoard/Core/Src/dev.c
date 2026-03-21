@@ -258,6 +258,13 @@ static void dev_can_task(void)
         return;   /* flush this poll cycle; process user input next cycle */
     }
 
+    /* Send heartbeat in application context (flag set by TIM7 ISR) */
+    if (g_heartbeat_pending)
+    {
+        g_heartbeat_pending = 0;
+        CAN_SendHeartbeat();
+    }
+
     while (ring_pop(&rb_u1_rx, &b) == 0)
     {
         if (b == 'm' || b == 'M') {
