@@ -32,6 +32,9 @@ extern FDCAN_HandleTypeDef hfdcan1;					/* Accessing FDCAN Handler */
 static uint32_t heartbeat_id;						/* Enclosure Heartbeat ID */
 HAL_StatusTypeDef CanStartStatus; 					/* Status of FDCAN start operation */
 
+/* Bus-Off recovery flag — written in ISR, read and cleared in application context */
+volatile uint8_t g_can_busoff_pending = 0;
+
 /* Static Functions -----------------------------------------------------------*/
 static int CAN_DequeueFrame(CAN_Frame *frame);
 static void CAN_EnqueueFrame(uint32_t id, uint8_t len, const uint8_t *data);
@@ -199,6 +202,77 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
 }
 
+/**
+ * @brief  FDCAN error/status change callback — fired for Bus-Off, Error Warning,
+ *         Error Passive, and protocol errors (all activated in CAN_Init).
+ * @note   ISR context — DO NOT call HAL_FDCAN_Stop/Start here.
+ *         Set a flag; let application context call CAN_ServiceBusOff().
+ */
+void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
+{
+    if (ErrorStatusITs & FDCAN_IT_BUS_OFF)
+    {
+        /* Mark for recovery — handled in Dev_Poll / CAN_ServiceBusOff */
+        g_can_busoff_pending = 1;
+    }
+}
+
+/**
+ * @brief  Recover from FDCAN Bus-Off state.
+ * @details Call from application context (never from ISR).
+ *          Sequence: Stop → re-apply filters/notifications → Start.
+ *          The FDCAN hardware performs the ISO 11898-1 Bus-Off recovery
+ *          (128 × 11 recessive bits) automatically during HAL_FDCAN_Start.
+ * @param  hfdcan  Pointer to the FDCAN handle.
+ * @retval HAL_OK on successful recovery, HAL_ERROR otherwise.
+ */
+HAL_StatusTypeDef CAN_ServiceBusOff(FDCAN_HandleTypeDef *hfdcan)
+{
+    if (!g_can_busoff_pending) return HAL_OK;
+    g_can_busoff_pending = 0;
+
+    /* Step 1: stop the peripheral (safe to call from task context) */
+    if (HAL_FDCAN_Stop(hfdcan) != HAL_OK) return HAL_ERROR;
+
+    /* Step 2: re-configure filters (cleared by Stop) */
+    FDCAN_FilterTypeDef f = {0};
+    f.IdType       = FDCAN_STANDARD_ID;
+    f.FilterIndex  = 0;
+    f.FilterType   = FDCAN_FILTER_RANGE;
+    f.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+    f.FilterID1    = 0x000;
+    f.FilterID2    = 0x7FF;
+    if (HAL_FDCAN_ConfigFilter(hfdcan, &f) != HAL_OK) return HAL_ERROR;
+
+    f.IdType       = FDCAN_EXTENDED_ID;
+    f.FilterIndex  = 0;
+    f.FilterType   = FDCAN_FILTER_RANGE_NO_EIDM;
+    f.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
+    f.FilterID1    = 0x1111111;
+    f.FilterID2    = 0x2222222;
+    if (HAL_FDCAN_ConfigFilter(hfdcan, &f) != HAL_OK) return HAL_ERROR;
+
+    if (HAL_FDCAN_ConfigGlobalFilter(hfdcan,
+            FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0,
+            FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK) return HAL_ERROR;
+
+    /* Step 3: restart — hardware runs 128×11 recessive-bit recovery sequence */
+    if (HAL_FDCAN_Start(hfdcan) != HAL_OK) return HAL_ERROR;
+
+    /* Step 4: re-arm notifications (cleared by Stop) */
+    uint32_t notif =
+          FDCAN_IT_RX_FIFO0_NEW_MESSAGE |
+          FDCAN_IT_BUS_OFF              |
+          FDCAN_IT_ERROR_WARNING        |
+          FDCAN_IT_ERROR_PASSIVE        |
+          FDCAN_IT_DATA_PROTOCOL_ERROR  |
+          FDCAN_IT_ARB_PROTOCOL_ERROR;
+    if (HAL_FDCAN_ActivateNotification(hfdcan, notif, 0) != HAL_OK) return HAL_ERROR;
+    if (HAL_FDCAN_ActivateNotification(hfdcan, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK) return HAL_ERROR;
+
+    return HAL_OK;
+}
+
 /* HELPER FUNCTIONS BELOW */
 
 /**
@@ -248,10 +322,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if (htim->Instance == TIM7) {
 		uint8_t tx_heart = 0;
-		if (CAN_Transmit(heartbeat_id, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_0, &tx_heart, &hfdcan1) != HAL_OK){
-			Error_Handler();
-			/* HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, GPIO_PIN_SET); */ //debug
-		} /* else HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7); */ // debug
+		/* Heartbeat TX failure is tolerated — Bus-Off recovery in CAN_ServiceBusOff
+		 * will restore TX capability. Do NOT call Error_Handler here. */
+		CAN_Transmit(heartbeat_id, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_0, &tx_heart, &hfdcan1);
 	}
 	if (htim->Instance == TIM17) {
 	    HAL_IncTick();

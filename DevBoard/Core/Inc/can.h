@@ -29,5 +29,10 @@ typedef struct {
 void CAN_Init(FDCAN_HandleTypeDef *hfdcan1, uint32_t hbid);
 HAL_StatusTypeDef CAN_Transmit(uint32_t Identifier, uint32_t IdType, uint32_t DataLength, uint8_t* DataBuffer, FDCAN_HandleTypeDef *hfdcan1);
 HAL_StatusTypeDef CAN_Receive(CAN_Frame *frame);
+HAL_StatusTypeDef CAN_ServiceBusOff(FDCAN_HandleTypeDef *hfdcan);
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs);
+
+/* ISR-set flag — application must call CAN_ServiceBusOff() when this is non-zero */
+extern volatile uint8_t g_can_busoff_pending;
+
 #endif /* SRC_CAN_H_ */

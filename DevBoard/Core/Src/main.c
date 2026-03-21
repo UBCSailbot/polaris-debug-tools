@@ -223,7 +223,9 @@ static void MX_FDCAN1_Init(void)
 {
 
   /* USER CODE BEGIN FDCAN1_Init 0 */
-
+  /* FDCAN kernel clock is set to PLL1Q (258 MHz) inside HAL_FDCAN_MspInit
+   * (stm32u5xx_hal_msp.c) via HAL_RCCEx_PeriphCLKConfig RCC_FDCAN1CLKSOURCE_PLL1.
+   * No additional clock config is needed here. */
   /* USER CODE END FDCAN1_Init 0 */
 
   /* USER CODE BEGIN FDCAN1_Init 1 */
@@ -257,7 +259,7 @@ static void MX_FDCAN1_Init(void)
   HAL_FDCAN_DeInit(&hfdcan1);
   hfdcan1.Init.ClockDivider         = FDCAN_CLOCK_DIV4;
   hfdcan1.Init.FrameFormat          = FDCAN_FRAME_FD_BRS;
-  hfdcan1.Init.AutoRetransmission   = ENABLE;
+  hfdcan1.Init.AutoRetransmission   = DISABLE;  /* FIFO fills instantly if no ACK when ENABLE; disable for debug */
   hfdcan1.Init.NominalPrescaler     = 4;
   hfdcan1.Init.NominalSyncJumpWidth = 3;
   hfdcan1.Init.NominalTimeSeg1      = 16;

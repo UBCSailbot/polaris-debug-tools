@@ -10,6 +10,7 @@
 #include "main.h"
 #include "can.h"
 #include <string.h>
+#include <stdio.h>
 
 #define RING_SIZE  256U
 #define RING_MASK  (RING_SIZE - 1U)
@@ -212,10 +213,50 @@ static void dev_spi_task(void)
     }
 }
 
+/* Decode FDCAN PSR.LEC field (Last Error Code, 3-bit value in PSR[2:0]) */
+static const char *fdcan_lec_str(uint32_t psr)
+{
+    switch (psr & FDCAN_PSR_LEC)        /* FDCAN_PSR_LEC mask = 0x00000007 */
+    {
+        case 0: return "NoErr";
+        case 1: return "Stuff";
+        case 2: return "Form";
+        case 3: return "Ack";           /* no ACK received — most common on isolated board */
+        case 4: return "Bit1";
+        case 5: return "Bit0";
+        case 6: return "CRC";
+        case 7: return "NoChg";
+        default: return "?";
+    }
+}
+
 static void dev_can_task(void)
 {
     uint8_t b;
     CAN_Frame frame;
+    char dbg[64];
+
+    /* Service Bus-Off recovery before attempting any TX — must be in application context */
+    if (g_can_busoff_pending)
+    {
+        uint32_t psr = hfdcan1.Instance->PSR;  /* snapshot before Stop clears it */
+        snprintf(dbg, sizeof(dbg),
+                 "[CAN BUS-OFF] PSR=0x%08lX LEC=%s — recovering\r\n",
+                 (unsigned long)psr, fdcan_lec_str(psr));
+        print(dbg);
+        HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
+
+        if (CAN_ServiceBusOff(&hfdcan1) != HAL_OK)
+        {
+            print("[CAN BUS-OFF recovery FAILED]\r\n");
+        }
+        else
+        {
+            print("[CAN BUS-OFF recovered]\r\n");
+            HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_RESET);
+        }
+        return;   /* flush this poll cycle; process user input next cycle */
+    }
 
     while (ring_pop(&rb_u1_rx, &b) == 0)
     {
@@ -226,10 +267,38 @@ static void dev_can_task(void)
         }
 
         HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
-        if (CAN_Transmit(0x123, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_1, &b, &hfdcan1) == HAL_OK) {
+
+        /* Check TX FIFO level before attempting transmit to give a clearer error */
+        uint32_t free_level = HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1);
+        if (free_level == 0)
+        {
+            /* FIFO full — read PSR to show why frames are not completing */
+            uint32_t psr = hfdcan1.Instance->PSR;
+            snprintf(dbg, sizeof(dbg),
+                     "[CAN FIFO FULL] PSR=0x%08lX LEC=%s BO=%lu EP=%lu EW=%lu\r\n",
+                     (unsigned long)psr,
+                     fdcan_lec_str(psr),
+                     (unsigned long)((psr & FDCAN_PSR_BO)  >> 7),   /* Bus-Off bit */
+                     (unsigned long)((psr & FDCAN_PSR_EP)  >> 5),   /* Error Passive */
+                     (unsigned long)((psr & FDCAN_PSR_EW)  >> 6));  /* Error Warning */
+            print(dbg);
+            HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port, LED_BLUE_Pin);
+            continue;  /* do not attempt AddMessageToTxFifoQ — it will return HAL_ERROR */
+        }
+
+        if (CAN_Transmit(0x123, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_1, &b, &hfdcan1) == HAL_OK)
+        {
             HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
-        } else {
-            print("[CAN TX ERR]\r\n");
+        }
+        else
+        {
+            uint32_t psr = hfdcan1.Instance->PSR;
+            snprintf(dbg, sizeof(dbg),
+                     "[CAN TX ERR] PSR=0x%08lX LEC=%s BO=%lu\r\n",
+                     (unsigned long)psr,
+                     fdcan_lec_str(psr),
+                     (unsigned long)((psr & FDCAN_PSR_BO) >> 7));
+            print(dbg);
             HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port, LED_BLUE_Pin);
         }
     }
