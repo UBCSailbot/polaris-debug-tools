@@ -121,8 +121,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  SPIMod_Init();
   MX_TIM7_Init();
-  Dev_Init();
   CAN_Init(&hfdcan1, 0x130);
+  Dev_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
