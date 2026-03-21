@@ -193,10 +193,10 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 
         if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, tmp) != HAL_OK) {
             Error_Handler();
-            HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, GPIO_PIN_SET);
+            return;  /* do not enqueue with corrupted/uninitialized RxHeader */
         }
 
-		CAN_EnqueueFrame(RxHeader.Identifier, dlc_to_bytes((uint8_t)(RxHeader.DataLength >> 16)), tmp);
+		CAN_EnqueueFrame(RxHeader.Identifier, dlc_to_bytes((uint8_t)(RxHeader.DataLength)), tmp);
     }
 }
 
@@ -323,9 +323,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		 * (dev_can_task) to avoid TX FIFO races with the main loop. */
 		g_heartbeat_pending = 1;
 	}
-	if (htim->Instance == TIM17) {
-	    HAL_IncTick();
-	}
+	/* TIM17 is the HAL timebase — HAL_IncTick() is called directly from
+	 * SysTick_Handler in stm32u5xx_it.c. Do NOT call it here a second time
+	 * or HAL_GetTick() advances at 2x the real rate, halving all HAL timeouts. */
 }
 
 /* DLC to bytes lookup */
