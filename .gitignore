@@ -1,0 +1,11 @@
+# STM32CubeIDE build artifacts
+DevBoard/Debug/
+DevBoard/Release/
+DevBoard/.settings/
+
+# Claude memory (local only)
+.claude/
+
+# Test binaries
+tests/test_ring_buffer
+tests/test_can_queue

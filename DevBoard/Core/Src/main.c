@@ -26,6 +26,8 @@
 /* USER CODE BEGIN Includes */
 //#include <string.h>
 //#include "SPIMod.h"
+#include "dev.h"
+#include "can.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +57,7 @@ UART_HandleTypeDef huart2;
 //static uint8_t m_tx_byte    = 0x00; // staged byte to send once
 //static uint8_t m_uart_byte  = 0x00; // typed on master PuTTY
 //static uint8_t m_spi_rx     = 0x00; // last byte received from slave
+TIM_HandleTypeDef htim7;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,6 +70,7 @@ static void MX_SPI1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_FDCAN1_Init(void);
 /* USER CODE BEGIN PFP */
+static void MX_TIM7_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -116,19 +120,19 @@ int main(void)
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
 //  SPIMod_Init();
+  MX_TIM7_Init();
+  Dev_Init();
+  CAN_Init(&hfdcan1, 0x130);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-//  while (1) {
-//    // 1) Local UART echo (polling)
-//
-//	  SPIMod_ReadWrite();
-//
-    /* USER CODE END WHILE */
+  while (1) {
+    Dev_Poll();
+  /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-//  }
+  /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
 }
 
@@ -226,22 +230,22 @@ static void MX_FDCAN1_Init(void)
 
   /* USER CODE END FDCAN1_Init 1 */
   hfdcan1.Instance = FDCAN1;
-  hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
-  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV4;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
   hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
-  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.AutoRetransmission = ENABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 16;
-  hfdcan1.Init.NominalSyncJumpWidth = 1;
-  hfdcan1.Init.NominalTimeSeg1 = 1;
-  hfdcan1.Init.NominalTimeSeg2 = 1;
+  hfdcan1.Init.NominalPrescaler = 4;
+  hfdcan1.Init.NominalSyncJumpWidth = 3;
+  hfdcan1.Init.NominalTimeSeg1 = 16;
+  hfdcan1.Init.NominalTimeSeg2 = 3;
   hfdcan1.Init.DataPrescaler = 1;
-  hfdcan1.Init.DataSyncJumpWidth = 1;
-  hfdcan1.Init.DataTimeSeg1 = 1;
-  hfdcan1.Init.DataTimeSeg2 = 1;
-  hfdcan1.Init.StdFiltersNbr = 0;
-  hfdcan1.Init.ExtFiltersNbr = 0;
+  hfdcan1.Init.DataSyncJumpWidth = 16;
+  hfdcan1.Init.DataTimeSeg1 = 23;
+  hfdcan1.Init.DataTimeSeg2 = 16;
+  hfdcan1.Init.StdFiltersNbr = 1;
+  hfdcan1.Init.ExtFiltersNbr = 1;
   hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
   if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
   {
@@ -500,7 +504,29 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-//
+static void MX_TIM7_Init(void)
+{
+    // PCLK1 = 4 MHz; PSC=3999 -> 1 kHz; ARR=9999 -> 10 s heartbeat period
+    htim7.Instance               = TIM7;
+    htim7.Init.Prescaler         = 3999;
+    htim7.Init.CounterMode       = TIM_COUNTERMODE_UP;
+    htim7.Init.Period            = 9999;
+    htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+    {
+        Error_Handler();
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    Dev_UART_RxCpltCallback(huart);
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    Dev_UART_ErrorCallback(huart);
+}
 /* USER CODE END 4 */
 
 /**

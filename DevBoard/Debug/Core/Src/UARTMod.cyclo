@@ -1,4 +1,0 @@
-../Core/Src/UARTMod.c:66:6:UARTMod_Init	1
-../Core/Src/UARTMod.c:75:6:UARTMod_OnUart1Byte	1
-../Core/Src/UARTMod.c:76:6:UARTMod_OnUart2Byte	1
-../Core/Src/UARTMod.c:79:6:UARTMod_Task	3

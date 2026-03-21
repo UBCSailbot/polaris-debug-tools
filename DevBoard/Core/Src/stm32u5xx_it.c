@@ -57,6 +57,13 @@ extern UART_HandleTypeDef huart2;
 
 void USART1_IRQHandler(void){ HAL_UART_IRQHandler(&huart1); }
 void USART2_IRQHandler(void){ HAL_UART_IRQHandler(&huart2); }
+
+extern TIM_HandleTypeDef htim7;
+extern FDCAN_HandleTypeDef hfdcan1;
+
+void TIM7_IRQHandler(void)       { HAL_TIM_IRQHandler(&htim7);    }
+void FDCAN1_IT0_IRQHandler(void) { HAL_FDCAN_IRQHandler(&hfdcan1); }
+void FDCAN1_IT1_IRQHandler(void) { HAL_FDCAN_IRQHandler(&hfdcan1); }
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
