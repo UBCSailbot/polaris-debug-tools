@@ -252,7 +252,26 @@ static void MX_FDCAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN1_Init 2 */
-
+  /* CubeMX defaults (above) are broken — DeInit and re-Init with correct values.
+   * These settings survive future CubeMX regenerations because they are in a USER CODE block. */
+  HAL_FDCAN_DeInit(&hfdcan1);
+  hfdcan1.Init.ClockDivider         = FDCAN_CLOCK_DIV4;
+  hfdcan1.Init.FrameFormat          = FDCAN_FRAME_FD_BRS;
+  hfdcan1.Init.AutoRetransmission   = ENABLE;
+  hfdcan1.Init.NominalPrescaler     = 4;
+  hfdcan1.Init.NominalSyncJumpWidth = 3;
+  hfdcan1.Init.NominalTimeSeg1      = 16;
+  hfdcan1.Init.NominalTimeSeg2      = 3;
+  hfdcan1.Init.DataPrescaler        = 1;
+  hfdcan1.Init.DataSyncJumpWidth    = 16;
+  hfdcan1.Init.DataTimeSeg1         = 23;
+  hfdcan1.Init.DataTimeSeg2         = 16;
+  hfdcan1.Init.StdFiltersNbr        = 1;   /* must be >0 or HAL_FDCAN_ConfigFilter fails */
+  hfdcan1.Init.ExtFiltersNbr        = 1;
+  if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END FDCAN1_Init 2 */
 
 }
