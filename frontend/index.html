@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self';">
+  <title>Sailbot Dev Board — Protocol Tester</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ── Titlebar ──────────────────────────────────────────── -->
+  <header id="titlebar">
+    <span id="status-dot" class="disconnected" title="Connection status" aria-hidden="true"></span>
+
+    <select id="port-select" aria-label="Serial port">
+      <option value="">— select port —</option>
+    </select>
+
+    <input id="baud-input" type="number" value="115200"
+           min="1200" max="4000000"
+           aria-label="Baud rate">
+
+    <span id="titlebar-label">Sailbot Debug</span>
+
+    <button id="btn-connect" type="button">Connect</button>
+  </header>
+
+  <!-- ── Disconnected Banner ───────────────────────────────── -->
+  <div id="banner" role="alert" aria-live="assertive">
+    Disconnected — reconnecting…&nbsp;<span id="reconnect-counter"></span>
+  </div>
+
+  <!-- ── 3-column main ─────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- Sidebar -->
+    <nav id="sidebar" aria-label="Protocol selector">
+      <div id="sidebar-title">Protocols</div>
+      <!-- .proto-row elements injected by app.js -->
+    </nav>
+
+    <!-- Centre column -->
+    <div id="centre">
+
+      <!-- Terminal -->
+      <div id="terminal"
+           role="log"
+           aria-label="Protocol terminal output"
+           aria-live="polite"
+           aria-atomic="false"></div>
+
+      <!-- Session stats footer -->
+      <div id="terminal-footer" aria-label="Session statistics">
+        Session:&nbsp;<span id="stat-duration">00:00:00</span>
+        &nbsp;·&nbsp;<span id="stat-passed">0</span> passed
+        &nbsp;·&nbsp;<span id="stat-failed">0</span> failed
+      </div>
+
+      <!-- Command Bar -->
+      <div id="command-bar" aria-label="Command bar">
+        <div id="preset-buttons" role="group" aria-label="Preset commands"></div>
+
+        <div id="custom-form" aria-label="Custom command form">
+          <!-- .custom-field inputs injected by app.js -->
+          <button id="btn-custom-send" type="button">Send Custom</button>
+        </div>
+
+        <div id="raw-input-row">
+          <input id="raw-input" type="text"
+                 placeholder="Raw command…"
+                 aria-label="Raw command input"
+                 autocomplete="off"
+                 spellcheck="false">
+          <button id="btn-send" type="button" disabled>Send</button>
+        </div>
+      </div>
+
+      <!-- Visualization Panel -->
+      <div id="viz-panel" class="hidden" aria-label="Protocol visualization">
+        <div id="viz-canvas-wrapper">
+          <canvas id="viz-canvas" aria-label="Protocol chart"></canvas>
+        </div>
+        <div id="viz-metrics" aria-label="Protocol metrics">
+          <!-- metric-card elements injected by charts.js -->
+        </div>
+      </div>
+
+    </div><!-- /centre -->
+
+    <!-- Right column -->
+    <aside id="right-col">
+
+      <!-- Result Panel -->
+      <section id="result-panel" aria-label="Last result">
+        <h3>Last Result</h3>
+
+        <div class="result-field">
+          <span class="result-field-label">Protocol</span>
+          <span class="result-field-value" id="res-proto">—</span>
+        </div>
+
+        <div class="result-field">
+          <span class="result-field-label">Status</span>
+          <span id="res-status"><span class="status-badge default">—</span></span>
+        </div>
+
+        <div class="result-field">
+          <span class="result-field-label">Data</span>
+          <span class="result-field-value" id="res-data">—</span>
+        </div>
+
+        <div class="result-field">
+          <span class="result-field-label">RTT</span>
+          <span class="result-field-value" id="res-rtt">—</span>
+        </div>
+
+        <!-- CANFD-specific fields — hidden unless proto === CANFD -->
+        <div class="result-field" id="res-can-group" style="display:none">
+          <span class="result-field-label">Frame ID</span>
+          <span class="result-field-value" id="res-can-id">—</span>
+        </div>
+        <div class="result-field" id="res-dlc-group" style="display:none">
+          <span class="result-field-label">DLC</span>
+          <span class="result-field-value" id="res-dlc">—</span>
+        </div>
+
+        <button id="btn-retry" type="button" aria-label="Retry last command">Retry</button>
+      </section>
+
+      <!-- Export Panel -->
+      <section id="export-panel" aria-label="Export session">
+        <h3>Export</h3>
+        <div id="export-buttons">
+          <button class="btn-export" id="btn-export-log" type="button">.log</button>
+          <button class="btn-export" id="btn-export-csv" type="button">.csv</button>
+        </div>
+        <div id="session-file-path" aria-label="Current session file path"></div>
+      </section>
+
+    </aside>
+  </div><!-- /main -->
+
+  <!-- Toast container -->
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Chart.js 4.4.1 from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"
+          integrity="sha512-ZwR1/gSZM3ai6vCdI+LVF1zSq/5HznD3oD+sCoJrzXJ+yKiTLiazragM4AFRxinecd6LgVOpthy0GwN0oYBVw=="
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"></script>
+
+  <!-- Renderer entry point — type=module enables ES6 imports -->
+  <script type="module" src="app.js"></script>
+
+</body>
+</html>
