@@ -1,125 +1,73 @@
 // preload.js
-// STUB: Replace ipcRenderer calls with real backend when main.js is implemented.
-// All window.electronAPI methods mirror the IPC interface defined in the plan.
+// Electron contextBridge — exposes window.electronAPI to the renderer.
+// contextIsolation: true, nodeIntegration: false — all Node access is here only.
 //
-// IPC channels defined here:
-//   serial:list-ports  (invoke)  → [{ path, manufacturer }]
-//   serial:connect     (invoke)  → { success, error? }
-//   serial:disconnect  (invoke)  → { success }
-//   serial:send        (invoke)  → { success, sentAt }
-//   serial:data        (on)      → { raw, proto, status, data, rtt }
-//   serial:connection-status (on)→ { connected, port, baud }
-//   serial:reconnect-attempt (on)→ { attempt, max }
-//   log:export-csv     (invoke)  → { success, path?, error? }
-//   log:export-log     (invoke)  → { success, path?, error? }
-//   log:session-path   (on)      → { path }
+// IPC channels (must match ipcMain.handle names in main.js):
+//   Invokable (renderer → main → renderer):
+//     serial:list-ports  → [{ path, manufacturer }]
+//     serial:connect     → { success, error? }
+//     serial:disconnect  → { success, error? }
+//     serial:send        → { success, sentAt?, error? }
+//     log:export-log     → { success, path?, error? }
+//     log:export-csv     → { success, path?, error? }
+//
+//   Push events (main → renderer, subscribe via on* methods):
+//     serial:data              → { raw, proto, status, data, rtt }
+//     serial:connection-status → { connected, port, baud }
+//     serial:reconnect-attempt → { attempt, max }
+//     log:session-path         → { path }
+
+'use strict';
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// --- Mock data emitter (remove when real backend exists) ---
-let _mockInterval = null;
-function startMockEmitter() {
-  if (_mockInterval) return; // only one emitter at a time
-  const protos = ['UART', 'SPI', 'CANFD'];
-  const statuses = ['PASS', 'FAIL', 'TIMEOUT', 'INIT', 'RAW'];
-  const canIds = [0x130, 0x131, 0x132, 0x133];
-  let tick = 0;
-
-  _mockInterval = setInterval(() => {
-    const proto  = protos[tick % protos.length];
-    const status = statuses[tick % statuses.length];
-    let data = 'mock payload';
-    if (proto === 'CANFD') {
-      const id = canIds[tick % canIds.length];
-      data = `ID=0x${id.toString(16).toUpperCase()} DLC=8 BYTES=DEADBEEF01020304`;
-    }
-    if (proto === 'SPI') {
-      const byte = (0xA0 + (tick % 16)).toString(16).toUpperCase().padStart(2, '0');
-      data = `TX=0x${byte} RX=0x${byte}`;
-    }
-    const raw = `${proto}:${status}:${data}`;
-    ipcRenderer.emit('serial:data', null, {
-      raw,
-      proto,
-      status,
-      data,
-      rtt: 5 + (tick % 40),
-    });
-    tick++;
-  }, 1800);
+// ─── Helper: subscribe to a push channel, return unsubscribe fn ──────────────
+function subscribe(channel, cb) {
+  const handler = (_event, payload) => cb(payload);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
 }
 
+// ─── Exposed API ─────────────────────────────────────────────────────────────
 contextBridge.exposeInMainWorld('electronAPI', {
-  // --- Serial ---
+
+  // List available serial ports
   listPorts: () =>
-    ipcRenderer.invoke('serial:list-ports').catch(() => [
-      { path: 'COM3', manufacturer: 'STMicroelectronics' },
-      { path: 'COM4', manufacturer: 'FTDI' },
-    ]),
+    ipcRenderer.invoke('serial:list-ports'),
 
+  // Open a serial port
   connect: ({ path, baudRate }) =>
-    ipcRenderer.invoke('serial:connect', { path, baudRate }).catch(() => {
-      startMockEmitter();
-      // Also emit a connected status event for the mock
-      setTimeout(() => {
-        ipcRenderer.emit('serial:connection-status', null, {
-          connected: true, port: path, baud: baudRate,
-        });
-        ipcRenderer.emit('log:session-path', null, {
-          path: `C:/sailbot-sessions/session-${Date.now()}.log`,
-        });
-      }, 100);
-      return { success: true };
-    }),
+    ipcRenderer.invoke('serial:connect', { path, baudRate }),
 
+  // Close the active serial port
   disconnect: () =>
-    ipcRenderer.invoke('serial:disconnect').catch(() => {
-      clearInterval(_mockInterval);
-      _mockInterval = null;
-      return { success: true };
-    }),
+    ipcRenderer.invoke('serial:disconnect'),
 
+  // Write a command string to the open port
   send: ({ command }) =>
-    ipcRenderer.invoke('serial:send', { command }).catch(() => ({
-      success: true,
-      sentAt: Date.now(),
-    })),
+    ipcRenderer.invoke('serial:send', { command }),
 
-  // --- Event subscriptions — each returns an unsubscribe function ---
-  onData: (cb) => {
-    const handler = (_e, payload) => cb(payload);
-    ipcRenderer.on('serial:data', handler);
-    return () => ipcRenderer.removeListener('serial:data', handler);
-  },
+  // Subscribe to incoming data lines from the firmware
+  // cb receives: { raw, proto, status, data, rtt }
+  onData: cb => subscribe('serial:data', cb),
 
-  onConnectionStatus: (cb) => {
-    const handler = (_e, payload) => cb(payload);
-    ipcRenderer.on('serial:connection-status', handler);
-    return () => ipcRenderer.removeListener('serial:connection-status', handler);
-  },
+  // Subscribe to connection state changes
+  // cb receives: { connected, port, baud }
+  onConnectionStatus: cb => subscribe('serial:connection-status', cb),
 
-  onReconnectAttempt: (cb) => {
-    const handler = (_e, payload) => cb(payload);
-    ipcRenderer.on('serial:reconnect-attempt', handler);
-    return () => ipcRenderer.removeListener('serial:reconnect-attempt', handler);
-  },
+  // Subscribe to auto-reconnect progress notifications
+  // cb receives: { attempt, max }
+  onReconnectAttempt: cb => subscribe('serial:reconnect-attempt', cb),
 
-  onSessionPath: (cb) => {
-    const handler = (_e, payload) => cb(payload);
-    ipcRenderer.on('log:session-path', handler);
-    return () => ipcRenderer.removeListener('log:session-path', handler);
-  },
+  // Subscribe to session log file path updates (emitted on connect)
+  // cb receives: { path }
+  onSessionPath: cb => subscribe('log:session-path', cb),
 
-  // --- Export ---
-  exportCsv: () =>
-    ipcRenderer.invoke('log:export-csv').catch(() => ({
-      success: true,
-      path: `C:/sailbot-sessions/session-${Date.now()}.csv`,
-    })),
-
+  // Export the current session as a .log file — returns existing path
   exportLog: () =>
-    ipcRenderer.invoke('log:export-log').catch(() => ({
-      success: true,
-      path: `C:/sailbot-sessions/session-${Date.now()}.log`,
-    })),
+    ipcRenderer.invoke('log:export-log'),
+
+  // Write session data to a .csv file in logs/
+  exportCsv: () =>
+    ipcRenderer.invoke('log:export-csv'),
 });

@@ -9,3 +9,8 @@ DevBoard/.settings/
 # Test binaries
 tests/test_ring_buffer
 tests/test_can_queue
+
+# Node / Electron
+node_modules/
+dist/
+logs/
