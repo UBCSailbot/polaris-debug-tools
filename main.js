@@ -39,8 +39,9 @@ let _intentionalClose = false; // true while closePort() is in progress — supp
 // Auto-reconnect config
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAYS_MS    = [1000, 2000, 4000, 4000, 4000]; // per attempt
-let reconnectAttempt = 0;
-let reconnectTimer   = null;
+let reconnectAttempt        = 0;
+let reconnectTimer          = null;
+let autoReconnectEnabled    = true;
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +200,7 @@ function closePort() {
 // ─── Auto-reconnect ───────────────────────────────────────────────────────────
 
 function scheduleReconnect() {
+  if (!autoReconnectEnabled) return;
   if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
     reconnectAttempt = 0;
     reconnectTimer   = null;
@@ -315,6 +317,13 @@ ipcMain.handle('serial:send', async (_event, { command }) => {
     lastSentAt = null; // don't attribute a stale RTT to the next response
     return { success: false, error: err.message };
   }
+});
+
+/** settings:set-auto-reconnect { enabled } → { success } */
+ipcMain.handle('settings:set-auto-reconnect', (_event, { enabled }) => {
+  autoReconnectEnabled = enabled;
+  if (!enabled) cancelReconnect();
+  return { success: true };
 });
 
 /** log:export-log → { success, path?, error? } */

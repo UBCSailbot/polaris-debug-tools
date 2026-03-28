@@ -70,4 +70,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Write session data to a .csv file in logs/
   exportCsv: () =>
     ipcRenderer.invoke('log:export-csv'),
+
+  // Enable or disable auto-reconnect in the main process
+  setAutoReconnect: (enabled) =>
+    ipcRenderer.invoke('settings:set-auto-reconnect', { enabled }),
 });

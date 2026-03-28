@@ -100,6 +100,17 @@ export class Terminal {
     this._updateCounters();
   }
 
+  /**
+   * Remove oldest lines so total stays within max.
+   * @param {number} max - Maximum number of lines. 0 = no limit.
+   */
+  trim(max) {
+    if (!max) return;
+    while (this._el.children.length > max) {
+      this._el.removeChild(this._el.firstChild);
+    }
+  }
+
   /** Release the duration timer (call when tearing down) */
   destroy() {
     clearInterval(this._timerHandle);

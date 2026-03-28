@@ -4,8 +4,9 @@
 // Depends on: Terminal (terminal.js), Charts (charts.js), PROTOCOLS (protocols.js)
 
 import { PROTOCOLS, PROTOCOL_ORDER, parseLine, parseCanFrame } from './protocols.js';
-import { Terminal } from './terminal.js';
-import { Charts }   from './charts.js';
+import { Terminal }    from './terminal.js';
+import { Charts }      from './charts.js';
+import { VisualView }  from './visual.js';
 
 // ─── State ──────────────────────────────────────────────────────────────────
 const state = {
@@ -13,13 +14,22 @@ const state = {
   activeProto: null,   // 'UART' | 'SPI' | 'CANFD' | null
   lastCommand: null,   // string — stored for Retry button
   unsubs:      [],     // IPC unsubscribe handles (call each to remove listener)
+  view:        'terminal',
 };
 
 // ─── DOM refs ───────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
 const portSelect       = $('port-select');
-const baudInput        = $('baud-input');
+const btnRefreshPorts  = $('btn-refresh-ports');
 const btnConnect       = $('btn-connect');
+const btnSettings      = $('btn-settings');
+const settingsPanel    = $('settings-panel');
+const toggleDarkMode   = $('toggle-dark-mode');
+const toggleTimestamps = $('toggle-timestamps');
+const toggleAutoRecon  = $('toggle-auto-reconnect');
+const selMaxLines      = $('sel-max-lines');
+const terminalEl       = $('terminal');
+const viewBtns         = document.querySelectorAll('.view-btn');
 const statusDot        = $('status-dot');
 const banner           = $('banner');
 const reconnectCounter = $('reconnect-counter');
@@ -57,6 +67,124 @@ const charts = new Charts({
   metricsEl: $('viz-metrics'),
 });
 
+const visualView = new VisualView({
+  panelEl:      $('visual-panel'),
+  canvasEl:     $('visual-canvas'),
+  metricsEl:    $('visual-metrics-panel'),
+  tabsEl:       $('visual-proto-tabs'),
+  commandsEl:   $('visual-commands'),
+  customFormEl: $('visual-custom-form'),
+  statusBarEl:  $('visual-status-bar'),
+  onCommand:    cmd => sendCommand(cmd),
+});
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+const SETTINGS_KEY = 'sailbot-devboard-settings';
+
+const settings = Object.assign({
+  dark:          false,
+  timestamps:    true,
+  maxLines:      200,
+  autoReconnect: true,
+  baud:          115200,
+}, (() => {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch { return {}; }
+})());
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function applySettings() {
+  // Theme
+  document.body.classList.toggle('dark', settings.dark);
+  toggleDarkMode.checked = settings.dark;
+
+  // Timestamps
+  terminalEl.classList.toggle('no-timestamps', !settings.timestamps);
+  toggleTimestamps.checked = settings.timestamps;
+
+  // Max lines
+  selMaxLines.value = String(settings.maxLines);
+  terminal.trim(settings.maxLines);
+
+  // Auto-reconnect
+  toggleAutoRecon.checked = settings.autoReconnect;
+
+  // Highlight active baud preset
+  document.querySelectorAll('.btn-baud-preset').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.baud, 10) === settings.baud)
+  );
+}
+
+// ─── View switching ───────────────────────────────────────────────────────────
+function setView(name) {
+  state.view = name;
+  document.body.classList.toggle('view-visual',   name === 'visual');
+  document.body.classList.toggle('view-terminal', name === 'terminal');
+  viewBtns.forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.view === name)
+  );
+  if (name === 'visual' && state.connected && !visualView._activeProto) {
+    visualView.show(state.activeProto || 'UART');
+  }
+}
+
+viewBtns.forEach(btn => {
+  btn.addEventListener('click', () => setView(btn.dataset.view));
+});
+
+// Panel open/close
+btnSettings.addEventListener('click', e => {
+  e.stopPropagation();
+  const open = settingsPanel.classList.toggle('visible');
+  btnSettings.classList.toggle('active', open);
+  btnSettings.setAttribute('aria-expanded', String(open));
+});
+
+document.addEventListener('click', e => {
+  if (!settingsPanel.contains(e.target) && e.target !== btnSettings) {
+    settingsPanel.classList.remove('visible');
+    btnSettings.classList.remove('active');
+    btnSettings.setAttribute('aria-expanded', 'false');
+  }
+});
+
+// Setting handlers
+toggleDarkMode.addEventListener('change', () => {
+  settings.dark = toggleDarkMode.checked;
+  document.body.classList.toggle('dark', settings.dark);
+  saveSettings();
+});
+
+toggleTimestamps.addEventListener('change', () => {
+  settings.timestamps = toggleTimestamps.checked;
+  terminalEl.classList.toggle('no-timestamps', !settings.timestamps);
+  saveSettings();
+});
+
+selMaxLines.addEventListener('change', () => {
+  settings.maxLines = parseInt(selMaxLines.value, 10);
+  terminal.trim(settings.maxLines);
+  saveSettings();
+});
+
+toggleAutoRecon.addEventListener('change', async () => {
+  settings.autoReconnect = toggleAutoRecon.checked;
+  saveSettings();
+  try { await window.electronAPI.setAutoReconnect(settings.autoReconnect); } catch { /* no-op */ }
+});
+
+document.querySelectorAll('.btn-baud-preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    settings.baud = parseInt(btn.dataset.baud, 10);
+    saveSettings();
+    document.querySelectorAll('.btn-baud-preset').forEach(b =>
+      b.classList.toggle('active', b === btn)
+    );
+  });
+});
+
 // ─── Toast ───────────────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
   const el = document.createElement('div');
@@ -83,6 +211,10 @@ function setConnected(connected) {
   if (connected) reconnectCounter.textContent = '';
   _syncCommandBarEnabled();
   _syncSidebarEnabled();
+  visualView.setConnected(connected);
+  if (connected && state.view === 'visual' && !visualView._activeProto) {
+    visualView.show(state.activeProto || 'UART');
+  }
 }
 
 // ─── Port list ───────────────────────────────────────────────────────────────
@@ -104,6 +236,8 @@ async function refreshPorts() {
   if (ports.some(p => p.path === current)) portSelect.value = current;
 }
 
+btnRefreshPorts.addEventListener('click', () => refreshPorts());
+
 // ─── Connect / Disconnect ────────────────────────────────────────────────────
 btnConnect.addEventListener('click', async () => {
   if (state.connected) {
@@ -114,7 +248,7 @@ btnConnect.addEventListener('click', async () => {
   }
   const path = portSelect.value;
   if (!path) { showToast('Select a port first.', 'error'); return; }
-  const baud = parseInt(baudInput.value, 10);
+  const baud = settings.baud;
   let result;
   try {
     result = await window.electronAPI.connect({ path, baudRate: baud });
@@ -287,6 +421,7 @@ async function sendCommand(command) {
   if (!state.connected) return;
   state.lastCommand = command;
   terminal.append(`> ${command}`, 'INIT');
+  terminal.trim(settings.maxLines);
   try {
     await window.electronAPI.send({ command });
   } catch {
@@ -306,18 +441,21 @@ function handleData({ raw, proto, status, data, rtt }) {
   // Malformed — purple, no badge/result update
   if (!parsed) {
     terminal.append(raw || '(empty)', 'RAW');
+    terminal.trim(settings.maxLines);
     return;
   }
 
   terminal.append(raw, parsed.status);
+  terminal.trim(settings.maxLines);
 
   // Sidebar badge — only for PASS/FAIL/TIMEOUT
   if (['PASS', 'FAIL', 'TIMEOUT'].includes(parsed.status)) {
     setBadge(parsed.proto, parsed.status);
   }
 
-  // Feed chart data
+  // Feed chart data (both terminal and visual views accumulate independently)
   charts.push(parsed.proto, { status: parsed.status, data: parsed.data, rtt });
+  visualView.push(parsed.proto, { status: parsed.status, data: parsed.data, rtt });
 
   // Result panel
   resProto.textContent = parsed.proto;
@@ -408,6 +546,8 @@ function wireIpc() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  setView('terminal');
+  applySettings();
   buildSidebar();
   await refreshPorts();
   wireIpc();

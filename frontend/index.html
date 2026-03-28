@@ -17,15 +17,83 @@
     <select id="port-select" aria-label="Serial port">
       <option value="">— select port —</option>
     </select>
-
-    <input id="baud-input" type="number" value="115200"
-           min="1200" max="4000000"
-           aria-label="Baud rate">
+    <button id="btn-refresh-ports" type="button" aria-label="Refresh port list" title="Refresh ports">&#8635;</button>
 
     <span id="titlebar-label">Sailbot Debug</span>
 
+    <div id="view-toggle" role="group" aria-label="View mode">
+      <button class="view-btn active" data-view="terminal" type="button">Terminal</button>
+      <button class="view-btn"        data-view="visual"   type="button">Visual</button>
+    </div>
+
     <button id="btn-connect" type="button">Connect</button>
+    <button id="btn-settings" type="button" aria-label="Settings" title="Settings" aria-expanded="false" aria-controls="settings-panel">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 15.5a3.5 3.5 0 0 1-3.5-3.5A3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.33.07-.67.07-1.08s-.03-.75-.07-1.08l2.32-1.82c.21-.16.27-.46.14-.7l-2.2-3.82a.55.55 0 0 0-.67-.24l-2.74 1.1c-.57-.44-1.18-.81-1.86-1.08L14 2.42A.554.554 0 0 0 13.45 2h-4.4c-.27 0-.5.18-.55.43l-.38 2.45c-.68.27-1.3.64-1.86 1.08L3.56 4.86a.55.55 0 0 0-.67.24L.7 8.92c-.14.24-.08.54.14.7l2.32 1.82c-.04.33-.08.68-.08 1.08s.04.75.08 1.08L.84 15.42c-.22.16-.28.46-.14.7l2.2 3.82c.13.24.43.32.67.24l2.74-1.1c.57.44 1.18.81 1.86 1.08l.38 2.45c.05.25.28.43.55.43h4.4c.27 0 .5-.18.55-.43l.38-2.45c.68-.27 1.3-.64 1.86-1.08l2.74 1.1c.24.08.54 0 .67-.24l2.2-3.82c.14-.24.08-.54-.14-.7l-2.32-1.82z"/>
+      </svg>
+    </button>
   </header>
+
+  <!-- ── Settings Panel ─────────────────────────────────────── -->
+  <div id="settings-panel" role="dialog" aria-label="Settings" aria-modal="false">
+
+    <div class="settings-section">
+      <div class="settings-section-title">Appearance</div>
+
+      <div class="setting-row">
+        <label class="setting-label" for="toggle-dark-mode">Dark mode</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-dark-mode">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label" for="toggle-timestamps">Show timestamps</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-timestamps" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Terminal</div>
+
+      <div class="setting-row">
+        <label class="setting-label" for="sel-max-lines">Max lines</label>
+        <select id="sel-max-lines" class="settings-select">
+          <option value="100">100</option>
+          <option value="200" selected>200</option>
+          <option value="500">500</option>
+          <option value="0">Unlimited</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Connection</div>
+
+      <div class="setting-row">
+        <label class="setting-label" for="toggle-auto-reconnect">Auto-reconnect</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-auto-reconnect" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="setting-row setting-row--stack">
+        <span class="setting-label">Baud presets</span>
+        <div class="baud-presets">
+          <button type="button" class="btn-baud-preset" data-baud="9600">9600</button>
+          <button type="button" class="btn-baud-preset" data-baud="115200">115200</button>
+          <button type="button" class="btn-baud-preset" data-baud="500000">500k</button>
+          <button type="button" class="btn-baud-preset" data-baud="1000000">1M</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
 
   <!-- ── Disconnected Banner ───────────────────────────────── -->
   <div id="banner" role="alert" aria-live="assertive">
@@ -140,6 +208,50 @@
       </section>
 
     </aside>
+    <!-- Visual Panel — shown when view-toggle is set to "Visual" -->
+    <div id="visual-panel" aria-label="Visual view">
+
+      <!-- Protocol tab bar -->
+      <div id="visual-proto-tabs" role="tablist" aria-label="Protocol">
+        <!-- .visual-tab buttons injected by visual.js -->
+      </div>
+
+      <!-- Command card grid -->
+      <div id="visual-commands" role="group" aria-label="Protocol commands">
+        <!-- .visual-cmd-card elements injected by visual.js -->
+      </div>
+
+      <!-- Inline custom command form (shown on Custom card click) -->
+      <div id="visual-custom-form" class="hidden" aria-label="Custom command form">
+        <!-- .custom-field inputs prepended by visual.js -->
+        <div id="visual-custom-actions">
+          <button id="btn-visual-custom-send"   type="button">Send</button>
+          <button id="btn-visual-custom-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Live chart + metrics -->
+      <div id="visual-chart-row">
+        <div id="visual-chart-wrapper">
+          <canvas id="visual-canvas" aria-label="Live protocol chart"></canvas>
+        </div>
+        <div id="visual-metrics-panel" aria-label="Protocol metrics">
+          <!-- metric-card elements injected by Charts -->
+        </div>
+      </div>
+
+      <!-- Status footer -->
+      <div id="visual-status-bar" aria-label="Last result">
+        <span id="vstat-proto"  class="vstat-chip">—</span>
+        <span id="vstat-badge"  class="status-badge default">—</span>
+        <span class="vstat-label">RTT</span>
+        <span id="vstat-rtt"   class="vstat-value">—</span>
+        <span class="vstat-label">Data</span>
+        <span id="vstat-data"  class="vstat-value">—</span>
+      </div>
+
+    </div>
+
   </div><!-- /main -->
 
   <!-- Toast container -->

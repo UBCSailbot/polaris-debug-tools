@@ -8,11 +8,12 @@ export const PROTOCOLS = {
     label: 'UART',
     chartType: 'line',
     commands: [
-      { label: 'Init',      command: 'UART:INIT', custom: false },
-      { label: 'Loopback',  command: 'UART:LOOP', custom: false },
-      { label: 'Baud test', command: 'UART:BAUD', custom: false },
+      { label: 'Init',      command: 'UART:INIT', custom: false, desc: 'Initialise UART bridge — run once before testing' },
+      { label: 'Loopback',  command: 'UART:LOOP', custom: false, desc: 'Send a byte and verify it echoes back correctly' },
+      { label: 'Baud test', command: 'UART:BAUD', custom: false, desc: 'Confirm baud rate matches expected configuration' },
       {
         label: 'Custom…', command: null, custom: true,
+        desc: 'Send a custom payload in hex',
         fields: [
           { name: 'payload', placeholder: 'Payload bytes (hex)', required: true },
         ],
@@ -24,11 +25,12 @@ export const PROTOCOLS = {
     label: 'SPI',
     chartType: 'bar',
     commands: [
-      { label: 'Init',          command: 'SPI:INIT',    custom: false },
-      { label: 'Transfer 0xA5', command: 'SPI:XFER:A5', custom: false },
-      { label: 'Transfer 0xFF', command: 'SPI:XFER:FF', custom: false },
+      { label: 'Init',          command: 'SPI:INIT',    custom: false, desc: 'Initialise SPI master interface' },
+      { label: 'Transfer 0xA5', command: 'SPI:XFER:A5', custom: false, desc: 'Send 0xA5 and read the response byte' },
+      { label: 'Transfer 0xFF', command: 'SPI:XFER:FF', custom: false, desc: 'Send 0xFF (all ones) and read the response byte' },
       {
         label: 'Custom…', command: null, custom: true,
+        desc: 'Send a custom hex byte and read the response',
         fields: [
           { name: 'byte', placeholder: 'Byte to send (hex, e.g. B3)', required: true },
         ],
@@ -40,11 +42,12 @@ export const PROTOCOLS = {
     label: 'CANFD',
     chartType: 'scatter',
     commands: [
-      { label: 'Init',       command: 'CAN:INIT',   custom: false },
-      { label: 'Send frame', command: 'CAN:SEND',   custom: false },
-      { label: 'Bus status', command: 'CAN:STATUS', custom: false },
+      { label: 'Init',       command: 'CAN:INIT',   custom: false, desc: 'Initialise FDCAN controller and filters' },
+      { label: 'Send frame', command: 'CAN:SEND',   custom: false, desc: 'Transmit a standard CAN frame on the bus' },
+      { label: 'Bus status', command: 'CAN:STATUS', custom: false, desc: 'Read bus error counters and controller state' },
       {
         label: 'Custom…', command: null, custom: true,
+        desc: 'Transmit a frame with custom ID, DLC, and data bytes',
         fields: [
           { name: 'id',    placeholder: 'Frame ID (hex, e.g. 130)',  required: true  },
           { name: 'dlc',   placeholder: 'DLC (0–8)',                  required: true  },
