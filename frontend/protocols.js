@@ -56,9 +56,24 @@ export const PROTOCOLS = {
       },
     ],
   },
+  I2C: {
+    id: 'I2C',
+    label: 'I2C',
+    chartType: 'bar',
+    commands: [
+      { label: 'Enter Mode', command: 'I2C:INIT', custom: false, desc: 'Enter I2C raw byte-stream master mode (I2C1 PB8/PB9)' },
+      {
+        label: 'Custom…', command: null, custom: true,
+        desc: 'Send a custom hex byte to the I2C slave and read the response',
+        fields: [
+          { name: 'byte', placeholder: 'Byte to send (hex, e.g. A5)', required: true },
+        ],
+      },
+    ],
+  },
 };
 
-export const PROTOCOL_ORDER = ['UART', 'SPI', 'CANFD'];
+export const PROTOCOL_ORDER = ['UART', 'SPI', 'CANFD', 'I2C'];
 
 /**
  * Parse a raw "PROTO:STATUS:DATA" line.
@@ -68,7 +83,7 @@ export const PROTOCOL_ORDER = ['UART', 'SPI', 'CANFD'];
 export function parseLine(raw) {
   const trimmed = (raw || '').trim();
   // Match only known protos so lowercase variants correctly return null
-  const match = trimmed.match(/^(UART|SPI|CANFD):([A-Z]+):(.*)$/);
+  const match = trimmed.match(/^(UART|SPI|CANFD|I2C):([A-Z]+):(.*)$/);
   if (!match) return null;
   return { proto: match[1], status: match[2], data: match[3] };
 }

@@ -10,6 +10,7 @@
 
 const MAX_UART_SAMPLES = 30;
 const MAX_SPI_BARS     = 8;
+const MAX_I2C_BARS     = 8;
 
 // Distinct colors for CANFD frame ID scatter rows (up to 8 unique IDs)
 const CAN_POINT_COLORS = [
@@ -49,6 +50,12 @@ export class Charts {
       lastRtt:    null,
       startedAt:  Date.now(),
     };
+    this._i2c = {
+      txs:      [],   // rolling window of sent byte values
+      rxs:      [],   // rolling window of received byte values
+      ackCount: 0,    // PASS response count
+      txCount:  0,    // total transfers
+    };
   }
 
   /**
@@ -62,6 +69,7 @@ export class Charts {
     if (proto === 'UART')  this._buildUart();
     if (proto === 'SPI')   this._buildSpi();
     if (proto === 'CANFD') this._buildCanfd();
+    if (proto === 'I2C')   this._buildI2c();
     this._refreshMetrics();
   }
 
@@ -114,6 +122,21 @@ export class Charts {
         }
         const nowSec = (Date.now() - this._can.startedAt) / 1000;
         this._can.points.push({ x: nowSec, y: this._can.idMap[hex], idHex: hex });
+      }
+    }
+
+    if (proto === 'I2C') {
+      this._i2c.txCount++;
+      if (status === 'PASS') this._i2c.ackCount++;
+      const txMatch = (data || '').match(/TX=0x([0-9A-Fa-f]{1,2})/i);
+      const rxMatch = (data || '').match(/RX=0x([0-9A-Fa-f]{1,2})/i);
+      const tx = txMatch ? parseInt(txMatch[1], 16) : 0;
+      const rx = rxMatch ? parseInt(rxMatch[1], 16) : 0;
+      this._i2c.txs.push(tx);
+      this._i2c.rxs.push(rx);
+      if (this._i2c.txs.length > MAX_I2C_BARS) {
+        this._i2c.txs.shift();
+        this._i2c.rxs.shift();
       }
     }
 
@@ -220,6 +243,58 @@ export class Charts {
     });
   }
 
+  _buildI2c() {
+    const labels = this._i2c.txs.map((_, i) => `T${i + 1}`);
+    this._chart = new Chart(this._canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'TX',
+            data: [...this._i2c.txs],
+            backgroundColor: 'rgba(74,144,226,0.75)',
+            borderColor: '#4a90e2',
+            borderWidth: 1,
+          },
+          {
+            label: 'RX',
+            data: [...this._i2c.rxs],
+            backgroundColor: 'rgba(76,175,80,0.75)',
+            borderColor: '#4caf50',
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            min: 0,
+            max: 255,
+            ticks: {
+              font: { size: 10, family: 'Consolas, monospace' },
+              callback: v => `0x${v.toString(16).toUpperCase().padStart(2, '0')}`,
+              stepSize: 64,
+            },
+          },
+          x: { ticks: { font: { size: 10 } } },
+        },
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              label: ctx =>
+                `${ctx.dataset.label}: 0x${ctx.raw.toString(16).toUpperCase().padStart(2, '0')}`,
+            },
+          },
+        },
+      },
+    });
+  }
+
   _buildCanfd() {
     const ids = Object.keys(this._can.idMap);
     const datasets = ids.map((hex, idx) => ({
@@ -287,6 +362,14 @@ export class Charts {
       this._destroyChart();
       this._buildCanfd();
     }
+
+    if (proto === 'I2C') {
+      const labels = this._i2c.txs.map((_, i) => `T${i + 1}`);
+      this._chart.data.labels = labels;
+      this._chart.data.datasets[0].data = [...this._i2c.txs];
+      this._chart.data.datasets[1].data = [...this._i2c.rxs];
+      this._chart.update('none');
+    }
   }
 
   _refreshMetrics() {
@@ -322,6 +405,20 @@ export class Charts {
         { label: 'IDs seen',     value: String(Object.keys(this._can.idMap).length) },
         { label: 'Error frames', value: String(this._can.errorCount) },
         { label: 'Last RTT',     value: lastRtt },
+      ];
+    }
+
+    if (this._proto === 'I2C') {
+      const ackRate = this._i2c.txCount > 0
+        ? ((this._i2c.ackCount / this._i2c.txCount) * 100).toFixed(1) + '%'
+        : '0%';
+      const lastRx = this._i2c.rxs.at(-1) != null
+        ? `0x${this._i2c.rxs.at(-1).toString(16).toUpperCase().padStart(2, '0')}`
+        : '—';
+      cards = [
+        { label: 'ACK rate',  value: ackRate },
+        { label: 'TX count',  value: String(this._i2c.txCount) },
+        { label: 'Last RX',   value: lastRx },
       ];
     }
 

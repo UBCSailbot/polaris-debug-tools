@@ -124,7 +124,7 @@ function openPort(portPath, baudRate) {
 
     // Parse PROTO:STATUS:DATA — match only known protos so the renderer's
     // parseLine() and the main process agree on what is structured data.
-    const match  = line.trim().match(/^(UART|SPI|CANFD):([A-Z]+):(.*)$/);
+    const match  = line.trim().match(/^(UART|SPI|CANFD|I2C):([A-Z]+):(.*)$/);
     const proto  = match ? match[1] : null;
     const status = match ? match[2] : 'RAW';
     const data   = match ? match[3] : line;
@@ -238,6 +238,118 @@ function cancelReconnect() {
     reconnectTimer = null;
   }
   reconnectAttempt = 0;
+}
+
+// ─── Dual-board state ─────────────────────────────────────────────────────────
+
+function makeBoardState() {
+  return {
+    port:             null,
+    parser:           null,
+    portPath:         null,
+    baud:             null,
+    lastSentAt:       null,
+    intentionalClose: false,
+    reconnectAttempt: 0,
+    reconnectTimer:   null,
+  };
+}
+
+const dualA = makeBoardState();
+const dualB = makeBoardState();
+
+function openBoardPort(board, dataChannel, statusChannel) {
+  const sp = new SerialPort({ path: board.portPath, baudRate: board.baud, autoOpen: false });
+  const lp = sp.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+
+  lp.on('data', line => {
+    const ts  = Date.now();
+    const rtt = board.lastSentAt != null ? ts - board.lastSentAt : null;
+    board.lastSentAt = null;
+
+    const match  = line.trim().match(/^(UART|SPI|CANFD|I2C):([A-Z]+):(.*)$/);
+    const proto  = match ? match[1] : null;
+    const status = match ? match[2] : 'RAW';
+    const data   = match ? match[3] : line;
+
+    sendToRenderer(dataChannel, { raw: line, proto, status, data, rtt });
+  });
+
+  sp.on('error', err => {
+    console.error(`Board [${board.portPath}] error:`, err.message);
+  });
+
+  sp.on('close', () => {
+    if (board.intentionalClose) return;
+    board.port   = null;
+    board.parser = null;
+    sendToRenderer(statusChannel, {
+      connected: false,
+      port: board.portPath,
+      baud: board.baud,
+    });
+    scheduleBoardReconnect(board, dataChannel, statusChannel);
+  });
+
+  return new Promise((resolve, reject) => {
+    sp.open(err => {
+      if (err) { reject(err); return; }
+      board.port   = sp;
+      board.parser = lp;
+      resolve();
+    });
+  });
+}
+
+function closeBoardPort(board) {
+  return new Promise(resolve => {
+    if (!board.port || !board.port.isOpen) {
+      board.port   = null;
+      board.parser = null;
+      resolve();
+      return;
+    }
+    board.intentionalClose = true;
+    board.port.close(err => {
+      board.intentionalClose = false;
+      if (err) console.error('Board port close error:', err.message);
+      board.port   = null;
+      board.parser = null;
+      resolve();
+    });
+  });
+}
+
+function scheduleBoardReconnect(board, dataChannel, statusChannel) {
+  if (board.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    board.reconnectAttempt = 0;
+    board.reconnectTimer   = null;
+    return;
+  }
+  const delay = RECONNECT_DELAYS_MS[board.reconnectAttempt] ?? 4000;
+  board.reconnectAttempt++;
+  board.reconnectTimer = setTimeout(async () => {
+    board.reconnectTimer = null;
+    try {
+      await openBoardPort(board, dataChannel, statusChannel);
+      board.reconnectAttempt = 0;
+      sendToRenderer(statusChannel, {
+        connected: true,
+        port: board.portPath,
+        baud: board.baud,
+      });
+    } catch {
+      scheduleBoardReconnect(board, dataChannel, statusChannel);
+    }
+  }, delay);
+}
+
+function cancelBoardReconnect(board) {
+  if (board.reconnectTimer) {
+    clearTimeout(board.reconnectTimer);
+    board.reconnectTimer = null;
+  }
+  board.reconnectAttempt = 0;
 }
 
 // ─── IPC handlers ────────────────────────────────────────────────────────────
@@ -368,6 +480,100 @@ ipcMain.handle('log:export-csv', async () => {
   }
 });
 
+// ─── Dual-board IPC handlers ─────────────────────────────────────────────────
+
+/** dual:connect-a { path, baudRate } → { success, error? } */
+ipcMain.handle('dual:connect-a', async (_event, { path: portPath, baudRate }) => {
+  try {
+    cancelBoardReconnect(dualA);
+    await closeBoardPort(dualA);
+    dualA.portPath   = portPath;
+    dualA.baud       = baudRate;
+    dualA.lastSentAt = null;
+    await openBoardPort(dualA, 'dual:data-a', 'dual:connection-status-a');
+    sendToRenderer('dual:connection-status-a', { connected: true, port: portPath, baud: baudRate });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+/** dual:disconnect-a → { success } */
+ipcMain.handle('dual:disconnect-a', async () => {
+  try {
+    cancelBoardReconnect(dualA);
+    await closeBoardPort(dualA);
+    sendToRenderer('dual:connection-status-a', {
+      connected: false, port: dualA.portPath, baud: dualA.baud,
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+/** dual:send-a { command } → { success, sentAt?, error? } */
+ipcMain.handle('dual:send-a', async (_event, { command }) => {
+  if (!dualA.port || !dualA.port.isOpen) return { success: false, error: 'Port not open' };
+  try {
+    const sentAt = Date.now();
+    dualA.lastSentAt = sentAt;
+    await new Promise((resolve, reject) => {
+      dualA.port.write(`${command}\r\n`, err => (err ? reject(err) : resolve()));
+    });
+    return { success: true, sentAt };
+  } catch (err) {
+    dualA.lastSentAt = null;
+    return { success: false, error: err.message };
+  }
+});
+
+/** dual:connect-b { path, baudRate } → { success, error? } */
+ipcMain.handle('dual:connect-b', async (_event, { path: portPath, baudRate }) => {
+  try {
+    cancelBoardReconnect(dualB);
+    await closeBoardPort(dualB);
+    dualB.portPath   = portPath;
+    dualB.baud       = baudRate;
+    dualB.lastSentAt = null;
+    await openBoardPort(dualB, 'dual:data-b', 'dual:connection-status-b');
+    sendToRenderer('dual:connection-status-b', { connected: true, port: portPath, baud: baudRate });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+/** dual:disconnect-b → { success } */
+ipcMain.handle('dual:disconnect-b', async () => {
+  try {
+    cancelBoardReconnect(dualB);
+    await closeBoardPort(dualB);
+    sendToRenderer('dual:connection-status-b', {
+      connected: false, port: dualB.portPath, baud: dualB.baud,
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+/** dual:send-b { command } → { success, sentAt?, error? } */
+ipcMain.handle('dual:send-b', async (_event, { command }) => {
+  if (!dualB.port || !dualB.port.isOpen) return { success: false, error: 'Port not open' };
+  try {
+    const sentAt = Date.now();
+    dualB.lastSentAt = sentAt;
+    await new Promise((resolve, reject) => {
+      dualB.port.write(`${command}\r\n`, err => (err ? reject(err) : resolve()));
+    });
+    return { success: true, sentAt };
+  } catch (err) {
+    dualB.lastSentAt = null;
+    return { success: false, error: err.message };
+  }
+});
+
 // ─── Window lifecycle ─────────────────────────────────────────────────────────
 
 function createWindow() {
@@ -407,4 +613,9 @@ app.on('before-quit', async () => {
   cancelReconnect();
   await closePort();
   closeSessionLog();
+  // Clean up dual-board ports
+  cancelBoardReconnect(dualA);
+  cancelBoardReconnect(dualB);
+  await closeBoardPort(dualA);
+  await closeBoardPort(dualB);
 });
