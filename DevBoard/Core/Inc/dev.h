@@ -9,6 +9,11 @@
 
 #include "stm32u5xx_hal.h"
 
+/** 7-bit I2C slave address used in DEV_MODE_I2C.
+ *  HAL_I2C_Master_Transmit/Receive shift this left by 1 internally.
+ *  Change to match your target device before flashing. */
+#define I2C_SLAVE_ADDR  0x50U
+
 #ifdef __cplusplus
 extern "C" {
 #endif
