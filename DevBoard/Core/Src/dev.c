@@ -49,10 +49,11 @@ static inline uint16_t ring_count(const RingBuf_t *r)
     return (r->head - r->tail) & RING_MASK;
 }
 
-extern SPI_HandleTypeDef  hspi1;
-extern UART_HandleTypeDef huart1; 
-extern UART_HandleTypeDef huart2; 
+extern SPI_HandleTypeDef   hspi1;
+extern UART_HandleTypeDef  huart1;
+extern UART_HandleTypeDef  huart2;
 extern FDCAN_HandleTypeDef hfdcan1;
+extern I2C_HandleTypeDef   hi2c1;
 
 static RingBuf_t rb_u1_rx;
 static RingBuf_t rb_u2_rx;
@@ -66,7 +67,8 @@ typedef enum {
     DEV_MODE_MENU = 0,
     DEV_MODE_UART = 1,
     DEV_MODE_SPI  = 2,
-    DEV_MODE_CAN  = 3
+    DEV_MODE_CAN  = 3,
+    DEV_MODE_I2C  = 4
 } DevMode_t;
 
 static volatile DevMode_t g_mode = DEV_MODE_MENU;
@@ -129,6 +131,7 @@ static void print_menu(void)
         "1) UART bridge (USART1 <-> USART2 PD5/PD6)\r\n"
         "2) SPI test (UART1 -> SPI1 MASTER)\r\n"
         "3) CAN test (UART1 <-> FDCAN1)\r\n"
+        "4) I2C test (I2C1 PB8/PB9)\r\n"
         "m) Show this menu\r\n"
         "Select: "
     );
@@ -145,6 +148,9 @@ static void announce_mode(DevMode_t m)
     else if (m == DEV_MODE_CAN)
         print("\r\n[Mode] CAN bridge.\r\n"
               "Type on PuTTY to transmit via FDCAN1. 'm' for menu.\r\n");
+    else if (m == DEV_MODE_I2C)
+        print("\r\n[Mode] I2C MASTER.\r\n"
+              "Type bytes to send to slave 0x50. 'm' for menu.\r\n");
 }
 
 static void dev_uart_task(void)
@@ -339,6 +345,11 @@ static void dev_menu_task(void)
             announce_mode(g_mode);
             return;
         }
+        else if (b == '4') {
+            g_mode = DEV_MODE_I2C;
+            announce_mode(g_mode);
+            return;
+        }
         else if (b == 'm' || b == 'M') {
             print_menu();
         }
@@ -347,6 +358,12 @@ static void dev_menu_task(void)
             print_menu();
         }
     }
+}
+
+static void dev_i2c_task(void)
+{
+    /* Implemented in Task 4 */
+    (void)0;
 }
 
 void Dev_Init(void)
@@ -371,6 +388,7 @@ void Dev_Init(void)
     print("[UART bridge ready - MASTER]\r\n");
     print("[SPI  MASTER ready]\r\n");
     print("[CAN  bridge ready]\r\n");
+    print("[I2C  MASTER ready]\r\n");
     print_menu();
 }
 
@@ -406,6 +424,10 @@ void Dev_Poll(void)
 
         case DEV_MODE_CAN:
             dev_can_task();
+            break;
+
+        case DEV_MODE_I2C:
+            dev_i2c_task();
             break;
     }
 }
