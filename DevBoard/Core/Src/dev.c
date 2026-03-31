@@ -362,8 +362,38 @@ static void dev_menu_task(void)
 
 static void dev_i2c_task(void)
 {
-    /* Implemented in Task 4 */
-    (void)0;
+    uint8_t b, rx;
+    HAL_StatusTypeDef st;
+
+    while (ring_pop(&rb_u1_rx, &b) == 0)
+    {
+        if (b == 'm' || b == 'M') {
+            g_mode = DEV_MODE_MENU;
+            print_menu();
+            return;
+        }
+
+        /* Local echo so the operator sees what they typed */
+        HAL_UART_Transmit(&huart1, &b, 1, TX_TIMEOUT_MS);
+
+        /* Transmit one byte to the slave */
+        st = HAL_I2C_Master_Transmit(&hi2c1, (uint16_t)(I2C_SLAVE_ADDR << 1),
+                                     &b, 1, TX_TIMEOUT_MS);
+        if (st != HAL_OK) {
+            print("[I2C ERR]\r\n");
+            HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
+            continue;
+        }
+
+        /* Attempt to read one byte back; silence NACK — slave may have nothing to send */
+        rx = 0x00;
+        st = HAL_I2C_Master_Receive(&hi2c1, (uint16_t)(I2C_SLAVE_ADDR << 1),
+                                    &rx, 1, TX_TIMEOUT_MS);
+        if (st == HAL_OK && rx != 0x00) {
+            HAL_UART_Transmit(&huart1, &rx, 1, TX_TIMEOUT_MS);
+            HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+        }
+    }
 }
 
 void Dev_Init(void)
