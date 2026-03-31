@@ -58,6 +58,7 @@ UART_HandleTypeDef huart2;
 //static uint8_t m_uart_byte  = 0x00; // typed on master PuTTY
 //static uint8_t m_spi_rx     = 0x00; // last byte received from slave
 TIM_HandleTypeDef htim7;
+I2C_HandleTypeDef hi2c1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +72,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_FDCAN1_Init(void);
 /* USER CODE BEGIN PFP */
 static void MX_TIM7_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -122,6 +124,7 @@ int main(void)
 //  SPIMod_Init();
   MX_TIM7_Init();
   CAN_Init(&hfdcan1, 0x130);
+  MX_I2C1_Init();
   Dev_Init();
   /* USER CODE END 2 */
 
@@ -533,6 +536,40 @@ static void MX_TIM7_Init(void)
     htim7.Init.Period            = 9999;
     htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
     if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+    {
+        Error_Handler();
+    }
+}
+
+static void MX_I2C1_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /* GPIOB clock already enabled by MX_GPIO_Init (PB7 = LED_BLUE).
+     * Enabling it again is safe — the macro is idempotent. */
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_I2C1_CLK_ENABLE();
+
+    /* PB8 = I2C1_SCL, PB9 = I2C1_SDA — AF4, open-drain, internal pull-up */
+    GPIO_InitStruct.Pin       = GPIO_PIN_8 | GPIO_PIN_9;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull      = GPIO_PULLUP;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /* 100 kHz standard mode, PCLK1 = 4 MHz (MSI range 4, APB1 div 1).
+     * Timing = 0x00110F12: PRESC=0, SCLDEL=1, SDADEL=1, SCLH=0x0F, SCLL=0x12.
+     * Verify with CubeMX AN4235 tool before connecting real hardware. */
+    hi2c1.Instance             = I2C1;
+    hi2c1.Init.Timing          = 0x00110F12;
+    hi2c1.Init.OwnAddress1     = 0;
+    hi2c1.Init.AddressingMode  = I2C_ADDRESSINGMODE_7BIT;
+    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c1.Init.OwnAddress2     = 0;
+    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c1.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;
+    if (HAL_I2C_Init(&hi2c1) != HAL_OK)
     {
         Error_Handler();
     }
