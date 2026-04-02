@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 220" role="img" aria-labelledby="title desc">
+  <title id="title">UBC Sailbot sail mark</title>
+  <desc id="desc">Stylized two-sail blue mark used in the UBC Sailbot logo.</desc>
+  <g fill="#2a6fa8">
+    <polygon points="80,6 156,206 66,206"/>
+    <polygon points="0,206 62,62 56,206"/>
+  </g>
+  <polygon points="61,62 69,50 64,106 60,106" fill="#0e0e0e"/>
+</svg>

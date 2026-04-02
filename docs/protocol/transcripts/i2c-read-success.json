@@ -1,0 +1,17 @@
+{
+  "name": "i2c-read-success",
+  "steps": [
+    { "dir": "tx", "raw": "I2C:INIT" },
+    { "dir": "rx", "raw": "I2C:PASS:ready=1" },
+    { "dir": "tx", "raw": "I2C:READ:6A:28:6" },
+    { "dir": "rx", "raw": "I2C:PASS:addr=0x6A;reg=0x28;bytes=A102B300C501" }
+  ],
+  "expect": {
+    "terminalFrames": 2,
+    "streamEvents": 0,
+    "logFrames": 0,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": null
+  }
+}

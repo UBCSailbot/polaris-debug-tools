@@ -1,0 +1,16 @@
+{
+  "name": "firmware-timeout",
+  "steps": [
+    { "dir": "tx", "raw": "I2C:READ:6A:28:6" },
+    { "dir": "rx", "raw": "LOG:ERROR:hal-i2c-timeout" },
+    { "dir": "rx", "raw": "I2C:TIMEOUT:addr=0x6A" }
+  ],
+  "expect": {
+    "terminalFrames": 1,
+    "streamEvents": 0,
+    "logFrames": 1,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": null
+  }
+}

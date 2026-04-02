@@ -1,0 +1,17 @@
+{
+  "name": "legacy-mode-enter-exit",
+  "steps": [
+    { "dir": "tx", "raw": "SYS:MODE:LEGACY" },
+    { "dir": "rx", "raw": "SYS:INFO:mode=legacy" },
+    { "dir": "tx", "raw": "SYS:RESET" },
+    { "dir": "rx", "raw": "SYS:INFO:mode=protocol" }
+  ],
+  "expect": {
+    "terminalFrames": 2,
+    "streamEvents": 0,
+    "logFrames": 0,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": null
+  }
+}

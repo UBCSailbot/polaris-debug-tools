@@ -1,0 +1,17 @@
+{
+  "name": "spi-burst-success",
+  "steps": [
+    { "dir": "tx", "raw": "SPI:INIT" },
+    { "dir": "rx", "raw": "SPI:PASS:ready=1" },
+    { "dir": "tx", "raw": "SPI:XFER:75FF" },
+    { "dir": "rx", "raw": "SPI:PASS:tx=75FF;rx=0068" }
+  ],
+  "expect": {
+    "terminalFrames": 2,
+    "streamEvents": 0,
+    "logFrames": 0,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": null
+  }
+}

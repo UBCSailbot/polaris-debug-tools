@@ -1,0 +1,19 @@
+{
+  "name": "canfd-monitor",
+  "steps": [
+    { "dir": "tx", "raw": "CANFD:MONITOR:START" },
+    { "dir": "rx", "raw": "CANFD:PASS:monitoring=1" },
+    { "dir": "rx", "raw": "CANFD:FRAME:130:8:DEADBEEF01020304" },
+    { "dir": "rx", "raw": "CANFD:FRAME:220:2:0AFF" },
+    { "dir": "tx", "raw": "CANFD:MONITOR:STOP" },
+    { "dir": "rx", "raw": "CANFD:PASS:monitoring=0" }
+  ],
+  "expect": {
+    "terminalFrames": 2,
+    "streamEvents": 2,
+    "logFrames": 0,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": null
+  }
+}

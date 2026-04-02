@@ -30,6 +30,9 @@ function subscribe(channel, cb) {
 
 // ─── Exposed API ─────────────────────────────────────────────────────────────
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Shared app / firmware version
+  getAppVersion: () =>
+    ipcRenderer.invoke('app:get-version'),
 
   // List available serial ports
   listPorts: () =>
@@ -47,13 +50,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   send: ({ command }) =>
     ipcRenderer.invoke('serial:send', { command }),
 
-  // Subscribe to incoming data lines from the firmware
-  // cb receives: { raw, proto, status, data, rtt }
+  // Subscribe to direct command results
+  // cb receives: { raw, parsed, rtt, localTimeout? }
   onData: cb => subscribe('serial:data', cb),
+
+  // Subscribe to unsolicited stream events such as UART:DATA or CANFD:FRAME
+  onStreamEvent: cb => subscribe('serial:stream-event', cb),
+
+  // Subscribe to firmware log frames
+  onLog: cb => subscribe('serial:log', cb),
 
   // Subscribe to connection state changes
   // cb receives: { connected, port, baud }
   onConnectionStatus: cb => subscribe('serial:connection-status', cb),
+
+  // Subscribe to board profile / capability updates after handshake
+  onBoardProfile: cb => subscribe('serial:board-profile', cb),
 
   // Subscribe to auto-reconnect progress notifications
   // cb receives: { attempt, max }
@@ -74,4 +86,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Enable or disable auto-reconnect in the main process
   setAutoReconnect: (enabled) =>
     ipcRenderer.invoke('settings:set-auto-reconnect', { enabled }),
+
+  // ── Dual-board: Board A ────────────────────────────────────────────────────
+  connectBoardA: ({ path, baudRate }) =>
+    ipcRenderer.invoke('dual:connect-a', { path, baudRate }),
+
+  disconnectBoardA: () =>
+    ipcRenderer.invoke('dual:disconnect-a'),
+
+  sendBoardA: ({ command }) =>
+    ipcRenderer.invoke('dual:send-a', { command }),
+
+  onDataBoardA: cb => subscribe('dual:data-a', cb),
+
+  onConnectionStatusBoardA: cb => subscribe('dual:connection-status-a', cb),
+
+  onBoardProfileBoardA: cb => subscribe('dual:board-profile-a', cb),
+
+  // ── Dual-board: Board B ────────────────────────────────────────────────────
+  connectBoardB: ({ path, baudRate }) =>
+    ipcRenderer.invoke('dual:connect-b', { path, baudRate }),
+
+  disconnectBoardB: () =>
+    ipcRenderer.invoke('dual:disconnect-b'),
+
+  sendBoardB: ({ command }) =>
+    ipcRenderer.invoke('dual:send-b', { command }),
+
+  onDataBoardB: cb => subscribe('dual:data-b', cb),
+
+  onConnectionStatusBoardB: cb => subscribe('dual:connection-status-b', cb),
+
+  onBoardProfileBoardB: cb => subscribe('dual:board-profile-b', cb),
 });

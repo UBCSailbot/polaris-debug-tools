@@ -87,21 +87,28 @@ export class Charts {
    */
   push(proto, { status, data, rtt }) {
     if (proto === 'UART') {
+      const rxMatch = (data || '').match(/(?:^|;)rx=([0-9A-Fa-f]+)(?:;|$)/i);
+      const bytePayload = status === 'DATA'
+        ? (data || '').replace(/[^0-9A-F]/gi, '')
+        : (rxMatch ? rxMatch[1] : '');
+
       this._uart.total++;
       if (status === 'FAIL') this._uart.errors++;
       if (rtt != null) {
         this._uart.rtts.push(rtt);
         if (this._uart.rtts.length > MAX_UART_SAMPLES) this._uart.rtts.shift();
       }
-      this._uart.totalBytes += (data || '').length;
+      this._uart.totalBytes += bytePayload.length / 2;
     }
 
     if (proto === 'SPI') {
       this._spi.txCount++;
-      const txMatch = (data || '').match(/TX=0x([0-9A-Fa-f]{1,2})/);
-      const rxMatch = (data || '').match(/RX=0x([0-9A-Fa-f]{1,2})/);
-      const tx = txMatch ? parseInt(txMatch[1], 16) : 0;
-      const rx = rxMatch ? parseInt(rxMatch[1], 16) : 0;
+      const txMatch = (data || '').match(/(?:^|;)tx=([0-9A-Fa-f]+)/i);
+      const rxMatch = (data || '').match(/(?:^|;)rx=([0-9A-Fa-f]+)/i);
+      const txHex = txMatch ? txMatch[1] : '';
+      const rxHex = rxMatch ? rxMatch[1] : '';
+      const tx = txHex.length >= 2 ? parseInt(txHex.slice(-2), 16) : 0;
+      const rx = rxHex.length >= 2 ? parseInt(rxHex.slice(-2), 16) : 0;
       this._spi.txs.push(tx);
       this._spi.rxs.push(rx);
       if (tx === rx) this._spi.matchCount++;
@@ -114,9 +121,10 @@ export class Charts {
     if (proto === 'CANFD') {
       if (status === 'FAIL') this._can.errorCount++;
       if (rtt != null) this._can.lastRtt = rtt;
-      const idMatch = (data || '').match(/ID=0x([0-9A-Fa-f]+)/i);
-      if (idMatch) {
-        const hex = '0x' + idMatch[1].toUpperCase();
+      const keyValueIdMatch = (data || '').match(/(?:^|;)id=0x([0-9A-Fa-f]+)(?:;|$)/i);
+      const eventIdMatch = keyValueIdMatch ? null : (data || '').match(/^([0-9A-Fa-f]+):\d+:[0-9A-Fa-f]*$/);
+      if (keyValueIdMatch || eventIdMatch) {
+        const hex = '0x' + (keyValueIdMatch ? keyValueIdMatch[1] : eventIdMatch[1]).toUpperCase();
         if (!(hex in this._can.idMap)) {
           this._can.idMap[hex] = Object.keys(this._can.idMap).length;
         }
@@ -128,10 +136,13 @@ export class Charts {
     if (proto === 'I2C') {
       this._i2c.txCount++;
       if (status === 'PASS') this._i2c.ackCount++;
-      const txMatch = (data || '').match(/TX=0x([0-9A-Fa-f]{1,2})/i);
-      const rxMatch = (data || '').match(/RX=0x([0-9A-Fa-f]{1,2})/i);
-      const tx = txMatch ? parseInt(txMatch[1], 16) : 0;
-      const rx = rxMatch ? parseInt(rxMatch[1], 16) : 0;
+      const addrMatch = (data || '').match(/(?:^|;)addr=0x([0-9A-Fa-f]{1,2})(?:;|$)/i);
+      const bytesMatch = (data || '').match(/(?:^|;)bytes=([0-9A-Fa-f]+)(?:;|$)/i);
+      const wroteMatch = (data || '').match(/(?:^|;)wrote=(\d+)(?:;|$)/i);
+      const tx = addrMatch ? parseInt(addrMatch[1], 16) : 0;
+      const rx = bytesMatch
+        ? parseInt(bytesMatch[1].slice(0, 2), 16)
+        : (wroteMatch ? parseInt(wroteMatch[1], 10) : 0);
       this._i2c.txs.push(tx);
       this._i2c.rxs.push(rx);
       if (this._i2c.txs.length > MAX_I2C_BARS) {
@@ -378,12 +389,12 @@ export class Charts {
     let cards = [];
 
     if (this._proto === 'UART') {
-      const lastRtt = this._uart.rtts.at(-1) ?? '—';
+      const lastRtt = this._uart.rtts.at(-1) ?? '-';
       const errRate = this._uart.total > 0
         ? ((this._uart.errors / this._uart.total) * 100).toFixed(1) + '%'
         : '0%';
       cards = [
-        { label: 'Last RTT',   value: lastRtt === '—' ? '—' : `${lastRtt} ms` },
+        { label: 'Last RTT',   value: lastRtt === '-' ? '-' : `${lastRtt} ms` },
         { label: 'Bytes rcvd', value: String(this._uart.totalBytes) },
         { label: 'Error rate', value: errRate },
       ];
@@ -400,7 +411,7 @@ export class Charts {
     }
 
     if (this._proto === 'CANFD') {
-      const lastRtt = this._can.lastRtt != null ? `${this._can.lastRtt} ms` : '—';
+      const lastRtt = this._can.lastRtt != null ? `${this._can.lastRtt} ms` : '-';
       cards = [
         { label: 'IDs seen',     value: String(Object.keys(this._can.idMap).length) },
         { label: 'Error frames', value: String(this._can.errorCount) },
@@ -414,7 +425,7 @@ export class Charts {
         : '0%';
       const lastRx = this._i2c.rxs.at(-1) != null
         ? `0x${this._i2c.rxs.at(-1).toString(16).toUpperCase().padStart(2, '0')}`
-        : '—';
+        : '-';
       cards = [
         { label: 'ACK rate',  value: ackRate },
         { label: 'TX count',  value: String(this._i2c.txCount) },

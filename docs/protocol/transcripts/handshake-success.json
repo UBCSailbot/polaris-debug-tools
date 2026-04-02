@@ -1,0 +1,21 @@
+{
+  "name": "handshake-success",
+  "steps": [
+    { "dir": "tx", "raw": "SYS:HELLO" },
+    { "dir": "rx", "raw": "SYS:INFO:proto=1;fw=0.2.0;board=devboard;caps=UART,SPI,CANFD,I2C,UART_STREAM,CANFD_MONITOR,I2C_SCAN,I2C_READ_REG8;legacy=1" }
+  ],
+  "expect": {
+    "terminalFrames": 1,
+    "streamEvents": 0,
+    "logFrames": 0,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": {
+      "proto": 1,
+      "fw": "0.2.0",
+      "board": "devboard",
+      "legacy": true,
+      "capsIncludes": ["UART", "SPI", "CANFD", "I2C", "UART_STREAM"]
+    }
+  }
+}

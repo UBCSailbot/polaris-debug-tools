@@ -1,32 +1,36 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self';">
-  <title>Sailbot Dev Board — Protocol Tester</title>
+  <title>Sailbot Protocol Tester</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <!-- ── Titlebar ──────────────────────────────────────────── -->
+  <!-- Titlebar -->
   <header id="titlebar">
+    <div id="titlebar-brand" aria-label="Application title">
+      <div id="titlebar-brand-copy">
+        <span id="titlebar-label">Sailbot Protocol Tester</span>
+        <span id="titlebar-version">Version 0.3.10</span>
+      </div>
+    </div>
     <span id="status-dot" class="disconnected" title="Connection status" aria-hidden="true"></span>
 
     <select id="port-select" aria-label="Serial port">
-      <option value="">— select port —</option>
+      <option value="">- select port -</option>
     </select>
     <button id="btn-refresh-ports" type="button" aria-label="Refresh port list" title="Refresh ports">&#8635;</button>
 
-    <span id="titlebar-label">Sailbot Debug</span>
-
-    <div id="view-toggle" role="group" aria-label="View mode">
-      <button class="view-btn active" data-view="terminal" type="button">Terminal</button>
-      <button class="view-btn"        data-view="visual"   type="button">Visual</button>
-    </div>
-
     <button id="btn-connect" type="button">Connect</button>
+    <div id="view-toggle" role="group" aria-label="View mode">
+      <button class="view-btn active" data-view="terminal"   type="button">Terminal</button>
+      <button class="view-btn"        data-view="visual"     type="button">Visual</button>
+      <button class="view-btn"        data-view="dual"       type="button">Dual board</button>
+    </div>
     <button id="btn-settings" type="button" aria-label="Settings" title="Settings" aria-expanded="false" aria-controls="settings-panel">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 15.5a3.5 3.5 0 0 1-3.5-3.5A3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.33.07-.67.07-1.08s-.03-.75-.07-1.08l2.32-1.82c.21-.16.27-.46.14-.7l-2.2-3.82a.55.55 0 0 0-.67-.24l-2.74 1.1c-.57-.44-1.18-.81-1.86-1.08L14 2.42A.554.554 0 0 0 13.45 2h-4.4c-.27 0-.5.18-.55.43l-.38 2.45c-.68.27-1.3.64-1.86 1.08L3.56 4.86a.55.55 0 0 0-.67.24L.7 8.92c-.14.24-.08.54.14.7l2.32 1.82c-.04.33-.08.68-.08 1.08s.04.75.08 1.08L.84 15.42c-.22.16-.28.46-.14.7l2.2 3.82c.13.24.43.32.67.24l2.74-1.1c.57.44 1.18.81 1.86 1.08l.38 2.45c.05.25.28.43.55.43h4.4c.27 0 .5-.18.55-.43l.38-2.45c.68-.27 1.3-.64 1.86-1.08l2.74 1.1c.24.08.54 0 .67-.24l2.2-3.82c.14-.24.08-.54-.14-.7l-2.32-1.82z"/>
@@ -34,73 +38,148 @@
     </button>
   </header>
 
-  <!-- ── Settings Panel ─────────────────────────────────────── -->
+  <!-- Settings Panel -->
   <div id="settings-panel" role="dialog" aria-label="Settings" aria-modal="false">
-
-    <div class="settings-section">
-      <div class="settings-section-title">Appearance</div>
-
-      <div class="setting-row">
-        <label class="setting-label" for="toggle-dark-mode">Dark mode</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="toggle-dark-mode">
-          <span class="toggle-track"></span>
-        </label>
-      </div>
-
-      <div class="setting-row">
-        <label class="setting-label" for="toggle-timestamps">Show timestamps</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="toggle-timestamps" checked>
-          <span class="toggle-track"></span>
-        </label>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <div class="settings-section-title">Terminal</div>
-
-      <div class="setting-row">
-        <label class="setting-label" for="sel-max-lines">Max lines</label>
-        <select id="sel-max-lines" class="settings-select">
-          <option value="100">100</option>
-          <option value="200" selected>200</option>
-          <option value="500">500</option>
-          <option value="0">Unlimited</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <div class="settings-section-title">Connection</div>
-
-      <div class="setting-row">
-        <label class="setting-label" for="toggle-auto-reconnect">Auto-reconnect</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="toggle-auto-reconnect" checked>
-          <span class="toggle-track"></span>
-        </label>
-      </div>
-
-      <div class="setting-row setting-row--stack">
-        <span class="setting-label">Baud presets</span>
-        <div class="baud-presets">
-          <button type="button" class="btn-baud-preset" data-baud="9600">9600</button>
-          <button type="button" class="btn-baud-preset" data-baud="115200">115200</button>
-          <button type="button" class="btn-baud-preset" data-baud="500000">500k</button>
-          <button type="button" class="btn-baud-preset" data-baud="1000000">1M</button>
+    <div class="settings-header">
+      <div class="settings-header-top">
+        <div class="settings-title-block">
+          <div class="settings-panel-title">Settings</div>
+          <div class="settings-panel-subtitle">Organized controls for everyday use, theming, connection setup, and firmware debugging.</div>
         </div>
+        <button id="btn-settings-close" type="button" aria-label="Close settings" title="Close settings">×</button>
       </div>
+      <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" class="settings-tab active" id="settings-tab-general" data-settings-tab="general" role="tab" aria-selected="true" aria-controls="settings-panel-general">General</button>
+        <button type="button" class="settings-tab" id="settings-tab-theme" data-settings-tab="theme" role="tab" aria-selected="false" aria-controls="settings-panel-theme">Theme</button>
+        <button type="button" class="settings-tab" id="settings-tab-connection" data-settings-tab="connection" role="tab" aria-selected="false" aria-controls="settings-panel-connection">Connection</button>
+        <button type="button" class="settings-tab" id="settings-tab-debugging" data-settings-tab="debugging" role="tab" aria-selected="false" aria-controls="settings-panel-debugging">Debugging</button>
+      </div>
+    </div>
+
+    <div class="settings-panels">
+      <section class="settings-tab-panel active" id="settings-panel-general" data-settings-panel="general" role="tabpanel" aria-labelledby="settings-tab-general">
+        <div class="settings-section">
+          <div class="settings-section-title">General</div>
+
+          <div class="setting-row">
+            <label class="setting-label" for="sel-max-lines">Max lines</label>
+            <select id="sel-max-lines" class="settings-select">
+              <option value="100">100</option>
+              <option value="200" selected>200</option>
+              <option value="500">500</option>
+              <option value="0">Unlimited</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <label class="setting-label" for="toggle-timestamps">Show timestamps</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-timestamps" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <label class="setting-label" for="toggle-terminal-status">Show terminal status</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-terminal-status" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-tab-panel" id="settings-panel-theme" data-settings-panel="theme" role="tabpanel" aria-labelledby="settings-tab-theme" hidden>
+        <div class="settings-section">
+          <div class="settings-section-title">Theme</div>
+
+          <div class="setting-row">
+            <label class="setting-label" for="toggle-dark-mode">Dark mode</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-dark-mode">
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">App color</span>
+            <div class="theme-presets" role="group" aria-label="App color presets">
+              <button type="button" class="theme-swatch-btn active" data-accent="blue" aria-label="Blue accent" title="Blue accent"><span class="theme-swatch" data-swatch="blue"></span></button>
+              <button type="button" class="theme-swatch-btn" data-accent="cyan" aria-label="Cyan accent" title="Cyan accent"><span class="theme-swatch" data-swatch="cyan"></span></button>
+              <button type="button" class="theme-swatch-btn" data-accent="green" aria-label="Green accent" title="Green accent"><span class="theme-swatch" data-swatch="green"></span></button>
+              <button type="button" class="theme-swatch-btn" data-accent="orange" aria-label="Orange accent" title="Orange accent"><span class="theme-swatch" data-swatch="orange"></span></button>
+              <button type="button" class="theme-swatch-btn" data-accent="rose" aria-label="Rose accent" title="Rose accent"><span class="theme-swatch" data-swatch="rose"></span></button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">Terminal background</span>
+            <div class="theme-toggle-group" role="group" aria-label="Terminal background mode">
+              <button type="button" class="theme-toggle-btn active" data-terminal-theme="dark">Dark</button>
+              <button type="button" class="theme-toggle-btn" data-terminal-theme="light">Light</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-tab-panel" id="settings-panel-connection" data-settings-panel="connection" role="tabpanel" aria-labelledby="settings-tab-connection" hidden>
+        <div class="settings-section">
+          <div class="settings-section-title">Connection</div>
+
+          <div class="setting-row">
+            <label class="setting-label" for="toggle-auto-reconnect">Auto-reconnect</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-auto-reconnect" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <label class="setting-label" for="toggle-auto-port-refresh">Auto reload ports</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-auto-port-refresh">
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="setting-row setting-row--stack">
+            <span class="setting-label">Baud presets</span>
+            <div class="baud-presets">
+              <button type="button" class="btn-baud-preset" data-baud="9600">9600</button>
+              <button type="button" class="btn-baud-preset" data-baud="115200">115200</button>
+              <button type="button" class="btn-baud-preset" data-baud="500000">500k</button>
+              <button type="button" class="btn-baud-preset" data-baud="1000000">1M</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-tab-panel" id="settings-panel-debugging" data-settings-panel="debugging" role="tabpanel" aria-labelledby="settings-tab-debugging" hidden>
+        <div class="settings-section">
+          <div class="settings-section-title">Debugging</div>
+
+          <div class="settings-hint">
+            These commands go to the STM32 firmware control plane. They are useful for protocol validation and legacy-mode recovery.
+          </div>
+
+          <div class="settings-actions" role="group" aria-label="Board control commands">
+            <button type="button" id="btn-board-ping" class="settings-action-btn">Ping</button>
+            <button type="button" id="btn-board-refresh-profile" class="settings-action-btn">Refresh Profile</button>
+            <button type="button" id="btn-board-legacy" class="settings-action-btn">Enter Legacy</button>
+            <button type="button" id="btn-board-reset-mode" class="settings-action-btn">Exit Legacy</button>
+          </div>
+        </div>
+      </section>
     </div>
 
   </div>
 
-  <!-- ── Disconnected Banner ───────────────────────────────── -->
+  <!-- Disconnected Banner -->
   <div id="banner" role="alert" aria-live="assertive">
-    Disconnected — reconnecting…&nbsp;<span id="reconnect-counter"></span>
+    Disconnected - reconnecting...&nbsp;<span id="reconnect-counter"></span>
   </div>
 
-  <!-- ── 3-column main ─────────────────────────────────────── -->
+  <!-- 3-column main -->
   <div id="main">
 
     <!-- Sidebar -->
@@ -122,8 +201,8 @@
       <!-- Session stats footer -->
       <div id="terminal-footer" aria-label="Session statistics">
         Session:&nbsp;<span id="stat-duration">00:00:00</span>
-        &nbsp;·&nbsp;<span id="stat-passed">0</span> passed
-        &nbsp;·&nbsp;<span id="stat-failed">0</span> failed
+        &nbsp;|&nbsp;<span id="stat-passed">0</span> passed
+        &nbsp;|&nbsp;<span id="stat-failed">0</span> failed
       </div>
 
       <!-- Command Bar -->
@@ -137,7 +216,7 @@
 
         <div id="raw-input-row">
           <input id="raw-input" type="text"
-                 placeholder="Raw command…"
+                 placeholder="Raw command..."
                  aria-label="Raw command input"
                  autocomplete="off"
                  spellcheck="false">
@@ -166,32 +245,32 @@
 
         <div class="result-field">
           <span class="result-field-label">Protocol</span>
-          <span class="result-field-value" id="res-proto">—</span>
+          <span class="result-field-value" id="res-proto">-</span>
         </div>
 
         <div class="result-field">
           <span class="result-field-label">Status</span>
-          <span id="res-status"><span class="status-badge default">—</span></span>
+          <span id="res-status"><span class="status-badge default">-</span></span>
         </div>
 
         <div class="result-field">
           <span class="result-field-label">Data</span>
-          <span class="result-field-value" id="res-data">—</span>
+          <span class="result-field-value" id="res-data">-</span>
         </div>
 
         <div class="result-field">
           <span class="result-field-label">RTT</span>
-          <span class="result-field-value" id="res-rtt">—</span>
+          <span class="result-field-value" id="res-rtt">-</span>
         </div>
 
-        <!-- CANFD-specific fields — hidden unless proto === CANFD -->
-        <div class="result-field" id="res-can-group" style="display:none">
+        <!-- CANFD-specific fields - hidden unless proto === CANFD -->
+        <div class="result-field hidden" id="res-can-group">
           <span class="result-field-label">Frame ID</span>
-          <span class="result-field-value" id="res-can-id">—</span>
+          <span class="result-field-value" id="res-can-id">-</span>
         </div>
-        <div class="result-field" id="res-dlc-group" style="display:none">
+        <div class="result-field hidden" id="res-dlc-group">
           <span class="result-field-label">DLC</span>
-          <span class="result-field-value" id="res-dlc">—</span>
+          <span class="result-field-value" id="res-dlc">-</span>
         </div>
 
         <button id="btn-retry" type="button" aria-label="Retry last command">Retry</button>
@@ -208,7 +287,7 @@
       </section>
 
     </aside>
-    <!-- Visual Panel — shown when view-toggle is set to "Visual" -->
+    <!-- Visual Panel - shown when view-toggle is set to "Visual" -->
     <div id="visual-panel" aria-label="Visual view">
 
       <!-- Protocol tab bar -->
@@ -242,15 +321,133 @@
 
       <!-- Status footer -->
       <div id="visual-status-bar" aria-label="Last result">
-        <span id="vstat-proto"  class="vstat-chip">—</span>
-        <span id="vstat-badge"  class="status-badge default">—</span>
+        <span id="vstat-proto"  class="vstat-chip">-</span>
+        <span id="vstat-badge"  class="status-badge default">-</span>
         <span class="vstat-label">RTT</span>
-        <span id="vstat-rtt"   class="vstat-value">—</span>
+        <span id="vstat-rtt"   class="vstat-value">-</span>
         <span class="vstat-label">Data</span>
-        <span id="vstat-data"  class="vstat-value">—</span>
+        <span id="vstat-data"  class="vstat-value">-</span>
       </div>
 
     </div>
+
+    <!-- Dual Board Panel - shown when view-toggle is set to "Dual board" -->
+    <div id="dual-panel" aria-label="Dual board view">
+
+      <div id="dual-warning-strip" aria-live="polite">
+        <span class="dual-warning-label">Status</span>
+        <div id="dual-warning-items">
+          <span class="dual-warning">Connect both boards to enable shared dual-board controls.</span>
+        </div>
+      </div>
+
+      <!-- Shared protocol bar -->
+      <div id="dual-proto-bar">
+        <span class="dual-proto-label">Protocol</span>
+        <div id="dual-proto-btns" role="group" aria-label="Shared protocol selector">
+          <!-- .dual-proto-btn buttons injected by app.js -->
+        </div>
+      </div>
+
+      <div id="dual-shared-controls">
+        <span class="dual-shared-label">Shared commands</span>
+        <div id="dual-shared-presets" role="group" aria-label="Shared dual-board commands"></div>
+      </div>
+
+      <!-- Two board panels side by side -->
+      <div id="dual-boards">
+
+        <!-- Board A -->
+        <div class="board-panel" id="board-a">
+          <div class="board-header">
+            <span class="board-status-dot disconnected" title="Board A connection" aria-hidden="true"></span>
+            <select class="board-port-select" id="board-a-port" aria-label="Board A serial port">
+              <option value="">- select port -</option>
+            </select>
+            <span class="board-label">A</span>
+            <button class="board-connect-btn" id="btn-board-a-connect" type="button">Connect</button>
+          </div>
+            <div class="board-meta">
+              <div class="board-status-rows">
+                <div class="board-status-row">
+                  <span class="board-status-label">Status</span>
+                  <span class="board-status-text default" id="board-a-status-primary">Disconnected. Connect this board to start the handshake.</span>
+              </div>
+              <div class="board-status-row">
+                <span class="board-status-label">Detail</span>
+                <span class="board-status-text default" id="board-a-status-detail">No protocol activity yet.</span>
+              </div>
+            </div>
+          </div>
+          <div class="board-terminal" id="board-a-terminal"
+               role="log" aria-label="Board A terminal output"
+               aria-live="polite" aria-atomic="false"></div>
+          <div class="board-command-bar" id="board-a-cmd-bar">
+            <div class="board-presets" id="board-a-presets" role="group" aria-label="Board A preset commands"></div>
+            <div class="board-custom-form" id="board-a-custom-form" aria-label="Board A custom command form">
+              <div class="board-custom-actions">
+                <button class="board-custom-send-btn" id="btn-board-a-custom-send" type="button">Send</button>
+                <button class="board-custom-cancel-btn" id="btn-board-a-custom-cancel" type="button">Cancel</button>
+              </div>
+            </div>
+            <div class="board-raw-row">
+              <input class="board-raw-input" id="board-a-raw"
+                     type="text" placeholder="Raw command..."
+                     aria-label="Board A raw command"
+                     autocomplete="off" spellcheck="false">
+              <button class="board-send-btn" id="btn-board-a-send" type="button" disabled>Send</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="board-divider" aria-hidden="true"></div>
+
+        <!-- Board B -->
+        <div class="board-panel" id="board-b">
+          <div class="board-header">
+            <span class="board-status-dot disconnected" title="Board B connection" aria-hidden="true"></span>
+            <select class="board-port-select" id="board-b-port" aria-label="Board B serial port">
+              <option value="">- select port -</option>
+            </select>
+            <span class="board-label">B</span>
+            <button class="board-connect-btn" id="btn-board-b-connect" type="button">Connect</button>
+          </div>
+            <div class="board-meta">
+              <div class="board-status-rows">
+                <div class="board-status-row">
+                  <span class="board-status-label">Status</span>
+                  <span class="board-status-text default" id="board-b-status-primary">Disconnected. Connect this board to start the handshake.</span>
+              </div>
+              <div class="board-status-row">
+                <span class="board-status-label">Detail</span>
+                <span class="board-status-text default" id="board-b-status-detail">No protocol activity yet.</span>
+              </div>
+            </div>
+          </div>
+          <div class="board-terminal" id="board-b-terminal"
+               role="log" aria-label="Board B terminal output"
+               aria-live="polite" aria-atomic="false"></div>
+          <div class="board-command-bar" id="board-b-cmd-bar">
+            <div class="board-presets" id="board-b-presets" role="group" aria-label="Board B preset commands"></div>
+            <div class="board-custom-form" id="board-b-custom-form" aria-label="Board B custom command form">
+              <div class="board-custom-actions">
+                <button class="board-custom-send-btn" id="btn-board-b-custom-send" type="button">Send</button>
+                <button class="board-custom-cancel-btn" id="btn-board-b-custom-cancel" type="button">Cancel</button>
+              </div>
+            </div>
+            <div class="board-raw-row">
+              <input class="board-raw-input" id="board-b-raw"
+                     type="text" placeholder="Raw command..."
+                     aria-label="Board B raw command"
+                     autocomplete="off" spellcheck="false">
+              <button class="board-send-btn" id="btn-board-b-send" type="button" disabled>Send</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /dual-boards -->
+
+    </div><!-- /dual-panel -->
 
   </div><!-- /main -->
 
@@ -259,12 +456,12 @@
 
   <!-- Chart.js 4.4.1 from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"
-          integrity="sha512-ZwR1/gSZM3ai6vCdI+LVF1zSq/5HznD3oD+sCoJrzXJ+yKiTLiazragM4AFRxinecd6LgVOpthy0GwN0oYBVw=="
           crossorigin="anonymous"
           referrerpolicy="no-referrer"></script>
 
-  <!-- Renderer entry point — type=module enables ES6 imports -->
+  <!-- Renderer entry point - type=module enables ES6 imports -->
   <script type="module" src="app.js"></script>
 
 </body>
 </html>
+

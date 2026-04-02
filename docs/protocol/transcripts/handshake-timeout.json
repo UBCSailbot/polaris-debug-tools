@@ -1,0 +1,15 @@
+{
+  "name": "handshake-timeout",
+  "steps": [
+    { "dir": "tx", "raw": "SYS:HELLO" },
+    { "dir": "local-timeout" }
+  ],
+  "expect": {
+    "terminalFrames": 0,
+    "streamEvents": 0,
+    "logFrames": 0,
+    "localTimeouts": 1,
+    "mode": "protocol",
+    "profile": null
+  }
+}

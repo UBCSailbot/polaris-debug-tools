@@ -1,0 +1,17 @@
+{
+  "name": "uart-loopback",
+  "steps": [
+    { "dir": "tx", "raw": "UART:INIT" },
+    { "dir": "rx", "raw": "UART:PASS:ready=1" },
+    { "dir": "tx", "raw": "UART:LOOP:41" },
+    { "dir": "rx", "raw": "UART:PASS:rx=41" }
+  ],
+  "expect": {
+    "terminalFrames": 2,
+    "streamEvents": 0,
+    "logFrames": 0,
+    "localTimeouts": 0,
+    "mode": "protocol",
+    "profile": null
+  }
+}

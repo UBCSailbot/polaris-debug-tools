@@ -1,60 +1,204 @@
-// main.js
-// Electron main process for the Sailbot dev board protocol tester GUI.
-//
-// IPC channels handled here:
-//   serial:list-ports  (handle) — scan available serial ports
-//   serial:connect     (handle) — open port, start reading, open session log
-//   serial:disconnect  (handle) — close port cleanly
-//   serial:send        (handle) — write command + \r\n to port, track RTT start
-//
-//   serial:data              (send) — parsed incoming line + RTT to renderer
-//   serial:connection-status (send) — connection state changes
-//   serial:reconnect-attempt (send) — reconnect progress notifications
-//   log:session-path         (send) — path of current session .log file
-//
-//   log:export-log (handle) — return path of current session .log file
-//   log:export-csv (handle) — write CSV from session data, return path
-
 'use strict';
 
 const { app, BrowserWindow, ipcMain } = require('electron');
-const path       = require('path');
-const fs         = require('fs');
-const { SerialPort }      = require('serialport');
-const { ReadlineParser }  = require('@serialport/parser-readline');
+const path = require('path');
+const fs = require('fs');
+const { execFile } = require('child_process');
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
 
-// ─── Session state ────────────────────────────────────────────────────────────
-let win             = null;   // BrowserWindow — set in createWindow()
-let port            = null;   // SerialPort instance
-let parser          = null;   // ReadlineParser piped from port
-let currentPortPath = null;   // port path used for the active connection
-let currentBaud     = null;   // baud rate used for the active connection
-let logStream       = null;   // fs.WriteStream for the current .log file
-let logPath         = null;   // absolute path to current .log file
-let sessionBase     = null;   // base filename (without extension) for this session
-let sessionData     = [];     // [{ ts, raw, proto, status, data, rtt }] for CSV export
-let lastSentAt      = null;   // Date.now() at last serial:send — cleared after first response
-let _intentionalClose = false; // true while closePort() is in progress — suppresses reconnect
+const protocolParser = require('./frontend/protocol-parser.cjs');
 
-// Auto-reconnect config
+const CMD_TIMEOUT_MS = 2000;
+const HANDSHAKE_TIMEOUT_MS = 1500;
+const HANDSHAKE_SETTLE_MS = 500;
+const HANDSHAKE_RETRY_DELAY_MS = 250;
+const MAX_HANDSHAKE_ATTEMPTS = 3;
 const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAYS_MS    = [1000, 2000, 4000, 4000, 4000]; // per attempt
-let reconnectAttempt        = 0;
-let reconnectTimer          = null;
-let autoReconnectEnabled    = true;
+const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 4000, 4000];
 
-// ─── Utility ──────────────────────────────────────────────────────────────────
+let win = null;
+let logStream = null;
+let logPath = null;
+let sessionBase = null;
+let sessionData = [];
+let autoReconnectEnabled = true;
 
-/** Send a push event to the renderer. No-ops if the window is gone. */
+function appendRuntimeDebug(message) {
+  const logsDir = path.join(__dirname, 'logs');
+  const debugPath = path.join(logsDir, 'runtime-debug.log');
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+
+  try {
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    fs.appendFileSync(debugPath, line, 'utf8');
+  } catch {
+    // Debug logging must never break app flow.
+  }
+}
+
+appendRuntimeDebug('main.js loaded');
+
+function normalizeListedPorts(ports) {
+  const seen = new Map();
+
+  for (const port of ports || []) {
+    const portPath = String(port?.path || port?.DeviceID || '').trim();
+
+    if (!portPath) {
+      continue;
+    }
+
+    if (!seen.has(portPath)) {
+      seen.set(portPath, {
+        path: portPath,
+        manufacturer: String(port?.manufacturer || port?.Manufacturer || '').trim(),
+        friendlyName: String(port?.friendlyName || port?.Name || '').trim(),
+      });
+    }
+  }
+
+  return Array.from(seen.values()).sort((a, b) => {
+    const matchA = a.path.match(/^COM(\d+)$/i);
+    const matchB = b.path.match(/^COM(\d+)$/i);
+
+    if (matchA && matchB) {
+      return Number(matchA[1]) - Number(matchB[1]);
+    }
+
+    return a.path.localeCompare(b.path);
+  });
+}
+
+function listWindowsPortsFallback() {
+  return new Promise(resolve => {
+    const command = [
+      '$ports = [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object;',
+      '$ports = $ports | ForEach-Object { [pscustomobject]@{ path = $_; manufacturer = \"\"; friendlyName = \"\" } };',
+      '$ports | ConvertTo-Json -Compress',
+    ].join(' ');
+
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', command],
+      { windowsHide: true },
+      (err, stdout, stderr) => {
+        let parsed;
+
+        if (err) {
+          console.error('windows port fallback error:', err.message);
+          if (stderr) {
+            console.error('windows port fallback stderr:', stderr);
+          }
+          appendRuntimeDebug(`Windows fallback failed: ${err.message}${stderr ? ` | stderr=${String(stderr).trim()}` : ''}`);
+          resolve([]);
+          return;
+        }
+
+        try {
+          parsed = stdout && stdout.trim() ? JSON.parse(stdout) : [];
+        } catch (parseErr) {
+          console.error('windows port fallback parse error:', parseErr.message);
+          appendRuntimeDebug(`Windows fallback parse failed: ${parseErr.message} | stdout=${String(stdout).trim()}`);
+          resolve([]);
+          return;
+        }
+
+        resolve(normalizeListedPorts(Array.isArray(parsed) ? parsed : [parsed]));
+      },
+    );
+  });
+}
+
+async function listAvailablePorts() {
+  let listed = [];
+
+  try {
+    listed = normalizeListedPorts(await SerialPort.list());
+    appendRuntimeDebug(`SerialPort.list returned ${listed.length} port(s): ${listed.map(port => port.path).join(', ') || '<none>'}`);
+  } catch (err) {
+    console.error('list-ports error:', err.message);
+    appendRuntimeDebug(`SerialPort.list failed: ${err.message}`);
+  }
+
+  if (listed.length > 0 || process.platform !== 'win32') {
+    return listed;
+  }
+
+  appendRuntimeDebug('SerialPort.list returned no ports; using Windows fallback.');
+  listed = await listWindowsPortsFallback();
+  appendRuntimeDebug(`Windows fallback returned ${listed.length} port(s): ${listed.map(port => port.path).join(', ') || '<none>'}`);
+  return listed;
+}
+
+function createConnectionState() {
+  return {
+    port: null,
+    parser: null,
+    portPath: null,
+    baud: null,
+    intentionalClose: false,
+    reconnectAttempt: 0,
+    reconnectTimer: null,
+    inFlight: false,
+    activeCommand: null,
+    commandTimeoutHandle: null,
+    boardProfile: null,
+    handshake: null,
+  };
+}
+
+const primary = createConnectionState();
+const dualA = createConnectionState();
+const dualB = createConnectionState();
+
+const CONNECTION_CONFIG = new Map([
+  [primary, {
+    dataChannel: 'serial:data',
+    streamChannel: 'serial:stream-event',
+    logChannel: 'serial:log',
+    statusChannel: 'serial:connection-status',
+    profileChannel: 'serial:board-profile',
+    reconnectChannel: 'serial:reconnect-attempt',
+    reconnectWithProgress: true,
+    recordSession: true,
+  }],
+  [dualA, {
+    dataChannel: 'dual:data-a',
+    streamChannel: null,
+    logChannel: null,
+    statusChannel: 'dual:connection-status-a',
+    profileChannel: 'dual:board-profile-a',
+    reconnectChannel: null,
+    reconnectWithProgress: false,
+    recordSession: false,
+  }],
+  [dualB, {
+    dataChannel: 'dual:data-b',
+    streamChannel: null,
+    logChannel: null,
+    statusChannel: 'dual:connection-status-b',
+    profileChannel: 'dual:board-profile-b',
+    reconnectChannel: null,
+    reconnectWithProgress: false,
+    recordSession: false,
+  }],
+]);
+
+function getConnectionConfig(connection) {
+  return CONNECTION_CONFIG.get(connection);
+}
+
 function sendToRenderer(channel, payload) {
   if (win && !win.isDestroyed()) {
     win.webContents.send(channel, payload);
   }
 }
 
-/** Build a timestamp string suitable for filenames: session_YYYY-MM-DD_HHmmss */
 function sessionTimestamp() {
-  const d   = new Date();
+  const d = new Date();
   const pad = n => String(n).padStart(2, '0');
   return (
     `session_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
@@ -62,32 +206,33 @@ function sessionTimestamp() {
   );
 }
 
-/** Escape a value for CSV: wrap in quotes if it contains commas, quotes, or newlines. */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function csvEscape(val) {
-  if (val == null) return '';
-  const str = String(val);
+  const str = val == null ? '' : String(val);
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 }
 
-// ─── Session log ─────────────────────────────────────────────────────────────
-
 function openSessionLog() {
   const logsDir = path.join(__dirname, 'logs');
-  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
 
   sessionBase = sessionTimestamp();
-  logPath     = path.join(logsDir, `${sessionBase}.log`);
-  logStream   = fs.createWriteStream(logPath, { flags: 'a', encoding: 'utf8' });
+  logPath = path.join(logsDir, `${sessionBase}.log`);
+  logStream = fs.createWriteStream(logPath, { flags: 'a', encoding: 'utf8' });
   sessionData = [];
 
   logStream.on('error', err => {
     console.error('Log write error:', err.message);
   });
 
-  // Notify renderer of the session file path
   sendToRenderer('log:session-path', { path: logPath });
 }
 
@@ -104,341 +249,558 @@ function appendToLog(raw, ts) {
   }
 }
 
-// ─── Serial port ──────────────────────────────────────────────────────────────
+function parseCommandDomain(command) {
+  const match = String(command ?? '').trim().match(/^([A-Z0-9_]+):/);
+  return match ? match[1] : null;
+}
 
-/**
- * Open the serial port and attach a readline parser.
- * Resolves on successful open, rejects on error.
- */
-function openPort(portPath, baudRate) {
-  // Create a fresh port + parser every time (including reconnects)
-  const sp = new SerialPort({ path: portPath, baudRate, autoOpen: false });
-  const lp = sp.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+function clearCommandState(connection) {
+  if (connection.commandTimeoutHandle) {
+    clearTimeout(connection.commandTimeoutHandle);
+    connection.commandTimeoutHandle = null;
+  }
+  connection.inFlight = false;
+  connection.activeCommand = null;
+}
 
-  lp.on('data', line => {
-    const ts  = Date.now();
-    const rtt = lastSentAt != null ? ts - lastSentAt : null;
-    lastSentAt = null; // one RTT measurement per command-response pair
+function clearHandshake(connection) {
+  if (!connection.handshake) {
+    return;
+  }
+  clearTimeout(connection.handshake.timeoutHandle);
+  connection.handshake = null;
+}
 
-    appendToLog(line, ts);
+function clearReconnect(connection) {
+  if (connection.reconnectTimer) {
+    clearTimeout(connection.reconnectTimer);
+    connection.reconnectTimer = null;
+  }
+  connection.reconnectAttempt = 0;
+}
 
-    // Parse PROTO:STATUS:DATA — match only known protos so the renderer's
-    // parseLine() and the main process agree on what is structured data.
-    const match  = line.trim().match(/^(UART|SPI|CANFD|I2C):([A-Z]+):(.*)$/);
-    const proto  = match ? match[1] : null;
-    const status = match ? match[2] : 'RAW';
-    const data   = match ? match[3] : line;
+function emitBoardProfile(connection, profile) {
+  sendToRenderer(getConnectionConfig(connection).profileChannel, profile);
+}
 
-    if (match) {
-      sessionData.push({ ts, raw: line, proto, status, data, rtt });
+function setUnavailableBoardProfile(connection, reason) {
+  connection.boardProfile = null;
+  emitBoardProfile(connection, {
+    available: false,
+    board: null,
+    fw: null,
+    proto: null,
+    caps: [],
+    legacy: null,
+    reason,
+  });
+}
+
+function normalizeBoardProfile(parsed) {
+  const profile = protocolParser.parseCapabilities(parsed.payload);
+  const hasIdentity =
+    profile.proto != null ||
+    profile.fw != null ||
+    profile.board != null ||
+    profile.caps.length > 0 ||
+    profile.legacy != null;
+
+  if (!hasIdentity) {
+    return null;
+  }
+
+  return {
+    available: true,
+    board: profile.board,
+    fw: profile.fw,
+    proto: profile.proto,
+    caps: profile.caps,
+    legacy: profile.legacy,
+    reason: null,
+  };
+}
+
+function maybeResolveHandshake(connection, parsed) {
+  let profile;
+
+  if (!connection.handshake || parsed.domain !== 'SYS' || parsed.type !== 'INFO') {
+    return false;
+  }
+
+  profile = normalizeBoardProfile(parsed);
+  if (!profile) {
+    return false;
+  }
+
+  connection.boardProfile = profile;
+  emitBoardProfile(connection, profile);
+  clearTimeout(connection.handshake.timeoutHandle);
+  connection.handshake.resolve(profile);
+  connection.handshake = null;
+  return true;
+}
+
+function maybeUpdateBoardProfileFromInfo(connection, parsed) {
+  const profile = normalizeBoardProfile(parsed);
+
+  if (!profile) {
+    return false;
+  }
+
+  connection.boardProfile = profile;
+  emitBoardProfile(connection, profile);
+  return true;
+}
+
+function recordStructuredFrame(connection, raw, parsed, rtt, localTimeout) {
+  if (!protocolParser.isTerminalFrame(parsed)) {
+    return;
+  }
+  if (!getConnectionConfig(connection).recordSession) {
+    return;
+  }
+
+  sessionData.push({
+    ts: Date.now(),
+    raw,
+    proto: parsed.domain,
+    status: localTimeout ? 'HOST_TIMEOUT' : parsed.status,
+    data: parsed.payload,
+    rtt,
+  });
+}
+
+function routePrimaryFrame(raw, parsed) {
+  let handshake = false;
+  let rtt = null;
+
+  if (parsed && maybeResolveHandshake(primary, parsed)) {
+    handshake = true;
+  }
+
+  if (!parsed) {
+    sendToRenderer('serial:data', { raw, parsed: null, rtt: null, localTimeout: false });
+    return;
+  }
+
+  if (protocolParser.isLog(parsed)) {
+    sendToRenderer('serial:log', { raw, parsed });
+    return;
+  }
+
+  if (!handshake && parsed.domain === 'SYS' && parsed.type === 'INFO') {
+    maybeUpdateBoardProfileFromInfo(primary, parsed);
+  }
+
+  if (protocolParser.isStreamingEvent(parsed)) {
+    sendToRenderer('serial:stream-event', { raw, parsed, rtt: null });
+    return;
+  }
+
+  if (protocolParser.isTerminalFrame(parsed) && primary.inFlight) {
+    if (!primary.activeCommand || !primary.activeCommand.domain || primary.activeCommand.domain === parsed.domain) {
+      rtt = Date.now() - primary.activeCommand.sentAt;
+      clearCommandState(primary);
+    }
+  }
+
+  recordStructuredFrame(primary, raw, parsed, rtt, false);
+  sendToRenderer('serial:data', { raw, parsed, rtt, localTimeout: false, handshake });
+}
+
+function routeDualFrame(connection, raw, parsed) {
+  let handshake = false;
+  let rtt = null;
+
+  if (parsed && maybeResolveHandshake(connection, parsed)) {
+    handshake = true;
+  }
+
+  if (!parsed) {
+    sendToRenderer(getConnectionConfig(connection).dataChannel, {
+      raw,
+      parsed: null,
+      rtt: null,
+      localTimeout: false,
+      handshake: false,
+    });
+    return;
+  }
+
+  if (!handshake && parsed.domain === 'SYS' && parsed.type === 'INFO') {
+    maybeUpdateBoardProfileFromInfo(connection, parsed);
+  }
+
+  if (protocolParser.isTerminalFrame(parsed) && connection.inFlight) {
+    if (!connection.activeCommand || !connection.activeCommand.domain || connection.activeCommand.domain === parsed.domain) {
+      rtt = Date.now() - connection.activeCommand.sentAt;
+      clearCommandState(connection);
+    }
+  }
+
+  sendToRenderer(getConnectionConfig(connection).dataChannel, {
+    raw,
+    parsed,
+    rtt,
+    localTimeout: false,
+    handshake,
+  });
+}
+
+function attachPortListeners(connection, parser) {
+  const config = getConnectionConfig(connection);
+
+  parser.on('data', line => {
+    const raw = String(line ?? '');
+    if (connection === primary) {
+      appendToLog(raw, Date.now());
+      routePrimaryFrame(raw, protocolParser.parseLine(raw));
+      return;
     }
 
-    sendToRenderer('serial:data', {
-      raw:    line,
-      proto:  proto,
-      status: status,
-      data:   data,
-      rtt:    rtt,
-    });
+    routeDualFrame(connection, raw, protocolParser.parseLine(raw));
   });
 
-  sp.on('error', err => {
-    // Non-fatal errors (e.g. framing errors) — log, don't crash
-    console.error('SerialPort error:', err.message);
+  connection.port.on('error', err => {
+    console.error(`SerialPort error [${connection.portPath || 'unknown'}]:`, err.message);
   });
 
-  sp.on('close', () => {
-    if (_intentionalClose) return; // normal user-initiated close — handled by closePort()
+  connection.port.on('close', () => {
+    if (connection.intentionalClose) {
+      return;
+    }
 
-    // Unexpected disconnect
-    port   = null;
-    parser = null;
-    sendToRenderer('serial:connection-status', {
+    clearCommandState(connection);
+    clearHandshake(connection);
+    connection.port = null;
+    connection.parser = null;
+
+    sendToRenderer(config.statusChannel, {
       connected: false,
-      port: currentPortPath,
-      baud: currentBaud,
+      port: connection.portPath,
+      baud: connection.baud,
     });
-    scheduleReconnect();
-  });
+    setUnavailableBoardProfile(connection, 'disconnected');
 
+    if (connection === primary) {
+      scheduleReconnect(primary);
+    } else {
+      scheduleBoardReconnect(connection);
+    }
+  });
+}
+
+function openPort(connection) {
   return new Promise((resolve, reject) => {
+    const sp = new SerialPort({
+      path: connection.portPath,
+      baudRate: connection.baud,
+      autoOpen: false,
+    });
+    const parser = sp.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+
     sp.open(err => {
       if (err) {
         reject(err);
         return;
       }
-      port   = sp;
-      parser = lp;
-      resolve();
+
+      connection.port = sp;
+      connection.parser = parser;
+      attachPortListeners(connection, parser);
+      sp.set({ dtr: false, rts: false }, setErr => {
+        if (setErr) {
+          appendRuntimeDebug(`serial control-line set failed for ${connection.portPath}: ${setErr.message}`);
+        }
+        resolve();
+      });
     });
   });
 }
 
-/**
- * Close the current port cleanly.
- * Sets _intentionalClose so the 'close' event handler skips reconnect.
- */
-function closePort() {
+function closePort(connection) {
   return new Promise(resolve => {
-    if (!port || !port.isOpen) {
-      port   = null;
-      parser = null;
+    clearCommandState(connection);
+    clearHandshake(connection);
+
+    if (!connection.port || !connection.port.isOpen) {
+      connection.port = null;
+      connection.parser = null;
       resolve();
       return;
     }
-    _intentionalClose = true;
-    port.close(err => {
-      _intentionalClose = false;
-      if (err) console.error('Port close error:', err.message);
-      port   = null;
-      parser = null;
+
+    connection.intentionalClose = true;
+    connection.port.close(err => {
+      connection.intentionalClose = false;
+      if (err) {
+        console.error('Port close error:', err.message);
+      }
+      connection.port = null;
+      connection.parser = null;
       resolve();
     });
   });
 }
 
-// ─── Auto-reconnect ───────────────────────────────────────────────────────────
-
-function scheduleReconnect() {
-  if (!autoReconnectEnabled) return;
-  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
-    reconnectAttempt = 0;
-    reconnectTimer   = null;
-    // Final failure — renderer already knows from last connection-status push
-    return;
-  }
-
-  const delay = RECONNECT_DELAYS_MS[reconnectAttempt] ?? 4000;
-  reconnectAttempt++;
-
-  sendToRenderer('serial:reconnect-attempt', {
-    attempt: reconnectAttempt,
-    max:     MAX_RECONNECT_ATTEMPTS,
-  });
-
-  reconnectTimer = setTimeout(async () => {
-    reconnectTimer = null;
-    try {
-      await openPort(currentPortPath, currentBaud);
-      reconnectAttempt = 0;
-      sendToRenderer('serial:connection-status', {
-        connected: true,
-        port:      currentPortPath,
-        baud:      currentBaud,
-      });
-    } catch {
-      scheduleReconnect(); // keep trying
-    }
-  }, delay);
-}
-
-function cancelReconnect() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  reconnectAttempt = 0;
-}
-
-// ─── Dual-board state ─────────────────────────────────────────────────────────
-
-function makeBoardState() {
-  return {
-    port:             null,
-    parser:           null,
-    portPath:         null,
-    baud:             null,
-    lastSentAt:       null,
-    intentionalClose: false,
-    reconnectAttempt: 0,
-    reconnectTimer:   null,
-  };
-}
-
-const dualA = makeBoardState();
-const dualB = makeBoardState();
-
-function openBoardPort(board, dataChannel, statusChannel) {
-  const sp = new SerialPort({ path: board.portPath, baudRate: board.baud, autoOpen: false });
-  const lp = sp.pipe(new ReadlineParser({ delimiter: '\r\n' }));
-
-  lp.on('data', line => {
-    const ts  = Date.now();
-    const rtt = board.lastSentAt != null ? ts - board.lastSentAt : null;
-    board.lastSentAt = null;
-
-    const match  = line.trim().match(/^(UART|SPI|CANFD|I2C):([A-Z]+):(.*)$/);
-    const proto  = match ? match[1] : null;
-    const status = match ? match[2] : 'RAW';
-    const data   = match ? match[3] : line;
-
-    sendToRenderer(dataChannel, { raw: line, proto, status, data, rtt });
-  });
-
-  sp.on('error', err => {
-    console.error(`Board [${board.portPath}] error:`, err.message);
-  });
-
-  sp.on('close', () => {
-    if (board.intentionalClose) return;
-    board.port   = null;
-    board.parser = null;
-    sendToRenderer(statusChannel, {
-      connected: false,
-      port: board.portPath,
-      baud: board.baud,
-    });
-    scheduleBoardReconnect(board, dataChannel, statusChannel);
-  });
-
+function writeCommand(connection, command) {
   return new Promise((resolve, reject) => {
-    sp.open(err => {
-      if (err) { reject(err); return; }
-      board.port   = sp;
-      board.parser = lp;
-      resolve();
-    });
-  });
-}
-
-function closeBoardPort(board) {
-  return new Promise(resolve => {
-    if (!board.port || !board.port.isOpen) {
-      board.port   = null;
-      board.parser = null;
-      resolve();
+    if (!connection.port || !connection.port.isOpen) {
+      reject(new Error('Port not open'));
       return;
     }
-    board.intentionalClose = true;
-    board.port.close(err => {
-      board.intentionalClose = false;
-      if (err) console.error('Board port close error:', err.message);
-      board.port   = null;
-      board.parser = null;
-      resolve();
+
+    connection.port.write(`${command}\r\n`, err => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      connection.port.drain(drainErr => {
+        if (drainErr) {
+          reject(drainErr);
+          return;
+        }
+        resolve();
+      });
     });
   });
 }
 
-function scheduleBoardReconnect(board, dataChannel, statusChannel) {
-  if (board.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
-    board.reconnectAttempt = 0;
-    board.reconnectTimer   = null;
+async function sendTrackedCommand(connection, command) {
+  const sentAt = Date.now();
+  const config = getConnectionConfig(connection);
+
+  if (connection.inFlight) {
+    return { success: false, error: 'Another command is already in flight' };
+  }
+
+  connection.inFlight = true;
+  connection.activeCommand = {
+    command,
+    domain: parseCommandDomain(command),
+    sentAt,
+  };
+  connection.commandTimeoutHandle = setTimeout(() => {
+    let parsed;
+    let raw;
+
+    if (!connection.inFlight || !connection.activeCommand) {
+      return;
+    }
+
+    parsed = {
+      raw: '',
+      domain: connection.activeCommand.domain || 'SYS',
+      proto: connection.activeCommand.domain || 'SYS',
+      kind: 'response',
+      type: 'TIMEOUT',
+      status: 'TIMEOUT',
+      payload: 'reason=host-timeout',
+      data: 'reason=host-timeout',
+    };
+    raw = `${parsed.domain}:TIMEOUT:${parsed.payload}`;
+
+    clearCommandState(connection);
+    recordStructuredFrame(connection, raw, parsed, null, true);
+    sendToRenderer(config.dataChannel, {
+      raw,
+      parsed,
+      rtt: null,
+      localTimeout: true,
+      handshake: false,
+    });
+  }, CMD_TIMEOUT_MS);
+
+  try {
+    await writeCommand(connection, command);
+    return { success: true, sentAt };
+  } catch (err) {
+    clearCommandState(connection);
+    return { success: false, error: err.message };
+  }
+}
+
+async function performHandshake(connection) {
+  clearHandshake(connection);
+  setUnavailableBoardProfile(connection, 'handshake-pending');
+  await delay(HANDSHAKE_SETTLE_MS);
+
+  for (let attempt = 1; attempt <= MAX_HANDSHAKE_ATTEMPTS; attempt += 1) {
+    let resolved = false;
+    let result;
+
+    appendRuntimeDebug(`Handshake attempt ${attempt}/${MAX_HANDSHAKE_ATTEMPTS} on ${connection.portPath || 'unknown-port'}`);
+
+    result = await new Promise(async resolve => {
+      connection.handshake = {
+        resolve(profile) {
+          resolved = true;
+          resolve(profile);
+        },
+        timeoutHandle: setTimeout(() => {
+          connection.handshake = null;
+          resolve(null);
+        }, HANDSHAKE_TIMEOUT_MS),
+      };
+
+      try {
+        await writeCommand(connection, 'SYS:HELLO');
+      } catch (err) {
+        clearHandshake(connection);
+        setUnavailableBoardProfile(connection, 'handshake-write-failed');
+        appendRuntimeDebug(`Handshake write failed on ${connection.portPath || 'unknown-port'}: ${err.message}`);
+        resolve(null);
+      }
+    }).finally(() => {
+      if (!resolved && connection.handshake) {
+        clearHandshake(connection);
+      }
+    });
+
+    if (result) {
+      appendRuntimeDebug(`Handshake succeeded on attempt ${attempt} for ${connection.portPath || 'unknown-port'}`);
+      return result;
+    }
+
+    if (attempt < MAX_HANDSHAKE_ATTEMPTS) {
+      await delay(HANDSHAKE_RETRY_DELAY_MS);
+    }
+  }
+
+  appendRuntimeDebug(`Handshake timed out after ${MAX_HANDSHAKE_ATTEMPTS} attempts for ${connection.portPath || 'unknown-port'}`);
+  setUnavailableBoardProfile(connection, 'handshake-timeout');
+  return null;
+}
+
+function scheduleReconnect(connection) {
+  const delay = RECONNECT_DELAYS_MS[connection.reconnectAttempt] ?? 4000;
+
+  if (!autoReconnectEnabled) {
     return;
   }
-  const delay = RECONNECT_DELAYS_MS[board.reconnectAttempt] ?? 4000;
-  board.reconnectAttempt++;
-  board.reconnectTimer = setTimeout(async () => {
-    board.reconnectTimer = null;
+  if (connection.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    clearReconnect(connection);
+    return;
+  }
+
+  connection.reconnectAttempt += 1;
+  sendToRenderer(getConnectionConfig(connection).reconnectChannel, {
+    attempt: connection.reconnectAttempt,
+    max: MAX_RECONNECT_ATTEMPTS,
+  });
+
+  connection.reconnectTimer = setTimeout(async () => {
+    connection.reconnectTimer = null;
     try {
-      await openBoardPort(board, dataChannel, statusChannel);
-      board.reconnectAttempt = 0;
-      sendToRenderer(statusChannel, {
+      await openPort(connection);
+      clearReconnect(connection);
+      sendToRenderer(getConnectionConfig(connection).statusChannel, {
         connected: true,
-        port: board.portPath,
-        baud: board.baud,
+        port: connection.portPath,
+        baud: connection.baud,
       });
+      await performHandshake(connection);
     } catch {
-      scheduleBoardReconnect(board, dataChannel, statusChannel);
+      scheduleReconnect(connection);
     }
   }, delay);
 }
 
-function cancelBoardReconnect(board) {
-  if (board.reconnectTimer) {
-    clearTimeout(board.reconnectTimer);
-    board.reconnectTimer = null;
+function scheduleBoardReconnect(connection) {
+  const delay = RECONNECT_DELAYS_MS[connection.reconnectAttempt] ?? 4000;
+  const config = getConnectionConfig(connection);
+
+  if (!autoReconnectEnabled) {
+    return;
   }
-  board.reconnectAttempt = 0;
+  if (connection.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    clearReconnect(connection);
+    return;
+  }
+
+  connection.reconnectAttempt += 1;
+  connection.reconnectTimer = setTimeout(async () => {
+    connection.reconnectTimer = null;
+    try {
+      await openPort(connection);
+      clearReconnect(connection);
+      sendToRenderer(config.statusChannel, {
+        connected: true,
+        port: connection.portPath,
+        baud: connection.baud,
+      });
+      await performHandshake(connection);
+    } catch {
+      scheduleBoardReconnect(connection);
+    }
+  }, delay);
 }
 
-// ─── IPC handlers ────────────────────────────────────────────────────────────
-
-/** serial:list-ports → [{ path, manufacturer }] */
 ipcMain.handle('serial:list-ports', async () => {
-  try {
-    const ports = await SerialPort.list();
-    return ports.map(p => ({
-      path:         p.path,
-      manufacturer: p.manufacturer || '',
-    }));
-  } catch (err) {
-    console.error('list-ports error:', err.message);
-    return [];
-  }
+  appendRuntimeDebug('IPC serial:list-ports invoked.');
+  return listAvailablePorts();
 });
 
-/** serial:connect { path, baudRate } → { success, error? } */
+ipcMain.handle('app:get-version', () => app.getVersion());
+
 ipcMain.handle('serial:connect', async (_event, { path: portPath, baudRate }) => {
   try {
-    // Cancel any pending reconnect and tear down existing connection
-    cancelReconnect();
-    await closePort();
+    clearReconnect(primary);
+    await closePort(primary);
     closeSessionLog();
 
-    currentPortPath = portPath;
-    currentBaud     = baudRate;
-    lastSentAt      = null;
+    primary.portPath = portPath;
+    primary.baud = baudRate;
+    primary.boardProfile = null;
 
-    await openPort(portPath, baudRate);
-    openSessionLog(); // creates .log file, notifies renderer of path
+    await openPort(primary);
+    openSessionLog();
 
     sendToRenderer('serial:connection-status', {
       connected: true,
-      port:      portPath,
-      baud:      baudRate,
+      port: portPath,
+      baud: baudRate,
     });
-    return { success: true };
+
+    await performHandshake(primary);
+    return { success: true, boardProfile: primary.boardProfile };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-/** serial:disconnect → { success } */
 ipcMain.handle('serial:disconnect', async () => {
   try {
-    cancelReconnect();
-    await closePort();
+    clearReconnect(primary);
+    await closePort(primary);
     closeSessionLog();
     sendToRenderer('serial:connection-status', {
       connected: false,
-      port:      currentPortPath,
-      baud:      currentBaud,
+      port: primary.portPath,
+      baud: primary.baud,
     });
+    setUnavailableBoardProfile(primary, 'disconnected');
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-/** serial:send { command } → { success, sentAt?, error? } */
 ipcMain.handle('serial:send', async (_event, { command }) => {
-  if (!port || !port.isOpen) {
+  if (!primary.port || !primary.port.isOpen) {
     return { success: false, error: 'Port not open' };
   }
-  try {
-    const sentAt = Date.now();
-    lastSentAt   = sentAt; // RTT clock starts now
-
-    await new Promise((resolve, reject) => {
-      port.write(`${command}\r\n`, err => (err ? reject(err) : resolve()));
-    });
-
-    return { success: true, sentAt };
-  } catch (err) {
-    lastSentAt = null; // don't attribute a stale RTT to the next response
-    return { success: false, error: err.message };
-  }
+  return sendTrackedCommand(primary, command);
 });
 
-/** settings:set-auto-reconnect { enabled } → { success } */
 ipcMain.handle('settings:set-auto-reconnect', (_event, { enabled }) => {
   autoReconnectEnabled = enabled;
-  if (!enabled) cancelReconnect();
+  if (!enabled) {
+    clearReconnect(primary);
+  }
   return { success: true };
 });
 
-/** log:export-log → { success, path?, error? } */
 ipcMain.handle('log:export-log', async () => {
   if (!logPath) {
     return { success: false, error: 'No active session log' };
@@ -446,32 +808,35 @@ ipcMain.handle('log:export-log', async () => {
   return { success: true, path: logPath };
 });
 
-/** log:export-csv → { success, path?, error? } */
 ipcMain.handle('log:export-csv', async () => {
+  let base;
+  let csvPath;
+  let header;
+  let rows;
+
   if (!sessionData.length) {
     return { success: false, error: 'No structured data recorded yet' };
   }
+
   try {
     const logsDir = path.join(__dirname, 'logs');
-    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
 
-    // Use session base name so CSV is clearly associated with the .log
-    const base    = sessionBase || sessionTimestamp();
-    const csvPath = path.join(logsDir, `${base}.csv`);
-
-    const header = 'timestamp_ms,proto,status,rtt_ms,data,raw\n';
-    const rows   = sessionData
-      .map(r =>
-        [
-          r.ts,
-          csvEscape(r.proto),
-          csvEscape(r.status),
-          r.rtt != null ? r.rtt : '',
-          csvEscape(r.data),
-          csvEscape(r.raw),
-        ].join(',')
-      )
-      .join('\n');
+    base = sessionBase || sessionTimestamp();
+    csvPath = path.join(logsDir, `${base}.csv`);
+    header = 'timestamp_ms,proto,status,rtt_ms,data,raw\n';
+    rows = sessionData.map(r => (
+      [
+        r.ts,
+        csvEscape(r.proto),
+        csvEscape(r.status),
+        r.rtt != null ? r.rtt : '',
+        csvEscape(r.data),
+        csvEscape(r.raw),
+      ].join(',')
+    )).join('\n');
 
     fs.writeFileSync(csvPath, header + rows, 'utf8');
     return { success: true, path: csvPath };
@@ -480,115 +845,117 @@ ipcMain.handle('log:export-csv', async () => {
   }
 });
 
-// ─── Dual-board IPC handlers ─────────────────────────────────────────────────
-
-/** dual:connect-a { path, baudRate } → { success, error? } */
 ipcMain.handle('dual:connect-a', async (_event, { path: portPath, baudRate }) => {
   try {
-    cancelBoardReconnect(dualA);
-    await closeBoardPort(dualA);
-    dualA.portPath   = portPath;
-    dualA.baud       = baudRate;
-    dualA.lastSentAt = null;
-    await openBoardPort(dualA, 'dual:data-a', 'dual:connection-status-a');
-    sendToRenderer('dual:connection-status-a', { connected: true, port: portPath, baud: baudRate });
-    return { success: true };
+    clearReconnect(dualA);
+    await closePort(dualA);
+    dualA.portPath = portPath;
+    dualA.baud = baudRate;
+    dualA.boardProfile = null;
+    await openPort(dualA);
+    sendToRenderer('dual:connection-status-a', {
+      connected: true,
+      port: portPath,
+      baud: baudRate,
+    });
+    await performHandshake(dualA);
+    return { success: true, boardProfile: dualA.boardProfile };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-/** dual:disconnect-a → { success } */
 ipcMain.handle('dual:disconnect-a', async () => {
   try {
-    cancelBoardReconnect(dualA);
-    await closeBoardPort(dualA);
+    clearReconnect(dualA);
+    await closePort(dualA);
     sendToRenderer('dual:connection-status-a', {
-      connected: false, port: dualA.portPath, baud: dualA.baud,
+      connected: false,
+      port: dualA.portPath,
+      baud: dualA.baud,
     });
+    setUnavailableBoardProfile(dualA, 'disconnected');
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-/** dual:send-a { command } → { success, sentAt?, error? } */
 ipcMain.handle('dual:send-a', async (_event, { command }) => {
-  if (!dualA.port || !dualA.port.isOpen) return { success: false, error: 'Port not open' };
-  try {
-    const sentAt = Date.now();
-    dualA.lastSentAt = sentAt;
-    await new Promise((resolve, reject) => {
-      dualA.port.write(`${command}\r\n`, err => (err ? reject(err) : resolve()));
-    });
-    return { success: true, sentAt };
-  } catch (err) {
-    dualA.lastSentAt = null;
-    return { success: false, error: err.message };
+  if (!dualA.port || !dualA.port.isOpen) {
+    return { success: false, error: 'Port not open' };
   }
+  return sendTrackedCommand(dualA, command);
 });
 
-/** dual:connect-b { path, baudRate } → { success, error? } */
 ipcMain.handle('dual:connect-b', async (_event, { path: portPath, baudRate }) => {
   try {
-    cancelBoardReconnect(dualB);
-    await closeBoardPort(dualB);
-    dualB.portPath   = portPath;
-    dualB.baud       = baudRate;
-    dualB.lastSentAt = null;
-    await openBoardPort(dualB, 'dual:data-b', 'dual:connection-status-b');
-    sendToRenderer('dual:connection-status-b', { connected: true, port: portPath, baud: baudRate });
-    return { success: true };
+    clearReconnect(dualB);
+    await closePort(dualB);
+    dualB.portPath = portPath;
+    dualB.baud = baudRate;
+    dualB.boardProfile = null;
+    await openPort(dualB);
+    sendToRenderer('dual:connection-status-b', {
+      connected: true,
+      port: portPath,
+      baud: baudRate,
+    });
+    await performHandshake(dualB);
+    return { success: true, boardProfile: dualB.boardProfile };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-/** dual:disconnect-b → { success } */
 ipcMain.handle('dual:disconnect-b', async () => {
   try {
-    cancelBoardReconnect(dualB);
-    await closeBoardPort(dualB);
+    clearReconnect(dualB);
+    await closePort(dualB);
     sendToRenderer('dual:connection-status-b', {
-      connected: false, port: dualB.portPath, baud: dualB.baud,
+      connected: false,
+      port: dualB.portPath,
+      baud: dualB.baud,
     });
+    setUnavailableBoardProfile(dualB, 'disconnected');
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-/** dual:send-b { command } → { success, sentAt?, error? } */
 ipcMain.handle('dual:send-b', async (_event, { command }) => {
-  if (!dualB.port || !dualB.port.isOpen) return { success: false, error: 'Port not open' };
-  try {
-    const sentAt = Date.now();
-    dualB.lastSentAt = sentAt;
-    await new Promise((resolve, reject) => {
-      dualB.port.write(`${command}\r\n`, err => (err ? reject(err) : resolve()));
-    });
-    return { success: true, sentAt };
-  } catch (err) {
-    dualB.lastSentAt = null;
-    return { success: false, error: err.message };
+  if (!dualB.port || !dualB.port.isOpen) {
+    return { success: false, error: 'Port not open' };
   }
+  return sendTrackedCommand(dualB, command);
 });
-
-// ─── Window lifecycle ─────────────────────────────────────────────────────────
 
 function createWindow() {
   win = new BrowserWindow({
-    width:  1280,
+    width: 1280,
     height: 800,
     webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration:  false,
+      nodeIntegration: false,
     },
   });
 
-  win.loadFile(path.join(__dirname, 'frontend', 'index.html'));
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    appendRuntimeDebug(`renderer console [${level}] ${sourceId}:${line} ${message}`);
+  });
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    appendRuntimeDebug(`did-fail-load code=${errorCode} desc=${errorDescription} url=${validatedURL}`);
+  });
+  win.webContents.on('preload-error', (_event, preloadPath, error) => {
+    appendRuntimeDebug(`preload-error path=${preloadPath} error=${error && error.message ? error.message : String(error)}`);
+  });
+  win.webContents.on('did-finish-load', () => {
+    appendRuntimeDebug('renderer did-finish-load');
+  });
 
+  win.loadFile(path.join(__dirname, 'frontend', 'index.html'));
   win.on('closed', () => {
     win = null;
   });
@@ -597,25 +964,26 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-  // macOS: re-create window when dock icon is clicked and no windows are open
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
   });
 });
 
 app.on('window-all-closed', () => {
-  // On macOS, keep the app running until Cmd+Q
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
 app.on('before-quit', async () => {
-  // Clean up serial port and log file on exit
-  cancelReconnect();
-  await closePort();
+  clearReconnect(primary);
+  await closePort(primary);
   closeSessionLog();
-  // Clean up dual-board ports
-  cancelBoardReconnect(dualA);
-  cancelBoardReconnect(dualB);
-  await closeBoardPort(dualA);
-  await closeBoardPort(dualB);
+
+  clearReconnect(dualA);
+  clearReconnect(dualB);
+  await closePort(dualA);
+  await closePort(dualB);
 });

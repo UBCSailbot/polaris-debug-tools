@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polaris Bench UI Concept</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="session-bar">
+      <div class="session-brand">
+        <div class="session-mark" aria-hidden="true"></div>
+        <div>
+          <div class="eyebrow">Bench Control</div>
+          <h1>Polaris Instrument Console</h1>
+        </div>
+      </div>
+      <div class="session-status">
+        <div class="status-pill live">
+          <span class="pulse-dot"></span>
+          Linked to COM6
+        </div>
+        <div class="status-meta">
+          <span>NUCLEO-U575ZI-Q</span>
+          <span>FW 0.2.0</span>
+          <span>Proto v1</span>
+        </div>
+      </div>
+      <div class="session-actions">
+        <button class="ghost-btn">Reconnect</button>
+        <button class="ghost-btn">Refresh Profile</button>
+        <button class="accent-btn">Run Bench Check</button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="workflow-rail">
+        <div class="rail-label">Workflows</div>
+        <button class="workflow-btn active" data-view="bringup">
+          <span class="workflow-title">Bring-Up</span>
+          <span class="workflow-copy">Handshake, readiness, first checks.</span>
+        </button>
+        <button class="workflow-btn" data-view="observe">
+          <span class="workflow-title">Observe</span>
+          <span class="workflow-copy">Single-board command and live data surface.</span>
+        </button>
+        <button class="workflow-btn" data-view="compare">
+          <span class="workflow-title">Compare</span>
+          <span class="workflow-copy">Board-to-board validation before sensor bring-up.</span>
+        </button>
+        <div class="rail-divider"></div>
+        <div class="rail-note">
+          <div class="rail-note-label">Mode</div>
+          <p>This prototype is isolated from the live app and uses mocked bench data only.</p>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="view-panel active" data-panel="bringup">
+          <div class="hero-band">
+            <div class="hero-copy">
+              <div class="eyebrow">Default landing state</div>
+              <h2>Start at the board, not the protocol.</h2>
+              <p>
+                One surface shows identity, capability, readiness, and the next safe action.
+                Raw serial is still available, but it no longer drives the whole product.
+              </p>
+              <div class="hero-actions">
+                <button class="accent-btn quick-action" data-log="bench sweep queued">Run Quick Sweep</button>
+                <button class="ghost-btn quick-action" data-log="profile refresh requested">Refresh Identity</button>
+              </div>
+            </div>
+            <div class="hero-figure">
+              <div class="signal-stack">
+                <div class="signal-line strong"></div>
+                <div class="signal-line"></div>
+                <div class="signal-line faint"></div>
+              </div>
+              <div class="hero-summary">
+                <div class="hero-chip ready">4 / 4 buses available</div>
+                <div class="hero-chip neutral">legacy disabled</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-grid quick-grid">
+            <article class="action-slab">
+              <div class="slab-top"><span class="mini-label">Quick Check</span><span class="status-pill ok">PASS</span></div>
+              <h3>UART Loop</h3>
+              <p>Confirm the bridge echoes cleanly before live streaming or pairing boards.</p>
+            </article>
+            <article class="action-slab">
+              <div class="slab-top"><span class="mini-label">Quick Check</span><span class="status-pill info">IDLE</span></div>
+              <h3>SPI Identity</h3>
+              <p>Run a known burst and verify the returned device signature immediately.</p>
+            </article>
+            <article class="action-slab">
+              <div class="slab-top"><span class="mini-label">Quick Check</span><span class="status-pill warn">2 found</span></div>
+              <h3>I2C Scan</h3>
+              <p>Surface responding addresses without asking the operator to parse raw logs.</p>
+            </article>
+            <article class="action-slab">
+              <div class="slab-top"><span class="mini-label">Quick Check</span><span class="status-pill ok">READY</span></div>
+              <h3>CANFD Status</h3>
+              <p>Inspect bus state, error level, and passive monitor readiness at a glance.</p>
+            </article>
+          </div>
+
+          <div class="section-grid readiness-grid">
+            <article class="readiness-panel">
+              <div class="panel-head">
+                <div><div class="mini-label">Protocol readiness</div><h3>UART</h3></div>
+                <span class="status-pill ok">Supported</span>
+              </div>
+              <p>Streaming capable, loopback healthy, 118 frames captured in the last minute.</p>
+              <div class="panel-meta"><span>Last result: rx=41</span><span>RTT: 18 ms</span></div>
+              <div class="panel-actions">
+                <button class="line-btn quick-action" data-log="uart loop test launched">Loop Test</button>
+                <button class="line-btn quick-action" data-log="uart stream enabled">Start Stream</button>
+              </div>
+            </article>
+            <article class="readiness-panel">
+              <div class="panel-head">
+                <div><div class="mini-label">Protocol readiness</div><h3>SPI</h3></div>
+                <span class="status-pill ok">Supported</span>
+              </div>
+              <p>Prepared for burst transfers. Latest identity read returned a stable device signature.</p>
+              <div class="panel-meta"><span>Last tx: 75FF</span><span>Last rx: 0068</span></div>
+              <div class="panel-actions">
+                <button class="line-btn quick-action" data-log="spi who_am_i burst queued">WHO_AM_I</button>
+                <button class="line-btn quick-action" data-log="custom spi transfer opened">Transfer</button>
+              </div>
+            </article>
+            <article class="readiness-panel">
+              <div class="panel-head">
+                <div><div class="mini-label">Protocol readiness</div><h3>CANFD</h3></div>
+                <span class="status-pill ok">Supported</span>
+              </div>
+              <p>Controller initialized with monitor support. No bus faults observed in the current session.</p>
+              <div class="panel-meta"><span>Frames seen: 44</span><span>Bus state: error active</span></div>
+              <div class="panel-actions">
+                <button class="line-btn quick-action" data-log="canfd monitor armed">Monitor</button>
+                <button class="line-btn quick-action" data-log="canfd status snapshot requested">Status</button>
+              </div>
+            </article>
+            <article class="readiness-panel">
+              <div class="panel-head">
+                <div><div class="mini-label">Protocol readiness</div><h3>I2C</h3></div>
+                <span class="status-pill ok">Supported</span>
+              </div>
+              <p>Register reads available. Two devices were found during the last scan, including the IMU at 0x6A.</p>
+              <div class="panel-meta"><span>Found: 50, 6A</span><span>Last read: 6 bytes</span></div>
+              <div class="panel-actions">
+                <button class="line-btn quick-action" data-log="i2c scan started">Scan</button>
+                <button class="line-btn quick-action" data-log="i2c register read opened">Read Register</button>
+              </div>
+            </article>
+          </div>
+
+          <section class="activity-strip">
+            <div class="section-head">
+              <div><div class="mini-label">Structured feed</div><h3>Recent Activity</h3></div>
+            </div>
+            <div class="activity-list" id="activity-list">
+              <div class="activity-item"><span class="activity-time">09:42:08</span><span class="activity-copy">SYS handshake complete, caps confirmed for UART, SPI, CANFD, I2C.</span></div>
+              <div class="activity-item"><span class="activity-time">09:42:19</span><span class="activity-copy">UART loop test passed in 18 ms.</span></div>
+              <div class="activity-item"><span class="activity-time">09:42:47</span><span class="activity-copy">I2C scan found devices at 0x50 and 0x6A.</span></div>
+            </div>
+          </section>
+        </section>
+
+        <section class="view-panel" data-panel="observe">
+          <div class="section-head observe-head">
+            <div><div class="eyebrow">Single-board workspace</div><h2>Observe one board like an instrument, not a transcript.</h2></div>
+            <div class="segmented" id="observe-protocols">
+              <button class="segment active" data-proto="UART">UART</button>
+              <button class="segment" data-proto="SPI">SPI</button>
+              <button class="segment" data-proto="CANFD">CANFD</button>
+              <button class="segment" data-proto="I2C">I2C</button>
+            </div>
+          </div>
+
+          <div class="observe-layout">
+            <section class="command-column">
+              <div class="column-card">
+                <div class="mini-label">Structured actions</div>
+                <h3 id="observe-title">UART Command Stack</h3>
+                <p id="observe-copy">Fast loopback and stream controls for bench bring-up.</p>
+                <div class="command-stack" id="command-stack"></div>
+              </div>
+            </section>
+            <section class="data-stage">
+              <div class="stage-hero">
+                <div><div class="mini-label">Live stage</div><h3 id="stage-heading">UART Throughput</h3></div>
+                <div class="stage-inline-metrics"><span>Events <strong id="metric-events">118</strong></span><span>RTT <strong id="metric-rtt">18 ms</strong></span></div>
+              </div>
+              <div class="stage-chart" id="stage-chart" aria-hidden="true"></div>
+              <div class="stage-detail-grid">
+                <div class="detail-well">
+                  <div class="mini-label">Decoded output</div>
+                  <div class="data-preview" id="data-preview">UART:DATA:244750474C4C...</div>
+                </div>
+                <div class="detail-well">
+                  <div class="mini-label">Latest frame</div>
+                  <div class="kv-list" id="kv-list">
+                    <span>status <strong>PASS</strong></span>
+                    <span>streaming <strong>1</strong></span>
+                    <span>last burst <strong>32 bytes</strong></span>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <aside class="inspector-column">
+              <div class="column-card inspector-card">
+                <div class="mini-label">Result inspector</div>
+                <h3>Latest Structured Response</h3>
+                <div class="inspector-list" id="inspector-list">
+                  <div><span>Protocol</span><strong>UART</strong></div>
+                  <div><span>Command</span><strong>STREAM:START</strong></div>
+                  <div><span>Status</span><strong class="ok-text">PASS</strong></div>
+                  <div><span>RTT</span><strong>18 ms</strong></div>
+                  <div><span>Event cadence</span><strong>steady</strong></div>
+                </div>
+                <button class="accent-btn quick-action" data-log="observe retry sent">Retry Latest</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view-panel" data-panel="compare">
+          <div class="section-head compare-head">
+            <div><div class="eyebrow">Dual-board workflow</div><h2>Compare link behavior before sensors enter the system.</h2></div>
+            <div class="segmented" id="compare-protocols">
+              <button class="segment active" data-compare="UART">UART</button>
+              <button class="segment" data-compare="SPI">SPI</button>
+              <button class="segment" data-compare="CANFD">CANFD</button>
+              <button class="segment" data-compare="I2C">I2C</button>
+            </div>
+          </div>
+          <div class="compare-banner">
+            <div><div class="mini-label">Bench verdict</div><h3 id="compare-verdict">Aligned for UART link validation</h3></div>
+            <div class="compare-banner-meta"><span>proto match</span><span>fw match</span><span>shared caps ready</span></div>
+          </div>
+          <div class="shared-runner">
+            <span class="mini-label">Shared actions</span>
+            <div class="shared-actions" id="shared-actions"></div>
+          </div>
+          <div class="compare-grid">
+            <article class="board-surface">
+              <div class="board-surface-head"><div><div class="mini-label">Board A</div><h3>COM6 · bridge ready</h3></div><span class="status-pill ok">streaming</span></div>
+              <div class="board-meta-grid"><span>FW 0.2.0</span><span>Proto 1</span><span>Caps aligned</span></div>
+              <div class="board-terminal-preview"><span>last response</span><strong>UART:PASS:RX=41</strong></div>
+            </article>
+            <article class="board-surface">
+              <div class="board-surface-head"><div><div class="mini-label">Board B</div><h3>COM8 · bridge ready</h3></div><span class="status-pill ok">streaming</span></div>
+              <div class="board-meta-grid"><span>FW 0.2.0</span><span>Proto 1</span><span>Caps aligned</span></div>
+              <div class="board-terminal-preview"><span>last response</span><strong>UART:PASS:RX=41</strong></div>
+            </article>
+          </div>
+          <section class="timeline-panel">
+            <div class="section-head compact"><div><div class="mini-label">Comparison timeline</div><h3>Command parity and timing deltas</h3></div></div>
+            <div class="timeline-table">
+              <div class="timeline-row header"><span>Time</span><span>Command</span><span>Board A</span><span>Board B</span><span>Delta</span></div>
+              <div class="timeline-row"><span>09:43:21</span><span>UART:LOOP:41</span><span>PASS · 18 ms</span><span>PASS · 21 ms</span><span class="ok-text">+3 ms</span></div>
+              <div class="timeline-row"><span>09:43:40</span><span>UART:STREAM:START</span><span>streaming</span><span>streaming</span><span class="ok-text">aligned</span></div>
+              <div class="timeline-row"><span>09:44:02</span><span>UART data burst</span><span>32 bytes</span><span>32 bytes</span><span class="ok-text">match</span></div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <section class="log-dock" id="log-dock">
+      <button class="dock-handle" id="dock-toggle" type="button">
+        <span>Engineering Log Dock</span>
+        <span class="dock-state">Collapse</span>
+      </button>
+      <div class="dock-body">
+        <div class="dock-grid">
+          <div class="dock-column">
+            <div class="mini-label">Latest operator events</div>
+            <div class="dock-log" id="dock-log">
+              <div>[09:44:10] compare verdict remains aligned for UART.</div>
+              <div>[09:44:02] board pair observed matching 32-byte burst.</div>
+              <div>[09:43:40] shared stream start issued to board A and board B.</div>
+              <div>[09:43:21] synchronized UART loop returned PASS on both sides.</div>
+            </div>
+          </div>
+          <div class="dock-column dock-column--narrow">
+            <div class="mini-label">Warnings</div>
+            <div class="warning-stack">
+              <div class="warning-chip">host timeout styling remains distinct from firmware timeout</div>
+              <div class="warning-chip">all data shown here is mocked for concept review</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
