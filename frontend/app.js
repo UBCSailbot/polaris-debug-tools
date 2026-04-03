@@ -6,6 +6,7 @@ import { parseLine, parseKeyValuePayload, isLog, isStreamingEvent } from './prot
 import { Terminal } from './terminal.js';
 import { Charts } from './charts.js';
 import { VisualView } from './visual.js';
+import { TEST_CATALOG, TestsView } from './tests.js';
 import {
   capsFromProfile,
   computeSharedCaps,
@@ -60,6 +61,7 @@ const btnCustomSend = $('btn-custom-send');
 const rawInput = $('raw-input');
 const btnSend = $('btn-send');
 const vizPanel = $('viz-panel');
+const testsPanel = $('tests-panel');
 const resProto = $('res-proto');
 const resStatus = $('res-status');
 const resData = $('res-data');
@@ -108,6 +110,20 @@ const visualView = new VisualView({
   statusBarEl: $('visual-status-bar'),
   onCommand: command => sendCommand(command),
 });
+
+const testsView = new TestsView({
+  tabsEl: $('tests-proto-tabs'),
+  cardsEl: $('tests-cards'),
+  summaryProtoEl: $('tests-summary-proto'),
+  summaryCountEl: $('tests-summary-count'),
+  summaryLastRunEl: $('tests-summary-last-run'),
+  summaryHintEl: $('tests-summary-hint'),
+  runAllBtnEl: $('btn-tests-run-all'),
+  onRunTest: test => runPremadeTest(test),
+  onRunAll: protoId => runPremadeTests(protoId),
+});
+
+let activePremadeTestId = null;
 
 function syncPortExclusions() {
   const portA = boardAPortSelect.value;
@@ -170,6 +186,61 @@ function formatTerminalFrameText(raw, parsed) {
   }
 
   return parsed.status || parsed.event || parsed.type || fallbackText;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatRunClock(value = Date.now()) {
+  try {
+    return new Date(value).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return '--:--:--';
+  }
+}
+
+function normalizeUpperHex(value) {
+  return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function parsePositiveInteger(value, fieldName, { allowZero = false } = {}) {
+  const normalized = String(value ?? '').trim();
+  const parsed = parseInt(normalized, 10);
+
+  if (!/^\d+$/.test(normalized) || Number.isNaN(parsed)) {
+    throw new Error(`${fieldName} must be a whole number.`);
+  }
+  if (!allowZero && parsed <= 0) {
+    throw new Error(`${fieldName} must be greater than zero.`);
+  }
+  if (allowZero && parsed < 0) {
+    throw new Error(`${fieldName} cannot be negative.`);
+  }
+  return parsed;
+}
+
+function getCanfdSendCommandDef() {
+  return PROTOCOLS.CANFD.commands.find(command => command.label === 'Send');
+}
+
+function parseObservedCanfdFrame(parsed) {
+  const frame = parseCanFrame(parsed?.payload);
+  const match = String(parsed?.payload ?? '').trim().match(/^([0-9A-Fa-f]+):(\d+):([0-9A-Fa-f]*)$/);
+
+  if (!match || frame.id == null) {
+    return null;
+  }
+
+  return {
+    id: frame.id,
+    dlc: frame.dlc,
+    bytes: match[3].toUpperCase(),
+  };
 }
 
 function pluralize(count, singular, plural = `${singular}s`) {
@@ -555,6 +626,7 @@ function makeBoardController({
   const term = new Terminal({ containerEl: termEl });
   let connected = false;
   let unsubs = [];
+  let frameListeners = new Set();
   let boardProfile = null;
   let caps = new Set();
   let mode = 'protocol';
@@ -563,6 +635,36 @@ function makeBoardController({
   let lastEvent = null;
   let lastHeartbeatAt = null;
   let pendingCustomCommand = null;
+  let customReportEl = null;
+
+  function ensureCustomReportEl() {
+    const actions = customFormEl.querySelector('.board-custom-actions');
+
+    if (!customReportEl || !customFormEl.contains(customReportEl)) {
+      customReportEl = document.createElement('div');
+      customReportEl.className = 'board-custom-report hidden';
+      customFormEl.insertBefore(customReportEl, actions);
+    }
+    return customReportEl;
+  }
+
+  function setCustomReport(message, tone = 'default') {
+    const reportEl = ensureCustomReportEl();
+
+    reportEl.textContent = message;
+    reportEl.className = `board-custom-report ${tone}`;
+    if (!message) {
+      reportEl.classList.add('hidden');
+    }
+  }
+
+  function clearCustomReport() {
+    if (!customReportEl) {
+      return;
+    }
+    customReportEl.textContent = '';
+    customReportEl.className = 'board-custom-report hidden';
+  }
 
   function closeCustomForm() {
     const actions = customFormEl.querySelector('.board-custom-actions');
@@ -573,6 +675,9 @@ function makeBoardController({
         child.remove();
       }
     });
+    customReportEl = null;
+    clearCustomReport();
+    customSendBtnEl.textContent = 'Send';
     customFormEl.classList.remove('visible');
   }
 
@@ -598,6 +703,8 @@ function makeBoardController({
       customFormEl.insertBefore(input, actions);
     }
 
+    clearCustomReport();
+    customSendBtnEl.textContent = commandDef.submitLabel || 'Send';
     customFormEl.classList.add('visible');
     customFormEl.querySelector('.custom-field')?.focus();
   }
@@ -618,6 +725,24 @@ function makeBoardController({
         return;
       }
       values[input.dataset.fieldName] = input.value.trim();
+    }
+
+    if (typeof pendingCustomCommand.execute === 'function') {
+      try {
+        result = await pendingCustomCommand.execute(values, {
+          sendCmd,
+          setCustomReport,
+          clearCustomReport,
+        });
+      } catch (err) {
+        setCustomReport(err.message || 'The burst could not start.', 'fail');
+        showToast(err.message || 'Custom action failed.', 'error');
+        return;
+      }
+      if (result?.closeForm !== false) {
+        closeCustomForm();
+      }
+      return;
     }
 
     try {
@@ -690,7 +815,31 @@ function makeBoardController({
   function syncPresetButtons() {
     presetsEl.querySelectorAll('.board-preset').forEach(btn => {
       const protoId = dualState.activeProto;
+      const peerSnapshot = (id === 'A' ? boardCtrlB : boardCtrlA)?.getSnapshot?.();
+      const monitorAvailable = !!peerSnapshot?.caps?.has?.('CANFD_MONITOR');
       const command = protoId ? PROTOCOLS[protoId].commands[parseInt(btn.dataset.commandIndex, 10)] : null;
+
+      if (btn.dataset.specialAction === 'burst') {
+        const burstDisabledReason = !connected
+          ? 'Connect this board first.'
+          : mode === 'legacy'
+            ? 'Exit legacy mode before using protocol presets.'
+            : !boardProfile?.available
+              ? 'Waiting for this board profile handshake.'
+              : protoId !== 'CANFD'
+                ? 'Burst is only available for CANFD.'
+                : !peerSnapshot?.connected
+                  ? 'Connect the other board to verify burst delivery.'
+                  : peerSnapshot.mode === 'legacy'
+                    ? 'Exit legacy mode on the other board before running a burst.'
+                    : !monitorAvailable
+                      ? 'The other board needs CANFD monitor support to verify burst delivery.'
+                      : '';
+
+        btn.disabled = !!burstDisabledReason;
+        btn.title = burstDisabledReason;
+        return;
+      }
 
       if (!command) {
         btn.disabled = true;
@@ -827,6 +976,7 @@ function makeBoardController({
     }
 
     renderMeta();
+    frameListeners.forEach(listener => listener({ frame, raw, localTimeout, handshake }));
     onStateChange();
   }
 
@@ -854,6 +1004,45 @@ function makeBoardController({
         btn.addEventListener('click', () => sendCmd(cmd.command));
       }
       presetsEl.appendChild(btn);
+
+      if (protoId === 'CANFD' && cmd.label === 'Status') {
+        const burstBtn = document.createElement('button');
+        const peerSnapshot = (id === 'A' ? boardCtrlB : boardCtrlA)?.getSnapshot?.();
+        const canfdSendCommand = getCanfdSendCommandDef();
+        const monitorAvailable = !!peerSnapshot?.caps?.has?.('CANFD_MONITOR');
+        const burstDisabledReason = !connected
+          ? 'Connect this board first.'
+          : mode === 'legacy'
+            ? 'Exit legacy mode before using protocol presets.'
+            : !boardProfile?.available
+              ? 'Waiting for this board profile handshake.'
+              : !peerSnapshot?.connected
+                ? 'Connect the other board to verify burst delivery.'
+                : !monitorAvailable
+                  ? 'The other board needs CANFD monitor support to verify burst delivery.'
+                  : '';
+
+        burstBtn.className = 'board-preset';
+        burstBtn.type = 'button';
+        burstBtn.textContent = 'Burst';
+        burstBtn.dataset.specialAction = 'burst';
+        burstBtn.disabled = !canfdSendCommand || !!burstDisabledReason;
+        burstBtn.title = burstDisabledReason;
+        burstBtn.addEventListener('click', () => openCustomForm({
+          label: 'Burst',
+          submitLabel: 'Run Burst',
+          fields: [
+            { name: 'id', placeholder: 'Frame ID (hex, e.g. 130)', required: true },
+            { name: 'bytes', placeholder: 'Payload bytes (hex)', required: true },
+            { name: 'iterations', placeholder: 'Iterations (dec)', required: true },
+            { name: 'frequencyMs', placeholder: 'Frequency ms (dec)', required: true },
+          ],
+          async execute(values, context) {
+            return runBoardBurst(id, values, context);
+          },
+        }));
+        presetsEl.appendChild(burstBtn);
+      }
     });
   }
 
@@ -972,6 +1161,10 @@ function makeBoardController({
     wireIpc,
     buildPresets,
     sendCommand: sendCmd,
+    subscribeFrames(listener) {
+      frameListeners.add(listener);
+      return () => frameListeners.delete(listener);
+    },
     getSnapshot() {
       return {
         connected,
@@ -980,12 +1173,16 @@ function makeBoardController({
         mode,
         streaming,
         lastResult,
+        lastEvent,
       };
     },
   };
 }
 
-const boardCtrlA = makeBoardController({
+let boardCtrlA;
+let boardCtrlB;
+
+boardCtrlA = makeBoardController({
   id: 'A',
   termEl: $('board-a-terminal'),
   dotEl: document.querySelector('#board-a .board-status-dot'),
@@ -1008,7 +1205,7 @@ const boardCtrlA = makeBoardController({
   onStateChange: () => updateDualState(),
 });
 
-const boardCtrlB = makeBoardController({
+boardCtrlB = makeBoardController({
   id: 'B',
   termEl: $('board-b-terminal'),
   dotEl: document.querySelector('#board-b .board-status-dot'),
@@ -1030,6 +1227,175 @@ const boardCtrlB = makeBoardController({
   onBoardProfile: cb => window.electronAPI.onBoardProfileBoardB(cb),
   onStateChange: () => updateDualState(),
 });
+
+function getBoardPair(sourceId) {
+  return sourceId === 'A'
+    ? { sourceCtrl: boardCtrlA, receiverCtrl: boardCtrlB, sourceLabel: 'A', receiverLabel: 'B' }
+    : { sourceCtrl: boardCtrlB, receiverCtrl: boardCtrlA, sourceLabel: 'B', receiverLabel: 'A' };
+}
+
+function waitForNextCanfdStatus(boardCtrl, timeoutMs = 1500) {
+  return new Promise(resolve => {
+    let timeoutHandle = null;
+    let unsubscribe = () => {};
+
+    function finish(value) {
+      clearTimeout(timeoutHandle);
+      unsubscribe();
+      resolve(value);
+    }
+
+    unsubscribe = boardCtrl.subscribeFrames(({ frame, localTimeout }) => {
+      if (frame?.domain !== 'CANFD') {
+        return;
+      }
+      if (!frame.status && !localTimeout) {
+        return;
+      }
+      finish({
+        status: localTimeout ? 'TIMEOUT' : (frame.status || 'TIMEOUT'),
+        payload: frame.payload || '',
+      });
+    });
+
+    timeoutHandle = setTimeout(() => finish(null), timeoutMs);
+  });
+}
+
+async function sendCanfdControlCommand(boardCtrl, command, timeoutMs = 1500) {
+  const ackPromise = waitForNextCanfdStatus(boardCtrl, timeoutMs);
+  const sendResult = await boardCtrl.sendCommand(command);
+
+  if (!sendResult?.success) {
+    return {
+      ok: false,
+      status: 'REJECTED',
+      payload: sendResult?.error || 'Send rejected',
+    };
+  }
+
+  const ack = await ackPromise;
+  if (!ack) {
+    return { ok: false, status: 'TIMEOUT', payload: 'No CANFD response observed.' };
+  }
+
+  return {
+    ok: ack.status === 'PASS',
+    status: ack.status,
+    payload: ack.payload,
+  };
+}
+
+async function runBoardBurst(sourceId, values, { setCustomReport }) {
+  const { sourceCtrl, receiverCtrl, sourceLabel, receiverLabel } = getBoardPair(sourceId);
+  const sendCommandDef = getCanfdSendCommandDef();
+  const frameId = normalizeUpperHex(values.id);
+  const payloadBytes = normalizeUpperHex(values.bytes);
+  const iterations = parsePositiveInteger(values.iterations, 'Iterations');
+  const frequencyMs = parsePositiveInteger(values.frequencyMs, 'Frequency', { allowZero: true });
+  const expectedFrame = sendCommandDef.buildCommand({ id: frameId, bytes: payloadBytes });
+  const expectedId = parseInt(frameId, 16);
+  const expectedDlc = payloadBytes.length / 2;
+  const receiverSnapshot = receiverCtrl.getSnapshot();
+  const sourceSnapshot = sourceCtrl.getSnapshot();
+  const receiverWasMonitoring = receiverSnapshot.streaming.has('CANFD');
+  let matchedFrames = 0;
+  let senderFailures = [];
+  let monitorStartedHere = false;
+  let unsubscribeReceiver = () => {};
+
+  if (!sourceSnapshot.connected || !receiverSnapshot.connected) {
+    throw new Error('Connect both boards before running a burst.');
+  }
+  if (dualState.activeProto !== 'CANFD') {
+    throw new Error('Switch dual-board mode to CANFD before running a burst.');
+  }
+  if (sourceSnapshot.mode === 'legacy' || receiverSnapshot.mode === 'legacy') {
+    throw new Error('Exit legacy mode on both boards before running a burst.');
+  }
+  if (!receiverSnapshot.caps.has('CANFD_MONITOR')) {
+    throw new Error(`Board ${receiverLabel} needs CANFD monitor support to verify burst delivery.`);
+  }
+  if (payloadBytes.length % 2 !== 0) {
+    throw new Error('Payload bytes must contain whole bytes.');
+  }
+
+  setCustomReport(`Preparing board ${receiverLabel} to monitor incoming CANFD frames...`, 'info');
+
+  unsubscribeReceiver = receiverCtrl.subscribeFrames(({ frame }) => {
+    const observed = parseObservedCanfdFrame(frame);
+
+    if (!frame || frame.domain !== 'CANFD' || frame.event !== 'FRAME' || !observed) {
+      return;
+    }
+    if (observed.id === expectedId && observed.dlc === expectedDlc && observed.bytes === payloadBytes) {
+      matchedFrames += 1;
+    }
+  });
+
+  try {
+    if (!receiverWasMonitoring) {
+      const monitorResult = await sendCanfdControlCommand(receiverCtrl, 'CANFD:MONITOR:START', 1800);
+
+      if (!monitorResult.ok) {
+        throw new Error(`Board ${receiverLabel} could not start monitor mode (${monitorResult.status.toLowerCase()}).`);
+      }
+      monitorStartedHere = true;
+      await delay(180);
+    }
+
+    for (let iteration = 0; iteration < iterations; iteration++) {
+      const stepNumber = iteration + 1;
+
+      setCustomReport(
+        `Burst running from board ${sourceLabel} to board ${receiverLabel}: ${stepNumber}/${iterations} sent, ${matchedFrames}/${iterations} observed.`,
+        'info'
+      );
+
+      const sendResult = await sendCanfdControlCommand(sourceCtrl, expectedFrame, Math.max(1500, frequencyMs + 900));
+
+      if (!sendResult.ok) {
+        const fields = parseKeyValuePayload(sendResult.payload);
+        const reason = fields.reason ? `reason=${fields.reason}` : (sendResult.payload || 'no detail');
+        senderFailures.push(`iteration ${stepNumber}: ${sendResult.status} (${reason})`);
+        break;
+      }
+
+      if (iteration < (iterations - 1) && frequencyMs > 0) {
+        await delay(frequencyMs);
+      }
+    }
+
+    await delay(Math.max(220, Math.min(1200, frequencyMs + 260)));
+  } finally {
+    unsubscribeReceiver();
+    if (monitorStartedHere) {
+      await sendCanfdControlCommand(receiverCtrl, 'CANFD:MONITOR:STOP', 1500).catch(() => {});
+    }
+  }
+
+  if (senderFailures.length) {
+    setCustomReport(
+      `Burst stopped with an error. Board ${receiverLabel} observed ${matchedFrames}/${iterations} matching frames. ${senderFailures[0]}.`,
+      'fail'
+    );
+    return { closeForm: false };
+  }
+
+  if (matchedFrames >= iterations) {
+    setCustomReport(
+      `Burst complete. Board ${receiverLabel} observed all ${iterations}/${iterations} frames from board ${sourceLabel}.`,
+      'success'
+    );
+    return { closeForm: false };
+  }
+
+  setCustomReport(
+    `Burst complete with loss. Board ${receiverLabel} observed ${matchedFrames}/${iterations} matching frames from board ${sourceLabel}; ${iterations - matchedFrames} were missing.`,
+    'warn'
+  );
+  return { closeForm: false };
+}
 
 function buildDualProtoBar() {
   const sharedProtocols = computeSharedProtocols(
@@ -1267,6 +1633,7 @@ function setView(name) {
   document.body.classList.toggle('view-visual', name === 'visual');
   document.body.classList.toggle('view-terminal', name === 'terminal');
   document.body.classList.toggle('view-dual', name === 'dual');
+  document.body.classList.toggle('view-tests', name === 'tests');
   syncReconnectBanner();
   viewBtns.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === name);
@@ -1277,6 +1644,9 @@ function setView(name) {
   }
   if (name === 'dual') {
     updateDualState();
+  }
+  if (name === 'tests') {
+    testsView.show(state.activeProto || getFirstSupportedProtocol() || PROTOCOL_ORDER[0]);
   }
 }
 
@@ -1480,6 +1850,7 @@ function setBoardProfile(profile) {
   state.boardProfile = profile;
   state.caps = capsFromProfile(profile);
   visualView.setCapabilities(profile?.available ? [...state.caps] : null);
+  testsView.setCapabilities(profile?.available ? [...state.caps] : null);
 
   if (state.activeProto && !isProtocolSupported(state.activeProto)) {
     state.activeProto = null;
@@ -1623,6 +1994,7 @@ function setActiveProtocol(id) {
   buildCommandBar(id);
   vizPanel.classList.remove('hidden');
   charts.show(id);
+  testsView.show(id);
 
   if (state.view === 'visual') {
     visualView.show(id);
@@ -1731,6 +2103,7 @@ function syncAllControls() {
   syncSidebarEnabled();
   syncCommandBarEnabled();
   visualView.setConnected(state.connected);
+  testsView.setConnected(state.connected);
 }
 
 btnSend.addEventListener('click', () => {
@@ -1788,6 +2161,114 @@ async function sendSystemCommand(command, successMessage) {
   result = await sendCommand(command);
   if (result?.success && successMessage) {
     showToast(successMessage);
+  }
+}
+
+function isPremadeTestRunnable(testDef) {
+  if (!testDef || !state.connected) {
+    return false;
+  }
+  if (!isProtocolSupported(testDef.protoId)) {
+    return false;
+  }
+  if (!Array.isArray(testDef.requiredCaps) || !testDef.requiredCaps.length) {
+    return true;
+  }
+  return testDef.requiredCaps.every(cap => state.caps.has(cap));
+}
+
+async function runPremadeTest(testDef, { suppressBusyToast = false } = {}) {
+  let completedSteps = 0;
+  let finishedAt = null;
+
+  if (!testDef) {
+    return false;
+  }
+
+  if (activePremadeTestId) {
+    if (!suppressBusyToast) {
+      showToast('Wait for the active premade test sequence to finish first.', 'error');
+    }
+    return false;
+  }
+
+  if (!state.connected) {
+    showToast('Connect to the board before running premade tests.', 'error');
+    return false;
+  }
+
+  if (!isPremadeTestRunnable(testDef)) {
+    showToast('This premade test is not supported by the connected firmware.', 'error');
+    return false;
+  }
+
+  activePremadeTestId = testDef.id;
+  testsView.setActiveRun(testDef.id);
+  testsView.setRunState(testDef.id, {
+    tone: 'running',
+    label: 'Running',
+    detail: `Queueing ${testDef.steps.length} commands into the firmware...`,
+  });
+
+  try {
+    for (const step of testDef.steps) {
+      const result = await sendCommand(step.command);
+
+      if (!result?.success) {
+        throw new Error(result?.error || 'Send rejected');
+      }
+
+      completedSteps += 1;
+      testsView.setRunState(testDef.id, {
+        tone: 'running',
+        label: 'Running',
+        detail: `Sent ${completedSteps} of ${testDef.steps.length} steps. Last step: ${step.label}.`,
+      });
+
+      if (step.delayMs) {
+        await delay(step.delayMs);
+      }
+    }
+
+    finishedAt = Date.now();
+    testsView.setRunState(testDef.id, {
+      tone: 'success',
+      label: 'Sent',
+      detail: `Sequence completed at ${formatRunClock(finishedAt)}. Watch terminal/status output to verify hardware behavior.`,
+      lastRunAt: finishedAt,
+    });
+    showToast(`${testDef.title} sequence sent.`);
+    return true;
+  } catch (err) {
+    finishedAt = Date.now();
+    testsView.setRunState(testDef.id, {
+      tone: 'fail',
+      label: 'Blocked',
+      detail: `Stopped after ${completedSteps} step${completedSteps === 1 ? '' : 's'}: ${err.message || 'unknown error'}.`,
+      lastRunAt: finishedAt,
+    });
+    showToast(`${testDef.title} could not finish: ${err.message || 'unknown error'}`, 'error');
+    return false;
+  } finally {
+    activePremadeTestId = null;
+    testsView.setActiveRun(null);
+  }
+}
+
+async function runPremadeTests(protoId) {
+  const tests = (TEST_CATALOG[protoId] || []).filter(isPremadeTestRunnable);
+
+  if (!tests.length) {
+    showToast('No premade tests are ready for this protocol right now.', 'error');
+    return;
+  }
+
+  for (const test of tests) {
+    const ok = await runPremadeTest(test, { suppressBusyToast: true });
+    if (!ok) {
+      break;
+    }
+    await delay(220);
   }
 }
 

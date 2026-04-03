@@ -15,7 +15,7 @@
     <div id="titlebar-brand" aria-label="Application title">
       <div id="titlebar-brand-copy">
         <span id="titlebar-label">Sailbot Protocol Tester</span>
-        <span id="titlebar-version">Version 0.3.11</span>
+        <span id="titlebar-version">Version 0.3.13</span>
       </div>
     </div>
     <span id="status-dot" class="disconnected" title="Connection status" aria-hidden="true"></span>
@@ -30,6 +30,7 @@
       <button class="view-btn active" data-view="terminal"   type="button">Terminal</button>
       <button class="view-btn"        data-view="visual"     type="button">Visual</button>
       <button class="view-btn"        data-view="dual"       type="button">Dual board</button>
+      <button class="view-btn"        data-view="tests"      type="button">Tests</button>
     </div>
     <button id="btn-settings" type="button" aria-label="Settings" title="Settings" aria-expanded="false" aria-controls="settings-panel">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -329,6 +330,39 @@
         <span id="vstat-data"  class="vstat-value">-</span>
       </div>
 
+    </div>
+
+    <!-- Tests Panel - shown when view-toggle is set to "Tests" -->
+    <div id="tests-panel" aria-label="Premade protocol tests">
+      <div id="tests-header">
+        <div id="tests-proto-tabs" role="tablist" aria-label="Test protocol">
+          <!-- .tests-proto-btn buttons injected by tests.js -->
+        </div>
+        <button id="btn-tests-run-all" type="button">Run All Visible</button>
+      </div>
+
+      <div id="tests-summary">
+        <div class="tests-summary-card">
+          <span class="tests-summary-label">Active protocol</span>
+          <span class="tests-summary-value" id="tests-summary-proto">-</span>
+        </div>
+        <div class="tests-summary-card">
+          <span class="tests-summary-label">Ready sequences</span>
+          <span class="tests-summary-value" id="tests-summary-count">-</span>
+        </div>
+        <div class="tests-summary-card">
+          <span class="tests-summary-label">Last run</span>
+          <span class="tests-summary-value" id="tests-summary-last-run">No test sequence has been run yet.</span>
+        </div>
+      </div>
+
+      <div id="tests-summary-hint" aria-live="polite">
+        Each card queues a safe, known-good command sequence into the dev firmware so operators can focus on the target hardware behavior.
+      </div>
+
+      <div id="tests-cards" role="list">
+        <!-- .test-card elements injected by tests.js -->
+      </div>
     </div>
 
     <!-- Dual Board Panel - shown when view-toggle is set to "Dual board" -->
