@@ -1,90 +1,130 @@
 // frontend/charts.js
-// Manages Chart.js instances for UART, SPI, and CANFD.
+// Manages Chart.js instances for UART, SPI, I2C, and CANFD visualizations.
 // Chart.js must be loaded globally (window.Chart) before this module is used.
-//
-// Usage:
-//   const charts = new Charts({ canvasEl, metricsEl });
-//   charts.show('UART');          // switch active protocol
-//   charts.push('UART', payload); // feed new data point
-//   charts.hide();                // destroy chart, clear metrics
+
+import { parseCanFrame } from './protocols.js';
 
 const MAX_UART_SAMPLES = 30;
-const MAX_SPI_BARS     = 8;
-const MAX_I2C_BARS     = 8;
+const MAX_SPI_BARS = 8;
+const MAX_I2C_BARS = 8;
+const MAX_CANFD_POINTS = 40;
 
-// Distinct colors for CANFD frame ID scatter rows (up to 8 unique IDs)
 const CAN_POINT_COLORS = [
   '#4a90e2', '#e2914a', '#4caf50', '#e24a90',
   '#4ae2e2', '#e2c84a', '#9c27b0', '#ef5350',
 ];
 
+export function getCanfdFrameMeta(data) {
+  const frame = parseCanFrame(data);
+
+  if (frame.id == null) {
+    return null;
+  }
+
+  return {
+    key: `0x${frame.id.toString(16).toUpperCase()}`,
+    id: frame.id,
+    dlc: frame.dlc,
+  };
+}
+
+export function getCanfdGridSlotCount(frameCount) {
+  if (frameCount <= 0) {
+    return 0;
+  }
+  if (frameCount === 1) {
+    return 1;
+  }
+  if (frameCount <= 4) {
+    return 4;
+  }
+  return frameCount;
+}
+
+function rgba(hex, alpha) {
+  const normalized = String(hex || '').replace('#', '');
+  const value = normalized.length === 3
+    ? normalized.split('').map(char => char + char).join('')
+    : normalized;
+
+  if (!/^[0-9A-Fa-f]{6}$/.test(value)) {
+    return `rgba(74, 144, 226, ${alpha})`;
+  }
+
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export class Charts {
   /**
    * @param {object} opts
-   * @param {HTMLCanvasElement} opts.canvasEl   - Shared canvas element
-   * @param {HTMLElement}       opts.metricsEl  - Container for metric cards
+   * @param {HTMLCanvasElement} opts.canvasEl
+   * @param {HTMLElement} opts.metricsEl
    */
   constructor({ canvasEl, metricsEl }) {
-    this._canvas  = canvasEl;
+    this._canvas = canvasEl;
+    this._wrapper = canvasEl.parentElement;
     this._metrics = metricsEl;
-    this._chart   = null;
-    this._proto   = null;
+    this._chart = null;
+    this._proto = null;
+    this._canfdCharts = new Map();
+    this._canfdGrid = document.createElement('div');
+    this._canfdGrid.className = 'canfd-grid';
+    this._canfdGrid.hidden = true;
+    this._wrapper.appendChild(this._canfdGrid);
 
-    // Per-protocol rolling data stores — reset on clear() only
     this._uart = {
-      rtts:       [],   // rolling window of RTT values (ms)
-      totalBytes: 0,    // total data payload chars received
-      errors:     0,    // FAIL response count
-      total:      0,    // all responses count
+      rtts: [],
+      totalBytes: 0,
+      errors: 0,
+      total: 0,
     };
+
     this._spi = {
-      txs:        [],   // sent byte values
-      rxs:        [],   // received byte values
-      matchCount: 0,    // tx === rx count
-      txCount:    0,    // total transfers
+      txs: [],
+      rxs: [],
+      matchCount: 0,
+      txCount: 0,
     };
+
     this._can = {
-      points:     [],   // [{ x: seconds, y: idIndex, idHex: string }]
-      idMap:      {},   // '0x130' → y-axis index
+      frames: {},
+      order: [],
       errorCount: 0,
-      lastRtt:    null,
-      startedAt:  Date.now(),
+      lastRtt: null,
+      startedAt: Date.now(),
     };
+
     this._i2c = {
-      txs:      [],   // rolling window of sent byte values
-      rxs:      [],   // rolling window of received byte values
-      ackCount: 0,    // PASS response count
-      txCount:  0,    // total transfers
+      txs: [],
+      rxs: [],
+      ackCount: 0,
+      txCount: 0,
     };
   }
 
-  /**
-   * Switch to the given protocol's chart.
-   * Destroys the previous chart instance first.
-   * @param {'UART'|'SPI'|'CANFD'} proto
-   */
   show(proto) {
     this._destroyChart();
     this._proto = proto;
-    if (proto === 'UART')  this._buildUart();
-    if (proto === 'SPI')   this._buildSpi();
+    this._setCanfdMode(proto === 'CANFD');
+
+    if (proto === 'UART') this._buildUart();
+    if (proto === 'SPI') this._buildSpi();
     if (proto === 'CANFD') this._buildCanfd();
-    if (proto === 'I2C')   this._buildI2c();
+    if (proto === 'I2C') this._buildI2c();
+
     this._refreshMetrics();
   }
 
-  /** Destroy the chart and clear the metrics panel */
   hide() {
     this._destroyChart();
     this._proto = null;
     this._metrics.innerHTML = '';
+    this._setCanfdMode(false);
   }
 
-  /**
-   * Feed a new data point from a parsed firmware response.
-   * @param {'UART'|'SPI'|'CANFD'} proto
-   * @param {{ status: string, data: string, rtt: number|null }} payload
-   */
   push(proto, { status, data, rtt }) {
     if (proto === 'UART') {
       const rxMatch = (data || '').match(/(?:^|;)rx=([0-9A-Fa-f]+)(?:;|$)/i);
@@ -93,10 +133,14 @@ export class Charts {
         : (rxMatch ? rxMatch[1] : '');
 
       this._uart.total++;
-      if (status === 'FAIL') this._uart.errors++;
+      if (status === 'FAIL') {
+        this._uart.errors++;
+      }
       if (rtt != null) {
         this._uart.rtts.push(rtt);
-        if (this._uart.rtts.length > MAX_UART_SAMPLES) this._uart.rtts.shift();
+        if (this._uart.rtts.length > MAX_UART_SAMPLES) {
+          this._uart.rtts.shift();
+        }
       }
       this._uart.totalBytes += bytePayload.length / 2;
     }
@@ -111,7 +155,9 @@ export class Charts {
       const rx = rxHex.length >= 2 ? parseInt(rxHex.slice(-2), 16) : 0;
       this._spi.txs.push(tx);
       this._spi.rxs.push(rx);
-      if (tx === rx) this._spi.matchCount++;
+      if (tx === rx) {
+        this._spi.matchCount++;
+      }
       if (this._spi.txs.length > MAX_SPI_BARS) {
         this._spi.txs.shift();
         this._spi.rxs.shift();
@@ -119,23 +165,64 @@ export class Charts {
     }
 
     if (proto === 'CANFD') {
-      if (status === 'FAIL') this._can.errorCount++;
-      if (rtt != null) this._can.lastRtt = rtt;
-      const keyValueIdMatch = (data || '').match(/(?:^|;)id=0x([0-9A-Fa-f]+)(?:;|$)/i);
-      const eventIdMatch = keyValueIdMatch ? null : (data || '').match(/^([0-9A-Fa-f]+):\d+:[0-9A-Fa-f]*$/);
-      if (keyValueIdMatch || eventIdMatch) {
-        const hex = '0x' + (keyValueIdMatch ? keyValueIdMatch[1] : eventIdMatch[1]).toUpperCase();
-        if (!(hex in this._can.idMap)) {
-          this._can.idMap[hex] = Object.keys(this._can.idMap).length;
-        }
+      const frameMeta = getCanfdFrameMeta(data);
+      let isNewFrame = false;
+
+      if (status === 'FAIL') {
+        this._can.errorCount++;
+      }
+      if (rtt != null) {
+        this._can.lastRtt = rtt;
+      }
+
+      if (frameMeta) {
         const nowSec = (Date.now() - this._can.startedAt) / 1000;
-        this._can.points.push({ x: nowSec, y: this._can.idMap[hex], idHex: hex });
+        let frame = this._can.frames[frameMeta.key];
+
+        if (!frame) {
+          frame = {
+            key: frameMeta.key,
+            count: 0,
+            lastDlc: frameMeta.dlc,
+            lastSeenSec: null,
+            points: [],
+            color: CAN_POINT_COLORS[this._can.order.length % CAN_POINT_COLORS.length],
+          };
+          this._can.frames[frameMeta.key] = frame;
+          this._can.order.push(frameMeta.key);
+          isNewFrame = true;
+        }
+
+        frame.count += 1;
+        frame.lastDlc = frameMeta.dlc;
+        frame.lastSeenSec = nowSec;
+        frame.points.push({
+          x: nowSec,
+          y: frame.count,
+          dlc: frameMeta.dlc,
+        });
+
+        if (frame.points.length > MAX_CANFD_POINTS) {
+          frame.points.shift();
+        }
+
+        if (this._proto === 'CANFD') {
+          if (isNewFrame) {
+            this._buildCanfd();
+          } else {
+            this._updateCanfdFrameChart(frameMeta.key);
+          }
+        }
+      } else if (this._proto === 'CANFD' && this._can.order.length === 0) {
+        this._buildCanfd();
       }
     }
 
     if (proto === 'I2C') {
       this._i2c.txCount++;
-      if (status === 'PASS') this._i2c.ackCount++;
+      if (status === 'PASS') {
+        this._i2c.ackCount++;
+      }
       const addrMatch = (data || '').match(/(?:^|;)addr=0x([0-9A-Fa-f]{1,2})(?:;|$)/i);
       const bytesMatch = (data || '').match(/(?:^|;)bytes=([0-9A-Fa-f]+)(?:;|$)/i);
       const wroteMatch = (data || '').match(/(?:^|;)wrote=(\d+)(?:;|$)/i);
@@ -151,17 +238,35 @@ export class Charts {
       }
     }
 
-    if (this._proto === proto) this._updateChart(proto);
-    if (this._proto === proto) this._refreshMetrics();
+    if (this._proto === proto && proto !== 'CANFD') {
+      this._updateChart(proto);
+    }
+    if (this._proto === proto) {
+      this._refreshMetrics();
+    }
   }
 
-  // ─── Private helpers ─────────────────────────────────────
+  _setCanfdMode(active) {
+    this._canvas.hidden = active;
+    this._canfdGrid.hidden = !active;
+    this._wrapper.classList.toggle('canfd-active', active);
+    this._wrapper.classList.toggle('canfd-single', false);
+    this._wrapper.classList.toggle('canfd-quad', false);
+    this._wrapper.classList.toggle('canfd-many', false);
+  }
 
   _destroyChart() {
     if (this._chart) {
       this._chart.destroy();
       this._chart = null;
     }
+    this._destroyCanfdCharts();
+  }
+
+  _destroyCanfdCharts() {
+    this._canfdCharts.forEach(({ chart }) => chart.destroy());
+    this._canfdCharts.clear();
+    this._canfdGrid.replaceChildren();
   }
 
   _buildUart() {
@@ -235,7 +340,7 @@ export class Charts {
             max: 255,
             ticks: {
               font: { size: 10, family: 'Consolas, monospace' },
-              callback: v => `0x${v.toString(16).toUpperCase().padStart(2, '0')}`,
+              callback: value => `0x${value.toString(16).toUpperCase().padStart(2, '0')}`,
               stepSize: 64,
             },
           },
@@ -287,7 +392,7 @@ export class Charts {
             max: 255,
             ticks: {
               font: { size: 10, family: 'Consolas, monospace' },
-              callback: v => `0x${v.toString(16).toUpperCase().padStart(2, '0')}`,
+              callback: value => `0x${value.toString(16).toUpperCase().padStart(2, '0')}`,
               stepSize: 64,
             },
           },
@@ -307,76 +412,194 @@ export class Charts {
   }
 
   _buildCanfd() {
-    const ids = Object.keys(this._can.idMap);
-    const datasets = ids.map((hex, idx) => ({
-      label: hex,
-      data: this._can.points
-        .filter(p => p.idHex === hex)
-        .map(p => ({ x: p.x, y: p.y })),
-      backgroundColor: CAN_POINT_COLORS[idx % CAN_POINT_COLORS.length],
-      pointRadius: 5,
-      pointHoverRadius: 7,
-    }));
+    const frameKeys = [...this._can.order];
+    const slotCount = getCanfdGridSlotCount(frameKeys.length);
+    let layoutClass = 'canfd-single';
 
-    this._chart = new Chart(this._canvas, {
-      type: 'scatter',
-      data: { datasets },
+    this._destroyCanfdCharts();
+
+    if (frameKeys.length > 4) {
+      layoutClass = 'canfd-many';
+    } else if (frameKeys.length > 1) {
+      layoutClass = 'canfd-quad';
+    }
+
+    this._wrapper.classList.toggle('canfd-single', layoutClass === 'canfd-single');
+    this._wrapper.classList.toggle('canfd-quad', layoutClass === 'canfd-quad');
+    this._wrapper.classList.toggle('canfd-many', layoutClass === 'canfd-many');
+    this._canfdGrid.className = `canfd-grid ${layoutClass}`;
+
+    if (!frameKeys.length) {
+      this._canfdGrid.appendChild(this._createCanfdEmptyState());
+      return;
+    }
+
+    const slots = frameKeys.slice();
+    while (slots.length < slotCount) {
+      slots.push(null);
+    }
+
+    slots.forEach(frameKey => {
+      if (!frameKey) {
+        this._canfdGrid.appendChild(this._createCanfdPlaceholder());
+        return;
+      }
+      this._canfdGrid.appendChild(this._createCanfdCard(frameKey));
+    });
+  }
+
+  _createCanfdEmptyState() {
+    const empty = document.createElement('div');
+    empty.className = 'canfd-chart-empty';
+    empty.innerHTML = [
+      '<span class="canfd-empty-title">Waiting for CANFD frames</span>',
+      '<span class="canfd-empty-copy">Start CANFD monitoring or send a frame to populate the visual grid.</span>',
+    ].join('');
+    return empty;
+  }
+
+  _createCanfdPlaceholder() {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'canfd-chart-placeholder';
+    placeholder.innerHTML = [
+      '<span class="canfd-placeholder-title">Waiting for frame</span>',
+      '<span class="canfd-placeholder-copy">A new frame ID will claim this slot automatically.</span>',
+    ].join('');
+    return placeholder;
+  }
+
+  _createCanfdCard(frameKey) {
+    const frame = this._can.frames[frameKey];
+    const card = document.createElement('article');
+    const header = document.createElement('div');
+    const title = document.createElement('div');
+    const meta = document.createElement('div');
+    const body = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    const chart = this._buildCanfdFrameChart(canvas, frame);
+
+    card.className = 'canfd-chart-card';
+    card.dataset.canfdFrame = frameKey;
+
+    header.className = 'canfd-chart-card-header';
+    title.className = 'canfd-chart-title';
+    meta.className = 'canfd-chart-meta';
+    body.className = 'canfd-chart-body';
+    canvas.className = 'canfd-chart-canvas';
+
+    title.textContent = frameKey;
+    meta.textContent = this._formatCanfdFrameMeta(frame);
+
+    header.appendChild(title);
+    header.appendChild(meta);
+    body.appendChild(canvas);
+    card.appendChild(header);
+    card.appendChild(body);
+
+    this._canfdCharts.set(frameKey, { chart, card, metaEl: meta });
+    return card;
+  }
+
+  _buildCanfdFrameChart(canvas, frame) {
+    return new Chart(canvas, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: frame.key,
+          data: frame.points.map(point => ({ x: point.x, y: point.y, dlc: point.dlc })),
+          parsing: false,
+          borderColor: frame.color,
+          backgroundColor: rgba(frame.color, 0.18),
+          pointBackgroundColor: frame.color,
+          pointBorderColor: frame.color,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.25,
+          fill: false,
+        }],
+      },
       options: {
         animation: false,
         responsive: true,
         maintainAspectRatio: false,
         scales: {
           x: {
+            type: 'linear',
             title: { display: true, text: 'time (s)', font: { size: 10 } },
             ticks: { font: { size: 10 } },
           },
           y: {
+            beginAtZero: true,
             ticks: {
-              stepSize: 1,
-              font: { size: 10, family: 'Consolas, monospace' },
-              callback: v => ids[v] || '',
+              precision: 0,
+              font: { size: 10 },
             },
-            min: -0.5,
-            max: Math.max(ids.length - 0.5, 0.5),
+            title: { display: true, text: 'hits', font: { size: 10 } },
           },
         },
         plugins: {
-          legend: {
-            position: 'top',
-            labels: { font: { size: 10 }, boxWidth: 8, usePointStyle: true },
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => items[0] ? frame.key : '',
+              label: ctx => {
+                const point = ctx.raw || {};
+                const timeText = point.x != null ? `${point.x.toFixed(1)} s` : '-';
+                const hitText = point.y != null ? `hit ${point.y}` : 'hit -';
+                const dlcText = point.dlc != null ? `DLC ${point.dlc}` : 'DLC -';
+                return `${timeText} | ${hitText} | ${dlcText}`;
+              },
+            },
           },
         },
       },
     });
   }
 
+  _updateCanfdFrameChart(frameKey) {
+    const record = this._canfdCharts.get(frameKey);
+    const frame = this._can.frames[frameKey];
+
+    if (!record || !frame) {
+      this._buildCanfd();
+      return;
+    }
+
+    record.chart.data.datasets[0].data = frame.points.map(point => ({
+      x: point.x,
+      y: point.y,
+      dlc: point.dlc,
+    }));
+    record.chart.update('none');
+    record.metaEl.textContent = this._formatCanfdFrameMeta(frame);
+  }
+
+  _formatCanfdFrameMeta(frame) {
+    const countText = `${frame.count} hit${frame.count === 1 ? '' : 's'}`;
+    const dlcText = frame.lastDlc != null ? `DLC ${frame.lastDlc}` : 'DLC -';
+    return `${countText} | ${dlcText}`;
+  }
+
   _updateChart(proto) {
-    if (!this._chart) return;
+    if (!this._chart) {
+      return;
+    }
 
     if (proto === 'UART') {
-      const labels = this._uart.rtts.map((_, i) => i + 1);
-      this._chart.data.labels = labels;
+      this._chart.data.labels = this._uart.rtts.map((_, i) => i + 1);
       this._chart.data.datasets[0].data = [...this._uart.rtts];
       this._chart.update('none');
     }
 
     if (proto === 'SPI') {
-      const labels = this._spi.txs.map((_, i) => `T${i + 1}`);
-      this._chart.data.labels = labels;
+      this._chart.data.labels = this._spi.txs.map((_, i) => `T${i + 1}`);
       this._chart.data.datasets[0].data = [...this._spi.txs];
       this._chart.data.datasets[1].data = [...this._spi.rxs];
       this._chart.update('none');
     }
 
-    if (proto === 'CANFD') {
-      // Rebuild fully when new IDs appear (y-axis bounds change)
-      this._destroyChart();
-      this._buildCanfd();
-    }
-
     if (proto === 'I2C') {
-      const labels = this._i2c.txs.map((_, i) => `T${i + 1}`);
-      this._chart.data.labels = labels;
+      this._chart.data.labels = this._i2c.txs.map((_, i) => `T${i + 1}`);
       this._chart.data.datasets[0].data = [...this._i2c.txs];
       this._chart.data.datasets[1].data = [...this._i2c.rxs];
       this._chart.update('none');
@@ -384,17 +607,20 @@ export class Charts {
   }
 
   _refreshMetrics() {
-    if (!this._proto) { this._metrics.innerHTML = ''; return; }
-
     let cards = [];
+
+    if (!this._proto) {
+      this._metrics.innerHTML = '';
+      return;
+    }
 
     if (this._proto === 'UART') {
       const lastRtt = this._uart.rtts.at(-1) ?? '-';
       const errRate = this._uart.total > 0
-        ? ((this._uart.errors / this._uart.total) * 100).toFixed(1) + '%'
+        ? `${((this._uart.errors / this._uart.total) * 100).toFixed(1)}%`
         : '0%';
       cards = [
-        { label: 'Last RTT',   value: lastRtt === '-' ? '-' : `${lastRtt} ms` },
+        { label: 'Last RTT', value: lastRtt === '-' ? '-' : `${lastRtt} ms` },
         { label: 'Bytes rcvd', value: String(this._uart.totalBytes) },
         { label: 'Error rate', value: errRate },
       ];
@@ -402,42 +628,42 @@ export class Charts {
 
     if (this._proto === 'SPI') {
       const matchRate = this._spi.txCount > 0
-        ? ((this._spi.matchCount / this._spi.txCount) * 100).toFixed(1) + '%'
+        ? `${((this._spi.matchCount / this._spi.txCount) * 100).toFixed(1)}%`
         : '0%';
       cards = [
         { label: 'Match rate', value: matchRate },
-        { label: 'TX count',   value: String(this._spi.txCount) },
+        { label: 'TX count', value: String(this._spi.txCount) },
       ];
     }
 
     if (this._proto === 'CANFD') {
       const lastRtt = this._can.lastRtt != null ? `${this._can.lastRtt} ms` : '-';
       cards = [
-        { label: 'IDs seen',     value: String(Object.keys(this._can.idMap).length) },
+        { label: 'Frames seen', value: String(this._can.order.length) },
         { label: 'Error frames', value: String(this._can.errorCount) },
-        { label: 'Last RTT',     value: lastRtt },
+        { label: 'Last RTT', value: lastRtt },
       ];
     }
 
     if (this._proto === 'I2C') {
       const ackRate = this._i2c.txCount > 0
-        ? ((this._i2c.ackCount / this._i2c.txCount) * 100).toFixed(1) + '%'
+        ? `${((this._i2c.ackCount / this._i2c.txCount) * 100).toFixed(1)}%`
         : '0%';
       const lastRx = this._i2c.rxs.at(-1) != null
         ? `0x${this._i2c.rxs.at(-1).toString(16).toUpperCase().padStart(2, '0')}`
         : '-';
       cards = [
-        { label: 'ACK rate',  value: ackRate },
-        { label: 'TX count',  value: String(this._i2c.txCount) },
-        { label: 'Last RX',   value: lastRx },
+        { label: 'ACK rate', value: ackRate },
+        { label: 'TX count', value: String(this._i2c.txCount) },
+        { label: 'Last RX', value: lastRx },
       ];
     }
 
     this._metrics.innerHTML = cards
-      .map(c =>
+      .map(card =>
         `<div class="metric-card">` +
-        `<span class="metric-label">${c.label}</span>` +
-        `<span class="metric-value">${c.value}</span>` +
+        `<span class="metric-label">${card.label}</span>` +
+        `<span class="metric-value">${card.value}</span>` +
         `</div>`
       )
       .join('');
