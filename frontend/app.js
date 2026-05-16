@@ -15,6 +15,7 @@ import {
   computeDualWarnings,
   getDualCommandDisabledReason,
 } from './dual-board.js';
+import { checkVersionCompat } from './compat.js';
 
 const state = {
   connected: false,
@@ -76,6 +77,8 @@ const btnExportCsv = $('btn-export-csv');
 const sessionFilePath = $('session-file-path');
 const toastContainer = $('toast-container');
 const titlebarVersion = $('titlebar-version');
+const firmwareBadge = $('firmware-version-badge');
+const versionWarningBanner = $('version-warning-banner');
 
 const boardAPortSelect = $('board-a-port');
 const boardBPortSelect = $('board-b-port');
@@ -1846,11 +1849,36 @@ function setConnected(connected) {
   syncAllControls();
 }
 
+function renderVersionInfo(profile) {
+  const result = checkVersionCompat(profile);
+
+  if (firmwareBadge) {
+    if (result.firmwareVersion) {
+      firmwareBadge.textContent = `fw ${result.firmwareVersion}`;
+      firmwareBadge.classList.add('visible');
+    } else {
+      firmwareBadge.textContent = '';
+      firmwareBadge.classList.remove('visible');
+    }
+  }
+
+  if (versionWarningBanner) {
+    if (result.warnMsg) {
+      versionWarningBanner.textContent = result.warnMsg;
+      versionWarningBanner.classList.add('visible');
+    } else {
+      versionWarningBanner.textContent = '';
+      versionWarningBanner.classList.remove('visible');
+    }
+  }
+}
+
 function setBoardProfile(profile) {
   state.boardProfile = profile;
   state.caps = capsFromProfile(profile);
   visualView.setCapabilities(profile?.available ? [...state.caps] : null);
   testsView.setCapabilities(profile?.available ? [...state.caps] : null);
+  renderVersionInfo(profile);
 
   if (state.activeProto && !isProtocolSupported(state.activeProto)) {
     state.activeProto = null;

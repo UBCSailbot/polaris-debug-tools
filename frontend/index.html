@@ -16,6 +16,7 @@
       <div id="titlebar-brand-copy">
         <span id="titlebar-label">Sailbot Protocol Tester</span>
         <span id="titlebar-version">Version 0.3.13</span>
+        <span id="firmware-version-badge"></span>
       </div>
     </div>
     <span id="status-dot" class="disconnected" title="Connection status" aria-hidden="true"></span>
@@ -179,6 +180,9 @@
   <div id="banner" role="alert" aria-live="assertive">
     Disconnected - reconnecting...&nbsp;<span id="reconnect-counter"></span>
   </div>
+
+  <!-- Firmware Version Warning Banner -->
+  <div id="version-warning-banner" role="alert" aria-live="polite"></div>
 
   <!-- 3-column main -->
   <div id="main">

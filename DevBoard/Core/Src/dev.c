@@ -15,8 +15,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define FW_VERSION            "0.2.0"
-#define PROTOCOL_VERSION      "1"
 #define BOARD_NAME            "devboard"
 #define CAPS_STRING           "UART,SPI,CANFD,I2C,UART_STREAM,CANFD_MONITOR,I2C_SCAN,I2C_READ_REG8"
 #define LEGACY_RESET_SEQUENCE "SYS:RESET\r\n"

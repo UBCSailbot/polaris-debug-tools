@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "test": "npm run test:frontend",
-    "test:frontend": "node frontend/protocols.test.js && node frontend/protocol-parser.test.js && node frontend/charts.test.js && node frontend/visual.test.js && node frontend/terminal.test.js && node frontend/dual-board.test.js && node frontend/transcript-replay.test.js && node frontend/guardrails.test.js",
+    "test:frontend": "node frontend/protocols.test.js && node frontend/protocol-parser.test.js && node frontend/charts.test.js && node frontend/visual.test.js && node frontend/terminal.test.js && node frontend/dual-board.test.js && node frontend/transcript-replay.test.js && node frontend/guardrails.test.js && node frontend/compat.test.js",
     "build": "electron-builder"
   },
   "dependencies": {

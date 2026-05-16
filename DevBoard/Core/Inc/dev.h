@@ -8,6 +8,9 @@
 
 #include "stm32u5xx_hal.h"
 
+#define FW_VERSION       "0.2.0"
+#define PROTOCOL_VERSION "1"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
