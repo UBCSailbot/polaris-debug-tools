@@ -118,4 +118,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onConnectionStatusBoardB: cb => subscribe('dual:connection-status-b', cb),
 
   onBoardProfileBoardB: cb => subscribe('dual:board-profile-b', cb),
+
+  // Load a preset JSON file via native file dialog
+  loadPreset: () =>
+    ipcRenderer.invoke('preset:load'),
+
+  // Save preset data to a JSON file via native save dialog
+  savePreset: (data) =>
+    ipcRenderer.invoke('preset:save', { data }),
 });

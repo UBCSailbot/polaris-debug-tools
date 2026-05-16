@@ -3,6 +3,8 @@
 
 import { PROTOCOLS, PROTOCOL_ORDER } from './protocols.js';
 
+const CUSTOM_TAB = 'CUSTOM';
+
 export const TEST_CATALOG = {
   UART: [
     {
@@ -208,6 +210,7 @@ export class TestsView {
     runAllBtnEl,
     onRunTest,
     onRunAll,
+    onRunCustomTest,
   }) {
     this._tabs = tabsEl;
     this._cards = cardsEl;
@@ -218,12 +221,14 @@ export class TestsView {
     this._runAllBtn = runAllBtnEl;
     this._onRunTest = onRunTest;
     this._onRunAll = onRunAll;
+    this._onRunCustomTest = onRunCustomTest || onRunTest;
     this._connected = false;
     this._caps = null;
     this._activeProto = PROTOCOL_ORDER[0];
     this._runStates = new Map();
     this._activeRunId = null;
     this._lastRun = null;
+    this._customPresets = [];
 
     this._buildTabs();
     this._runAllBtn.addEventListener('click', () => {
@@ -288,14 +293,116 @@ export class TestsView {
   }
 
   getActiveTests(protoId = this._activeProto) {
+    if (protoId === CUSTOM_TAB) {
+      return [...this._customPresets];
+    }
     return [...(TEST_CATALOG[protoId] || [])];
   }
 
   getTestById(testId) {
+    const custom = this._customPresets.find(p => p.id === testId);
+    if (custom) return custom;
     return PROTOCOL_ORDER
       .flatMap(protoId => TEST_CATALOG[protoId] || [])
       .find(test => test.id === testId) || null;
   }
+
+  loadCustomPresets(presets) {
+    this._customPresets = [...this._customPresets, ...presets];
+    this._buildTabs();
+    if (this._activeProto === CUSTOM_TAB) {
+      this._renderCards();
+    }
+    this._renderSummary();
+  }
+
+  clearCustomPresets() {
+    this._customPresets = [];
+    if (this._activeProto === CUSTOM_TAB) {
+      this._activeProto = this._firstSupportedProtocol() || PROTOCOL_ORDER[0];
+    }
+    this._buildTabs();
+    this._renderCards();
+    this._renderSummary();
+  }
+
+  getCustomPresets() {
+    return [...this._customPresets];
+  }
+
+  _renderCustomCards() {
+    this._cards.innerHTML = '';
+
+    if (!this._customPresets.length) {
+      this._cards.innerHTML = '<div class="tests-empty">No custom presets loaded. Use the Load Preset button to import a .json file.</div>';
+      return;
+    }
+
+    this._customPresets.forEach(preset => {
+      const runState = this._runStates.get(preset.id) || { tone: 'idle', label: 'Ready', detail: 'Not run yet.' };
+      const enabled = this._connected;
+      const busy = !!this._activeRunId;
+
+      const card = document.createElement('article');
+      const header = document.createElement('div');
+      const category = document.createElement('span');
+      const title = document.createElement('h3');
+      const status = document.createElement('span');
+      const summary = document.createElement('p');
+      const sequence = document.createElement('div');
+      const sequenceLabel = document.createElement('span');
+      const steps = document.createElement('div');
+      const footer = document.createElement('div');
+      const detail = document.createElement('span');
+      const button = document.createElement('button');
+
+      card.className = 'test-card';
+      header.className = 'test-card-header';
+      category.className = 'test-card-category';
+      title.className = 'test-card-title';
+      status.className = `test-card-status ${runState.tone || 'idle'}`;
+      summary.className = 'test-card-summary';
+      sequence.className = 'test-card-section';
+      sequenceLabel.className = 'test-card-section-label';
+      steps.className = 'test-step-list';
+      footer.className = 'test-card-footer';
+      detail.className = 'test-card-detail';
+      button.className = 'test-run-btn';
+      button.type = 'button';
+
+      category.textContent = 'Custom';
+      title.textContent = preset.name;
+      status.textContent = runState.label;
+      summary.textContent = `${preset.steps.length} step${preset.steps.length === 1 ? '' : 's'}.`;
+      sequenceLabel.textContent = 'Sequence';
+      detail.textContent = enabled ? runState.detail : 'Connect to the board before running custom presets.';
+      button.textContent = this._activeRunId === preset.id ? 'Running...' : 'Run Preset';
+      button.disabled = !enabled || busy;
+      button.addEventListener('click', () => this._onRunCustomTest(preset));
+
+      preset.steps.forEach(step => {
+        const chip = document.createElement('span');
+        chip.className = 'test-step-chip';
+        chip.textContent = step.label;
+        steps.appendChild(chip);
+      });
+
+      header.appendChild(category);
+      header.appendChild(status);
+      card.appendChild(header);
+      card.appendChild(title);
+      card.appendChild(summary);
+      sequence.appendChild(sequenceLabel);
+      sequence.appendChild(steps);
+      footer.appendChild(detail);
+      footer.appendChild(button);
+      card.appendChild(sequence);
+      card.appendChild(footer);
+
+      this._cards.appendChild(card);
+    });
+  }
+
 
   _buildTabs() {
     this._tabs.innerHTML = '';
@@ -310,6 +417,16 @@ export class TestsView {
       btn.addEventListener('click', () => this.show(protoId));
       this._tabs.appendChild(btn);
     }
+
+    const customBtn = document.createElement('button');
+    customBtn.type = 'button';
+    customBtn.className = 'tests-proto-btn';
+    customBtn.textContent = this._customPresets.length ? `Custom (${this._customPresets.length})` : 'Custom';
+    customBtn.dataset.proto = CUSTOM_TAB;
+    customBtn.disabled = false;
+    customBtn.addEventListener('click', () => this.show(CUSTOM_TAB));
+    this._tabs.appendChild(customBtn);
+
     this._updateTabActive();
   }
 
@@ -320,6 +437,11 @@ export class TestsView {
   }
 
   _renderCards() {
+    if (this._activeProto === CUSTOM_TAB) {
+      this._renderCustomCards();
+      return;
+    }
+
     const tests = this.getActiveTests();
 
     this._cards.innerHTML = '';
@@ -406,9 +528,12 @@ export class TestsView {
 
   _renderSummary() {
     const tests = this.getActiveTests();
-    const runnableCount = tests.filter(test => this._isTestEnabled(test)).length;
+    const isCustom = this._activeProto === CUSTOM_TAB;
+    const runnableCount = isCustom
+      ? (this._connected ? this._customPresets.length : 0)
+      : tests.filter(test => this._isTestEnabled(test)).length;
     const statusText = this._connected ? 'Connected' : 'Disconnected';
-    const activeProtoLabel = PROTOCOLS[this._activeProto]?.label || '-';
+    const activeProtoLabel = isCustom ? 'Custom' : (PROTOCOLS[this._activeProto]?.label || '-');
     const lastRunText = this._lastRun
       ? `${this._lastRun.title} at ${this._formatRunTime(this._lastRun.lastRunAt)}`
       : 'No test sequence has been run yet.';
@@ -423,7 +548,9 @@ export class TestsView {
       this._summaryHintEl.textContent = this._protocolDisabledReason(this._activeProto);
     } else if (this._activeRunId) {
       const active = this.getTestById(this._activeRunId);
-      this._summaryHintEl.textContent = active ? `Running ${active.title}. Commands are being sent in sequence.` : 'A premade test is currently running.';
+      this._summaryHintEl.textContent = active ? `Running ${active.title || active.name}. Commands are being sent in sequence.` : 'A test sequence is currently running.';
+    } else if (isCustom && !this._customPresets.length) {
+      this._summaryHintEl.textContent = 'Load a preset file using the Load Preset button to add custom test sequences here.';
     } else {
       this._summaryHintEl.textContent = 'Each card queues a safe, known-good command sequence into the dev firmware so operators can focus on the target hardware behavior.';
     }
@@ -432,7 +559,7 @@ export class TestsView {
   }
 
   _protocolExists(protoId) {
-    return !!PROTOCOLS[protoId];
+    return protoId === CUSTOM_TAB || !!PROTOCOLS[protoId];
   }
 
   _firstSupportedProtocol() {
@@ -440,12 +567,13 @@ export class TestsView {
   }
 
   _isProtocolEnabled(protoId) {
+    if (protoId === CUSTOM_TAB) {
+      return true;
+    }
     const proto = PROTOCOLS[protoId];
-
     if (!proto || this._caps === null) {
       return false;
     }
-
     return this._caps.has(proto.domainCap);
   }
 

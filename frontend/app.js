@@ -16,6 +16,7 @@ import {
   getDualCommandDisabledReason,
 } from './dual-board.js';
 import { checkVersionCompat } from './compat.js';
+import { validatePreset } from './preset-validator.js';
 
 const state = {
   connected: false,
@@ -63,6 +64,8 @@ const rawInput = $('raw-input');
 const btnSend = $('btn-send');
 const vizPanel = $('viz-panel');
 const testsPanel = $('tests-panel');
+const btnTestsLoadPreset = $('btn-tests-load-preset');
+const btnTestsSavePreset = $('btn-tests-save-preset');
 const resProto = $('res-proto');
 const resStatus = $('res-status');
 const resData = $('res-data');
@@ -124,6 +127,7 @@ const testsView = new TestsView({
   runAllBtnEl: $('btn-tests-run-all'),
   onRunTest: test => runPremadeTest(test),
   onRunAll: protoId => runPremadeTests(protoId),
+  onRunCustomTest: preset => runCustomPreset(preset),
 });
 
 let activePremadeTestId = null;
@@ -2300,6 +2304,69 @@ async function runPremadeTests(protoId) {
   }
 }
 
+async function runCustomPreset(preset) {
+  let completedSteps = 0;
+  let finishedAt = null;
+
+  if (activePremadeTestId) {
+    showToast('Wait for the active sequence to finish first.', 'error');
+    return false;
+  }
+
+  if (!state.connected) {
+    showToast('Connect to the board before running presets.', 'error');
+    return false;
+  }
+
+  activePremadeTestId = preset.id;
+  testsView.setActiveRun(preset.id);
+  testsView.setRunState(preset.id, {
+    tone: 'running',
+    label: 'Running',
+    detail: `Queueing ${preset.steps.length} command${preset.steps.length === 1 ? '' : 's'}...`,
+  });
+
+  try {
+    for (const step of preset.steps) {
+      const result = await sendCommand(step.command);
+      if (!result?.success) {
+        throw new Error(result?.error || 'Send rejected');
+      }
+      completedSteps += 1;
+      testsView.setRunState(preset.id, {
+        tone: 'running',
+        label: 'Running',
+        detail: `Sent ${completedSteps} of ${preset.steps.length}. Last: ${step.label}.`,
+      });
+      if (step.delayMs) {
+        await delay(step.delayMs);
+      }
+    }
+    finishedAt = Date.now();
+    testsView.setRunState(preset.id, {
+      tone: 'success',
+      label: 'Sent',
+      detail: `Sequence completed at ${formatRunClock(finishedAt)}. Watch terminal output to verify hardware behavior.`,
+      lastRunAt: finishedAt,
+    });
+    showToast(`${preset.name} sequence sent.`);
+    return true;
+  } catch (err) {
+    finishedAt = Date.now();
+    testsView.setRunState(preset.id, {
+      tone: 'fail',
+      label: 'Blocked',
+      detail: `Stopped after ${completedSteps} step${completedSteps === 1 ? '' : 's'}: ${err.message || 'unknown error'}.`,
+      lastRunAt: finishedAt,
+    });
+    showToast(`${preset.name} could not finish: ${err.message || 'unknown error'}`, 'error');
+    return false;
+  } finally {
+    activePremadeTestId = null;
+    testsView.setActiveRun(null);
+  }
+}
+
 btnRetry.addEventListener('click', () => {
   if (state.lastCommand) {
     sendCommand(state.lastCommand);
@@ -2320,6 +2387,63 @@ btnBoardLegacy.addEventListener('click', () => {
 
 btnBoardResetMode.addEventListener('click', () => {
   sendSystemCommand('SYS:RESET', 'Requested protocol mode');
+});
+
+btnTestsLoadPreset.addEventListener('click', async () => {
+  let result;
+  try {
+    result = await window.electronAPI.loadPreset();
+  } catch {
+    showToast('Failed to open file dialog.', 'error');
+    return;
+  }
+
+  if (!result.success) {
+    if (!result.canceled) {
+      showToast(result.error || 'Failed to load preset file.', 'error');
+    }
+    return;
+  }
+
+  const validation = validatePreset(result.data);
+  if (!validation.valid) {
+    showToast(`Invalid preset: ${validation.error}`, 'error');
+    return;
+  }
+
+  const preset = { ...validation.preset, id: `custom-${Date.now()}` };
+  testsView.loadCustomPresets([preset]);
+  btnTestsSavePreset.disabled = false;
+  showToast(`Loaded: ${preset.name}`);
+});
+
+btnTestsSavePreset.addEventListener('click', async () => {
+  const presets = testsView.getCustomPresets();
+  if (!presets.length) {
+    showToast('No custom presets to save.', 'error');
+    return;
+  }
+
+  const data = presets.length === 1
+    ? { name: presets[0].name, version: '1', steps: presets[0].steps }
+    : presets.map(p => ({ name: p.name, version: '1', steps: p.steps }));
+
+  let result;
+  try {
+    result = await window.electronAPI.savePreset(data);
+  } catch {
+    showToast('Failed to open save dialog.', 'error');
+    return;
+  }
+
+  if (!result.success) {
+    if (!result.canceled) {
+      showToast(result.error || 'Failed to save preset file.', 'error');
+    }
+    return;
+  }
+
+  showToast(`Saved to ${result.path}`);
 });
 
 function updateResultPanel(parsed, rtt, localTimeout) {

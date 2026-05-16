@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -842,6 +842,43 @@ ipcMain.handle('log:export-csv', async () => {
     return { success: true, path: csvPath };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('preset:load', async () => {
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Load Test Preset',
+    filters: [{ name: 'JSON Preset', extensions: ['json'] }],
+    properties: ['openFile'],
+  });
+  if (result.canceled || !result.filePaths.length) {
+    return { success: false, canceled: true };
+  }
+  try {
+    const raw = fs.readFileSync(result.filePaths[0], 'utf8');
+    return { success: true, data: JSON.parse(raw) };
+  } catch (err) {
+    return { success: false, canceled: false, error: err.message };
+  }
+});
+
+ipcMain.handle('preset:save', async (_event, { data }) => {
+  const defaultName = (typeof data?.name === 'string' && data.name.trim())
+    ? data.name.trim().replace(/[^a-z0-9_\-]/gi, '_')
+    : 'preset';
+  const result = await dialog.showSaveDialog(win, {
+    title: 'Save Test Preset',
+    defaultPath: `${defaultName}.json`,
+    filters: [{ name: 'JSON Preset', extensions: ['json'] }],
+  });
+  if (result.canceled || !result.filePath) {
+    return { success: false, canceled: true };
+  }
+  try {
+    fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2), 'utf8');
+    return { success: true, path: result.filePath };
+  } catch (err) {
+    return { success: false, canceled: false, error: err.message };
   }
 });
 
