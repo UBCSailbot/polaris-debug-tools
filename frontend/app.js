@@ -17,6 +17,16 @@ import {
 } from './dual-board.js';
 import { checkVersionCompat } from './compat.js';
 import { validatePreset } from './preset-validator.js';
+import { choosePortSelection } from './port-select.js';
+import { evaluateExpectation } from './assertions.js';
+import {
+  validateSoakConfig,
+  createSoakState,
+  beginSoak,
+  shouldContinueSoak,
+  recordSoakRun,
+  summarizeSoak,
+} from './soak.js';
 
 const state = {
   connected: false,
@@ -66,6 +76,13 @@ const vizPanel = $('viz-panel');
 const testsPanel = $('tests-panel');
 const btnTestsLoadPreset = $('btn-tests-load-preset');
 const btnTestsSavePreset = $('btn-tests-save-preset');
+const soakTestSelect = $('soak-test-select');
+const soakIterationsInput = $('soak-iterations');
+const soakDurationInput = $('soak-duration');
+const soakIntervalInput = $('soak-interval');
+const btnSoakStart = $('btn-soak-start');
+const btnSoakStop = $('btn-soak-stop');
+const soakStatusEl = $('soak-status');
 const resProto = $('res-proto');
 const resStatus = $('res-status');
 const resData = $('res-data');
@@ -1846,6 +1863,9 @@ function setConnected(connected) {
     state.pendingCustomCommand = null;
     resetResultPanel();
     resetProtocolBadges();
+    if (soakRunning && soakState) {
+      soakState.cancelled = true;
+    }
   }
   [btnBoardPing, btnBoardRefreshProfile, btnBoardLegacy, btnBoardResetMode].forEach(btn => {
     btn.disabled = !connected;
@@ -2136,6 +2156,7 @@ function syncAllControls() {
   syncCommandBarEnabled();
   visualView.setConnected(state.connected);
   testsView.setConnected(state.connected);
+  refreshSoakOptions();
 }
 
 btnSend.addEventListener('click', () => {
@@ -2304,8 +2325,109 @@ async function runPremadeTests(protoId) {
   }
 }
 
+// ── Response waiters — let sequence runners capture the terminal frame that
+// answers the command they just sent (needed for step assertions/soak). ────
+const RESPONSE_WAIT_TIMEOUT_MS = 2600; // just past main.js's 2000 ms host timeout
+
+let primaryResponseWaiters = [];
+
+function waitForPrimaryResponse(timeoutMs = RESPONSE_WAIT_TIMEOUT_MS) {
+  return new Promise(resolve => {
+    const waiter = {
+      resolve,
+      timer: setTimeout(() => {
+        primaryResponseWaiters = primaryResponseWaiters.filter(w => w !== waiter);
+        resolve(null);
+      }, timeoutMs),
+    };
+    primaryResponseWaiters.push(waiter);
+  });
+}
+
+function resolvePrimaryResponseWaiters(outcome) {
+  if (!primaryResponseWaiters.length) {
+    return;
+  }
+  const waiters = primaryResponseWaiters;
+  primaryResponseWaiters = [];
+  for (const waiter of waiters) {
+    clearTimeout(waiter.timer);
+    waiter.resolve(outcome);
+  }
+}
+
+/**
+ * Send a sequence of preset/test steps. Steps carrying an `expect` block
+ * wait for their terminal response and evaluate the assertion. Shared by
+ * the preset runner and soak mode.
+ *
+ * @returns report: { total, sent, assertChecked, assertFailed, hostTimeouts,
+ *                    failures: [{label, messages}], error: string|null }
+ */
+async function executeSequenceSteps(steps, { onProgress, awaitResponses = false } = {}) {
+  const report = {
+    total: steps.length,
+    sent: 0,
+    assertChecked: 0,
+    assertFailed: 0,
+    hostTimeouts: 0,
+    failures: [],
+    error: null,
+  };
+
+  for (const step of steps) {
+    // Steps with assertions always wait for their response; soak mode waits
+    // on every step so host timeouts are counted and pacing never overlaps
+    // the one-in-flight command rule.
+    const needsOutcome = awaitResponses || !!step.expect;
+    const outcomePromise = needsOutcome ? waitForPrimaryResponse() : null;
+
+    const result = await sendCommand(step.command);
+    if (!result?.success) {
+      report.error = result?.error || 'Send rejected';
+      break;
+    }
+    report.sent += 1;
+
+    if (needsOutcome) {
+      const outcome = await outcomePromise;
+      if (outcome?.localTimeout) {
+        report.hostTimeouts += 1;
+      }
+      if (step.expect) {
+        report.assertChecked += 1;
+        const verdict = evaluateExpectation(step.expect, outcome);
+        if (!verdict.pass) {
+          report.assertFailed += 1;
+          report.failures.push({ label: step.label, messages: verdict.failures });
+        }
+      }
+    }
+
+    if (onProgress) {
+      onProgress(step, report);
+    }
+
+    if (step.delayMs) {
+      await delay(step.delayMs);
+    }
+  }
+
+  return report;
+}
+
+function describeAssertionSummary(report) {
+  if (!report.assertChecked) {
+    return '';
+  }
+  if (report.assertFailed) {
+    const first = report.failures[0];
+    return ` ${report.assertFailed} of ${report.assertChecked} assertions failed — ${first.label}: ${first.messages[0]}.`;
+  }
+  return ` All ${report.assertChecked} assertion${report.assertChecked === 1 ? '' : 's'} passed.`;
+}
+
 async function runCustomPreset(preset) {
-  let completedSteps = 0;
   let finishedAt = null;
 
   if (activePremadeTestId) {
@@ -2327,45 +2449,228 @@ async function runCustomPreset(preset) {
   });
 
   try {
-    for (const step of preset.steps) {
-      const result = await sendCommand(step.command);
-      if (!result?.success) {
-        throw new Error(result?.error || 'Send rejected');
-      }
-      completedSteps += 1;
-      testsView.setRunState(preset.id, {
+    const report = await executeSequenceSteps(preset.steps, {
+      onProgress: (step, rep) => testsView.setRunState(preset.id, {
         tone: 'running',
         label: 'Running',
-        detail: `Sent ${completedSteps} of ${preset.steps.length}. Last: ${step.label}.`,
-      });
-      if (step.delayMs) {
-        await delay(step.delayMs);
-      }
-    }
+        detail: `Sent ${rep.sent} of ${rep.total}. Last: ${step.label}.`,
+      }),
+    });
     finishedAt = Date.now();
+
+    if (report.error) {
+      testsView.setRunState(preset.id, {
+        tone: 'fail',
+        label: 'Blocked',
+        detail: `Stopped after ${report.sent} step${report.sent === 1 ? '' : 's'}: ${report.error}.`,
+        lastRunAt: finishedAt,
+      });
+      showToast(`${preset.name} could not finish: ${report.error}`, 'error');
+      return false;
+    }
+
+    if (report.assertFailed > 0) {
+      testsView.setRunState(preset.id, {
+        tone: 'fail',
+        label: 'Assert fail',
+        detail: `Completed at ${formatRunClock(finishedAt)}.${describeAssertionSummary(report)}`,
+        lastRunAt: finishedAt,
+      });
+      showToast(`${preset.name}: ${report.assertFailed} assertion${report.assertFailed === 1 ? '' : 's'} failed.`, 'error');
+      return false;
+    }
+
     testsView.setRunState(preset.id, {
       tone: 'success',
-      label: 'Sent',
-      detail: `Sequence completed at ${formatRunClock(finishedAt)}. Watch terminal output to verify hardware behavior.`,
+      label: report.assertChecked ? 'Passed' : 'Sent',
+      detail: `Sequence completed at ${formatRunClock(finishedAt)}.${describeAssertionSummary(report) || ' Watch terminal output to verify hardware behavior.'}`,
       lastRunAt: finishedAt,
     });
-    showToast(`${preset.name} sequence sent.`);
+    showToast(report.assertChecked
+      ? `${preset.name} passed (${report.assertChecked} assertion${report.assertChecked === 1 ? '' : 's'}).`
+      : `${preset.name} sequence sent.`);
     return true;
-  } catch (err) {
-    finishedAt = Date.now();
-    testsView.setRunState(preset.id, {
-      tone: 'fail',
-      label: 'Blocked',
-      detail: `Stopped after ${completedSteps} step${completedSteps === 1 ? '' : 's'}: ${err.message || 'unknown error'}.`,
-      lastRunAt: finishedAt,
-    });
-    showToast(`${preset.name} could not finish: ${err.message || 'unknown error'}`, 'error');
-    return false;
   } finally {
     activePremadeTestId = null;
     testsView.setActiveRun(null);
   }
 }
+
+// ── Soak mode — run one sequence in a loop and track error rates. ──────────
+
+let soakState = null;
+let soakRunning = false;
+
+function readSoakNumber(input) {
+  const raw = String(input.value ?? '').trim();
+  if (!raw) {
+    return 0;
+  }
+  const num = Number(raw);
+  return Number.isInteger(num) && num >= 0 ? num : NaN;
+}
+
+function formatSoakElapsed(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return min ? `${min}m ${sec}s` : `${sec}s`;
+}
+
+function updateSoakStatus() {
+  if (!soakStatusEl) {
+    return;
+  }
+  if (!soakState) {
+    soakStatusEl.textContent = 'Idle. Pick a sequence, set a run count or duration, and start.';
+    soakStatusEl.classList.remove('soak-failing');
+    return;
+  }
+
+  const s = summarizeSoak(soakState);
+  const parts = [
+    `${soakRunning ? 'Running' : 'Done'}: ${s.runs} run${s.runs === 1 ? '' : 's'} in ${formatSoakElapsed(s.elapsedMs)}`,
+    `${s.runsWithFailures} failing (${s.errorRatePct}%)`,
+    `${s.stepsSent} steps`,
+  ];
+  if (s.assertChecked) {
+    parts.push(`${s.assertFailed}/${s.assertChecked} asserts failed`);
+  }
+  if (s.hostTimeouts) {
+    parts.push(`${s.hostTimeouts} host timeout${s.hostTimeouts === 1 ? '' : 's'}`);
+  }
+  if (s.sendErrors) {
+    parts.push(`${s.sendErrors} send error${s.sendErrors === 1 ? '' : 's'}`);
+  }
+  soakStatusEl.textContent = parts.join(' | ');
+  soakStatusEl.classList.toggle('soak-failing', s.runsWithFailures > 0);
+}
+
+function updateSoakControls() {
+  if (!btnSoakStart) {
+    return;
+  }
+  btnSoakStart.disabled = soakRunning || !state.connected || !soakTestSelect.value;
+  btnSoakStop.disabled = !soakRunning;
+  soakTestSelect.disabled = soakRunning;
+  soakIterationsInput.disabled = soakRunning;
+  soakDurationInput.disabled = soakRunning;
+  soakIntervalInput.disabled = soakRunning;
+}
+
+function refreshSoakOptions() {
+  if (!soakTestSelect) {
+    return;
+  }
+
+  const current = soakTestSelect.value;
+  const options = [];
+
+  for (const protoId of PROTOCOL_ORDER) {
+    for (const test of TEST_CATALOG[protoId] || []) {
+      if (isPremadeTestRunnable(test)) {
+        options.push({ id: test.id, label: `${protoId}: ${test.title}` });
+      }
+    }
+  }
+  for (const preset of testsView.getCustomPresets()) {
+    options.push({ id: preset.id, label: `Custom: ${preset.name}` });
+  }
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = options.length ? '- pick sequence -' : '- no runnable sequences -';
+  soakTestSelect.replaceChildren(placeholder);
+
+  for (const opt of options) {
+    const el = document.createElement('option');
+    el.value = opt.id;
+    el.textContent = opt.label;
+    soakTestSelect.appendChild(el);
+  }
+
+  if (options.some(opt => opt.id === current)) {
+    soakTestSelect.value = current;
+  }
+  updateSoakControls();
+}
+
+async function startSoak() {
+  if (soakRunning) {
+    return;
+  }
+  if (!state.connected) {
+    showToast('Connect to the board before starting a soak.', 'error');
+    return;
+  }
+  if (activePremadeTestId) {
+    showToast('Wait for the active sequence to finish first.', 'error');
+    return;
+  }
+
+  const testDef = testsView.getTestById(soakTestSelect.value);
+  if (!testDef) {
+    showToast('Pick a sequence to soak.', 'error');
+    return;
+  }
+
+  const config = {
+    iterations: readSoakNumber(soakIterationsInput),
+    durationMs: readSoakNumber(soakDurationInput) * 60000,
+    intervalMs: readSoakNumber(soakIntervalInput),
+  };
+  const check = validateSoakConfig(config);
+  if (!check.valid) {
+    showToast(check.error, 'error');
+    return;
+  }
+
+  soakState = createSoakState(config);
+  beginSoak(soakState);
+  soakRunning = true;
+  activePremadeTestId = `soak:${testDef.id}`;
+  testsView.setActiveRun(testDef.id);
+  updateSoakControls();
+  updateSoakStatus();
+
+  const name = testDef.title || testDef.name || 'sequence';
+
+  try {
+    while (shouldContinueSoak(soakState) && state.connected) {
+      const report = await executeSequenceSteps(testDef.steps, { awaitResponses: true });
+      recordSoakRun(soakState, report);
+      updateSoakStatus();
+
+      if (report.error && !state.connected) {
+        break;
+      }
+      if (soakState.config.intervalMs && shouldContinueSoak(soakState)) {
+        await delay(soakState.config.intervalMs);
+      }
+    }
+  } finally {
+    soakState.endedAt = Date.now();
+    soakRunning = false;
+    activePremadeTestId = null;
+    testsView.setActiveRun(null);
+    updateSoakControls();
+    updateSoakStatus();
+
+    const s = summarizeSoak(soakState);
+    showToast(
+      `Soak of ${name} finished: ${s.runs} run${s.runs === 1 ? '' : 's'}, ${s.errorRatePct}% with failures.`,
+      s.runsWithFailures ? 'error' : 'info',
+    );
+  }
+}
+
+btnSoakStart?.addEventListener('click', () => { startSoak(); });
+btnSoakStop?.addEventListener('click', () => {
+  if (soakState) {
+    soakState.cancelled = true;
+  }
+});
+soakTestSelect?.addEventListener('change', updateSoakControls);
 
 btnRetry.addEventListener('click', () => {
   if (state.lastCommand) {
@@ -2414,6 +2719,7 @@ btnTestsLoadPreset.addEventListener('click', async () => {
   const preset = { ...validation.preset, id: `custom-${Date.now()}` };
   testsView.loadCustomPresets([preset]);
   btnTestsSavePreset.disabled = false;
+  refreshSoakOptions();
   showToast(`Loaded: ${preset.name}`);
 });
 
@@ -2478,6 +2784,17 @@ function handleDirectData({ raw, parsed, rtt, localTimeout, handshake }) {
 
   terminal.append(formatTerminalFrameText(raw, parsed), localTimeout ? 'TIMEOUT' : (parsed.status || 'INIT'));
   terminal.trim(settings.maxLines);
+
+  const isTerminalResponse = localTimeout ||
+    parsed.status === 'PASS' || parsed.status === 'FAIL' || parsed.status === 'TIMEOUT' ||
+    (parsed.domain === 'SYS' && parsed.type === 'INFO' && !handshake);
+  if (isTerminalResponse) {
+    resolvePrimaryResponseWaiters({
+      status: parsed.status,
+      payload: parsed.payload,
+      localTimeout: !!localTimeout,
+    });
+  }
 
   if (parsed.domain === 'SYS' && parsed.type === 'INFO') {
     if (!handshake) {
@@ -2557,35 +2874,6 @@ btnExportCsv.addEventListener('click', async () => {
   showToast(`Export failed: ${result.error || 'unknown'}`, 'error');
 });
 
-async function refreshPorts() {
-  let ports;
-
-  try {
-    ports = await window.electronAPI.listPorts();
-  } catch {
-    ports = [];
-  }
-
-  function populate(select) {
-    const current = select.value;
-    select.innerHTML = '<option value="">- select port -</option>';
-    for (const port of ports) {
-      const opt = document.createElement('option');
-      opt.value = port.path;
-      opt.textContent = port.manufacturer ? `${port.path} | ${port.manufacturer}` : port.path;
-      select.appendChild(opt);
-    }
-    if (ports.some(port => port.path === current)) {
-      select.value = current;
-    }
-  }
-
-  populate(portSelect);
-  populate(boardAPortSelect);
-  populate(boardBPortSelect);
-  syncPortExclusions();
-}
-
 async function refreshAvailablePorts({ silent = false } = {}) {
   let ports;
   let loadError = null;
@@ -2598,6 +2886,10 @@ async function refreshAvailablePorts({ silent = false } = {}) {
   }
 
   function labelForPort(port) {
+    // ST-Link is the NUCLEO's own VCP — tag it so the board port is obvious.
+    if (port.isStLink) {
+      return `${port.path} | ST-Link`;
+    }
     if (port.friendlyName) {
       return `${port.path} | ${port.friendlyName}`;
     }
@@ -2607,7 +2899,7 @@ async function refreshAvailablePorts({ silent = false } = {}) {
     return port.path;
   }
 
-  function populate(select) {
+  function populate(select, { autoPickStLink = false } = {}) {
     const current = select.value;
     const placeholder = document.createElement('option');
 
@@ -2622,12 +2914,14 @@ async function refreshAvailablePorts({ silent = false } = {}) {
       select.appendChild(opt);
     }
 
-    if (ports.some(port => port.path === current)) {
-      select.value = current;
-    }
+    select.value = autoPickStLink
+      ? choosePortSelection(ports, current)
+      : (ports.some(port => port.path === current) ? current : '');
   }
 
-  populate(portSelect);
+  // Only the primary select auto-picks: in dual-board mode two selects
+  // auto-picking the same ST-Link would fight the exclusion logic.
+  populate(portSelect, { autoPickStLink: !state.connected });
   populate(boardAPortSelect);
   populate(boardBPortSelect);
   syncPortExclusions();

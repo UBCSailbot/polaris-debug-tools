@@ -6,9 +6,13 @@ DevBoard/.settings/
 # Claude memory (local only)
 .claude/
 
-# Test binaries
-tests/test_ring_buffer
-tests/test_can_queue
+# Test binaries (host-compiled firmware tests)
+tests/firmware/test_ring_buffer
+tests/firmware/test_can_queue
+tests/firmware/test_line_parsing
+tests/firmware/test_dispatch
+tests/firmware/test_watchdog
+tests/firmware/*.exe
 
 # Node / Electron
 node_modules/

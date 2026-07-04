@@ -9,7 +9,7 @@ const {
   isTerminalFrame,
   isStreamingEvent,
   isLog,
-} = require('./protocol-parser.cjs');
+} = require('../../frontend/protocol-parser.cjs');
 
 const fixturesDir = path.resolve('docs', 'protocol', 'transcripts');
 const fixtureFiles = fs.readdirSync(fixturesDir).filter(name => name.endsWith('.json')).sort();

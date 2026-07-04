@@ -368,6 +368,22 @@
         Each card queues a safe, known-good command sequence into the dev firmware so operators can focus on the target hardware behavior.
       </div>
 
+      <div id="soak-bar" aria-label="Soak mode">
+        <span class="soak-label">Soak</span>
+        <select id="soak-test-select" aria-label="Sequence to soak">
+          <option value="">- pick sequence -</option>
+        </select>
+        <input id="soak-iterations" type="number" min="1" step="1" placeholder="runs"
+               title="Stop after this many runs (leave blank to bound by duration)" aria-label="Soak run count">
+        <input id="soak-duration" type="number" min="1" step="1" placeholder="minutes"
+               title="Stop after this many minutes (leave blank to bound by run count)" aria-label="Soak duration in minutes">
+        <input id="soak-interval" type="number" min="0" step="1" value="500" placeholder="gap ms"
+               title="Pause between runs in milliseconds" aria-label="Delay between soak runs">
+        <button id="btn-soak-start" type="button" disabled>Start Soak</button>
+        <button id="btn-soak-stop" type="button" disabled>Stop</button>
+        <span id="soak-status" aria-live="polite">Idle. Pick a sequence, set a run count or duration, and start.</span>
+      </div>
+
       <div id="tests-cards" role="list">
         <!-- .test-card elements injected by tests.js -->
       </div>

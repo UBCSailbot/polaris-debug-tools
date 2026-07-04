@@ -8,7 +8,7 @@ const {
   isTerminalFrame,
   isStreamingEvent,
   isLog,
-} = require('./protocol-parser.cjs');
+} = require('../../frontend/protocol-parser.cjs');
 
 let passed = 0;
 let failed = 0;

@@ -2,7 +2,7 @@
 // Run with: node frontend/protocols.test.js
 
 import { createRequire } from 'node:module';
-import { PROTOCOLS, parseCanFrame } from './protocols.js';
+import { PROTOCOLS, parseCanFrame } from '../../frontend/protocols.js';
 
 const require = createRequire(import.meta.url);
 const {
@@ -11,7 +11,7 @@ const {
   isTerminalFrame,
   isStreamingEvent,
   isLog,
-} = require('./protocol-parser.cjs');
+} = require('../../frontend/protocol-parser.cjs');
 
 let passed = 0;
 let failed = 0;

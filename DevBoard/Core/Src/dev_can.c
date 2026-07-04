@@ -75,7 +75,6 @@ static void can_diag_tx_state(const char *tag, const char *kind, uint32_t seq,
 static void can_diag_async_events(void);
 static HAL_StatusTypeDef can_configure_notifications(void);
 static void can_runtime_reset(void);
-//static void can_reset_transient_state(void);
 static void can_stop_library_heartbeat(void);
 static uint32_t can_enter_critical(void);
 static void can_exit_critical(uint32_t primask);
@@ -104,7 +103,10 @@ HAL_StatusTypeDef Dev_CAN_EnsureReady(void)
         return HAL_OK;
     }
 
-    CAN_Init(&hfdcan1, CAN_HEARTBEAT_ID, 1U);
+    /* start_timer = 0: the TIM7 library heartbeat is unused here (the software
+     * heartbeat is gated by CAN_HEARTBEAT_ENABLED). Starting it only to stop it
+     * a few lines later left a window where the TIM7 ISR could fire. */
+    CAN_Init(&hfdcan1, CAN_HEARTBEAT_ID, 0U);
     if (CanStartStatus != HAL_OK) {
         return HAL_ERROR;
     }
@@ -817,20 +819,6 @@ static void can_runtime_reset(void)
     g_can_rx_dequeue_count = 0U;
     g_can_rx_hw_poll_count = 0U;
     g_can_last_reported_ram_access_fail_count = 0U;
-}
-
-static void can_reset_transient_state(void)
-{
-    uint32_t primask = can_enter_critical();
-
-    g_can_tx_complete_mask = 0U;
-    g_can_tx_abort_mask = 0U;
-    g_can_last_tx_complete_mask = 0U;
-    g_can_last_tx_abort_mask = 0U;
-    g_can_last_error_status_its = 0U;
-    g_can_last_error_code = 0U;
-
-    can_exit_critical(primask);
 }
 
 static void can_stop_library_heartbeat(void)

@@ -4,7 +4,7 @@
  *
  * CHANGES FROM ORIGINAL:
  *   - Dev_Init: MPU region added to mark the FDCAN1 message RAM as
- *     non-bufferable, non-cacheable, shareable memory before any FDCAN
+ *     non-bufferable, non-cacheable, non-shareable memory before any FDCAN
  *     access occurs. This prevents CPU writes to RXF0A from being buffered
  *     by the Cortex-M33 write buffer, which was causing AHB bus arbitration
  *     collisions with the FDCAN peripheral and triggering MRAF on every frame.
@@ -16,7 +16,7 @@
 #include <string.h>
 
 #define BOARD_NAME            "devboard"
-#define CAPS_STRING           "UART,SPI,CANFD,I2C,UART_STREAM,CANFD_MONITOR,I2C_SCAN,I2C_READ_REG8"
+#define CAPS_STRING           "UART,SPI,CANFD,I2C,UART_STREAM,CANFD_MONITOR,I2C_SCAN,I2C_READ_REG8,WATCHDOG"
 #define LEGACY_RESET_SEQUENCE "SYS:RESET\r\n"
 
 RingBuf_t rb_u1_rx;
@@ -37,6 +37,7 @@ UartProtoState_t g_uart_state;
 SpiProtoState_t g_spi_state;
 CanProtoState_t g_can_state;
 I2cProtoState_t g_i2c_state;
+WdgState_t g_wdg_state;
 
 uint32_t spi_last_poll = 0U;
 
@@ -513,35 +514,78 @@ static void handle_sys_command(const ParsedCommand_t *cmd)
         return;
     }
 
+    if (strcmp(cmd->command, "WATCHDOG") == 0) {
+        uint32_t timeout_ms = WDG_DEFAULT_TIMEOUT_MS;
+
+        if ((cmd->argc == 1U) && (strcmp(cmd->argv[0], "STATUS") == 0)) {
+            (void)snprintf(payload, sizeof(payload), "watchdog=%u;timeout_ms=%lu",
+                           (unsigned int)g_wdg_state.enabled,
+                           (unsigned long)g_wdg_state.timeout_ms);
+            emit_frame("SYS", "INFO", payload);
+            return;
+        }
+
+        if ((cmd->argc >= 1U) && (strcmp(cmd->argv[0], "ENABLE") == 0)) {
+            if (cmd->argc == 2U) {
+                if (!parse_dec_u32(cmd->argv[1], &timeout_ms) ||
+                    (timeout_ms < WDG_MIN_TIMEOUT_MS) ||
+                    (timeout_ms > WDG_MAX_TIMEOUT_MS)) {
+                    emit_fail("SYS", "bad-arg");
+                    return;
+                }
+            } else if (cmd->argc != 1U) {
+                emit_fail("SYS", "bad-arg");
+                return;
+            }
+
+            if (!Dev_WDG_Enable(timeout_ms)) {
+                emit_fail("SYS", "wdg-hw");
+                return;
+            }
+            (void)snprintf(payload, sizeof(payload), "watchdog=1;timeout_ms=%lu",
+                           (unsigned long)timeout_ms);
+            emit_frame("SYS", "INFO", payload);
+            return;
+        }
+
+        if ((cmd->argc == 1U) && (strcmp(cmd->argv[0], "DISABLE") == 0)) {
+            /* The IWDG cannot be stopped once started (hardware limitation). */
+            emit_fail("SYS", "wdg-no-disable");
+            return;
+        }
+
+        emit_fail("SYS", "bad-arg");
+        return;
+    }
+
     emit_fail("SYS", "unknown-command");
 }
 
 static bool legacy_reset_matcher_consume(uint8_t byte)
 {
     static const char target[] = LEGACY_RESET_SEQUENCE;
-    uint8_t flush_index;
+    const uint8_t target_len = (uint8_t)(sizeof(target) - 1U);
 
-    if (byte == (uint8_t)target[g_legacy_reset_matcher.len]) {
-        g_legacy_reset_matcher.pending[g_legacy_reset_matcher.len++] = (char)byte;
-        if (g_legacy_reset_matcher.len == (sizeof(target) - 1U)) {
-            legacy_reset_matcher_reset();
-            return true;
-        }
-        return false;
+    /* Append the byte, then shift the window forward until the retained
+     * bytes are again a prefix of the target. Shifting (rather than flushing
+     * everything) re-scans the retained bytes, so an escape sequence that
+     * begins inside a failed partial match — e.g. "SYS:RESYS:RESET\r\n" —
+     * is still caught. Released bytes go to the legacy handler in order. */
+    g_legacy_reset_matcher.pending[g_legacy_reset_matcher.len++] = (char)byte;
+
+    while ((g_legacy_reset_matcher.len > 0U) &&
+           (memcmp(g_legacy_reset_matcher.pending, target, g_legacy_reset_matcher.len) != 0)) {
+        legacy_dispatch_byte((uint8_t)g_legacy_reset_matcher.pending[0]);
+        g_legacy_reset_matcher.len--;
+        memmove(g_legacy_reset_matcher.pending,
+                &g_legacy_reset_matcher.pending[1],
+                g_legacy_reset_matcher.len);
     }
 
-    for (flush_index = 0U; flush_index < g_legacy_reset_matcher.len; flush_index++) {
-        legacy_dispatch_byte((uint8_t)g_legacy_reset_matcher.pending[flush_index]);
+    if (g_legacy_reset_matcher.len == target_len) {
+        legacy_reset_matcher_reset();
+        return true;
     }
-    legacy_reset_matcher_reset();
-
-    if (byte == (uint8_t)target[0]) {
-        g_legacy_reset_matcher.pending[0] = (char)byte;
-        g_legacy_reset_matcher.len = 1U;
-        return false;
-    }
-
-    legacy_dispatch_byte(byte);
     return false;
 }
 
@@ -759,6 +803,11 @@ HAL_StatusTypeDef uart2_wait_for_byte(uint8_t *out, uint32_t timeout_ms)
         if (ring_pop(&rb_u2_rx, out) == 0) {
             return HAL_OK;
         }
+        /* Keep the 3-deep FDCAN RX FIFO drained and the watchdog fed while
+         * blocking here — a busy CAN bus must not lose frames just because
+         * a UART command is waiting for its echo. */
+        CAN_DrainRxFifo();
+        Dev_WDG_Feed();
     }
 
     return HAL_TIMEOUT;
@@ -769,10 +818,54 @@ void arm_uart1_receive(void)
     (void)HAL_UARTEx_ReceiveToIdle_IT(&huart1, isr_u1_buf, sizeof(isr_u1_buf));
 }
 
+uint32_t wdg_reload_from_ms(uint32_t timeout_ms)
+{
+    return timeout_ms / WDG_MS_PER_TICK;
+}
+
+bool Dev_WDG_Enable(uint32_t timeout_ms)
+{
+    uint32_t start;
+
+    /* Hardware limitation: once started the IWDG can never be stopped, only
+     * retimed and fed. A wedged poll loop stops feeding → board resets. */
+    IWDG->KR  = WDG_KR_START_KEY;
+    IWDG->KR  = WDG_KR_ACCESS_KEY;
+    IWDG->PR  = WDG_PR_DIV256;
+    IWDG->RLR = wdg_reload_from_ms(timeout_ms);
+
+    /* PR/RLR shadow-register sync takes a few LSI cycles (~200 us). */
+    start = HAL_GetTick();
+    while (IWDG->SR != 0U) {
+        if ((HAL_GetTick() - start) > WDG_SYNC_TIMEOUT_MS) {
+            return false;
+        }
+    }
+
+    IWDG->KR = WDG_KR_REFRESH_KEY;
+
+#ifdef __HAL_DBGMCU_FREEZE_IWDG
+    /* Pause the watchdog while the core is halted so SWD debug sessions do
+     * not reset the board mid-breakpoint. */
+    __HAL_DBGMCU_FREEZE_IWDG();
+#endif
+
+    g_wdg_state.enabled = 1U;
+    g_wdg_state.timeout_ms = timeout_ms;
+    return true;
+}
+
+void Dev_WDG_Feed(void)
+{
+    if (g_wdg_state.enabled != 0U) {
+        IWDG->KR = WDG_KR_REFRESH_KEY;
+    }
+}
+
 void Dev_Init(void)
 {
-    /* Configure MPU region for FDCAN1 message RAM as non-bufferable,
-     * non-cacheable, shareable memory BEFORE any FDCAN peripheral access.
+    /* Configure the MPU region for FDCAN1 message RAM as Device nGnRnE
+     * (non-bufferable, non-cacheable) BEFORE any FDCAN peripheral access.
      *
      * WHY: The STM32U5 FDCAN message RAM is shared between the CPU (AHB bus)
      * and the FDCAN peripheral. When the CPU writes to RXF0A to acknowledge
@@ -786,17 +879,9 @@ void Dev_Init(void)
      * writes to complete and release the bus before execution continues,
      * eliminating the arbitration collision window entirely.
      *
-     * FDCAN1 message RAM base on STM32U575: 0x4002A400
-     * Size: 4KB region covers the full message RAM allocation.
+     * FDCAN1 message RAM (SRAMCAN) base on STM32U575: 0x4000AC00,
+     * size 5120 bytes (limit 0x4000BFFF).
      * Region number 0 is used — adjust if your MPU already uses it. */
-/* Configure MPU for FDCAN1 message RAM — ARMv8-M API (Cortex-M33 / STM32U5).
- * Marks the region as Device nGnRnE: non-bufferable, non-cacheable, non-reorderable.
- * Forces CPU writes to RXF0A to complete before the bus is released, eliminating
- * the AHB arbitration collision with FDCAN peripheral RAM writes that caused MRAF. */
-    /* Configure MPU for FDCAN1 message RAM.
- * STM32U575 SRAMCAN base: 0x4000AC00, size 5120 bytes (0x1400).
- * Device nGnRnE: non-bufferable, forces CPU writes to complete before
- * bus is released, eliminating arbitration collisions with FDCAN peripheral. */
     MPU_Attributes_InitTypeDef mpu_attr   = {0};
     MPU_Region_InitTypeDef     mpu_region = {0};
 
@@ -829,6 +914,7 @@ void Dev_Init(void)
     memset(&g_spi_state, 0, sizeof(g_spi_state));
     memset(&g_can_state, 0, sizeof(g_can_state));
     memset(&g_i2c_state, 0, sizeof(g_i2c_state));
+    memset(&g_wdg_state, 0, sizeof(g_wdg_state));
 
     dwt_init();
     cs_high();
@@ -846,6 +932,7 @@ void Dev_Init(void)
 
 void Dev_Poll(void)
 {
+    Dev_WDG_Feed();
     if (g_mode == DEV_MODE_PROTOCOL) {
         service_protocol_mode();
     } else {

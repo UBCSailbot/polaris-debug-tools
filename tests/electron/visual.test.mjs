@@ -1,7 +1,7 @@
 // frontend/visual.test.js
 // Unit tests for the exported pure helper from visual.js.
 
-import { buildCustomCommand } from './visual.js';
+import { buildCustomCommand } from '../../frontend/visual.js';
 
 let passed = 0;
 let failed = 0;

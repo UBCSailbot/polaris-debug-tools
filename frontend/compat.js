@@ -29,5 +29,17 @@ export function checkVersionCompat(profile) {
     };
   }
 
+  // The spec (serial-protocol-v1.md section 17) requires wire-breaking changes
+  // to bump the proto version, so a newer proto is not guaranteed to work with
+  // this app either.
+  if (protoVersion > REQUIRED_PROTO_VERSION) {
+    return {
+      compatible: false,
+      firmwareVersion,
+      protoVersion,
+      warnMsg: `Firmware protocol v${protoVersion} is newer than this app supports (v${REQUIRED_PROTO_VERSION}). Update the desktop app.`,
+    };
+  }
+
   return { compatible: true, firmwareVersion, protoVersion, warnMsg: null };
 }

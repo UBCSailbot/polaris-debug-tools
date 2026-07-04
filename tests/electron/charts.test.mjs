@@ -1,7 +1,7 @@
 // frontend/charts.test.js
 // Unit tests for CANFD chart layout helpers.
 
-import { getCanfdFrameMeta, getCanfdGridSlotCount } from './charts.js';
+import { getCanfdFrameMeta, getCanfdGridSlotCount } from '../../frontend/charts.js';
 
 let passed = 0;
 let failed = 0;

@@ -61,6 +61,11 @@ void Dev_I2C_HandleCommand(const ParsedCommand_t *cmd)
                 (void)snprintf(&found[used], sizeof(found) - used, "%02X", addr);
                 used = strlen(found);
             }
+            /* The full scan blocks the poll loop for hundreds of ms — keep
+             * the 3-deep FDCAN RX FIFO drained and the watchdog fed so a
+             * busy CAN bus doesn't drop frames while we probe addresses. */
+            CAN_DrainRxFifo();
+            Dev_WDG_Feed();
         }
 
         (void)snprintf(payload, sizeof(payload), "found=%s", found);

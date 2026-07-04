@@ -87,6 +87,12 @@ void CAN_Init(FDCAN_HandleTypeDef *hfdcan1, uint32_t hbid, uint8_t start_timer)
         Error_Handler();
     }
 
+    /* NOTE: POLARIS never uses extended (29-bit) CAN IDs — every node on the
+     * boat bus transmits standard 11-bit IDs only. This extended-ID filter
+     * (and the FIFO1 interrupt below) is therefore dead configuration kept
+     * for HAL completeness: nothing ever drains RX FIFO1, so if extended-ID
+     * traffic did appear it would fill FIFO1 and stop. If extended IDs are
+     * ever adopted, add a HAL_FDCAN_RxFifo1Callback + drain path first. */
     sFilterConfig.IdType = FDCAN_EXTENDED_ID;
     sFilterConfig.FilterIndex = 0;
     sFilterConfig.FilterType = FDCAN_FILTER_RANGE_NO_EIDM;
@@ -316,7 +322,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM7) {
         uint8_t tx_heart = 0;
-        printf("Heartbeat!!\r\n");
+        /* No printf here — this runs in TIM7 ISR context and printf is neither
+         * ISR-safe nor (with the weak __io_putchar stub) safe to call at all. */
         if (CAN_Transmit(heartbeat_id, FDCAN_STANDARD_ID, FDCAN_DLC_BYTES_0,
                          &tx_heart, &hfdcan1) != HAL_OK) {
             HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, GPIO_PIN_SET);

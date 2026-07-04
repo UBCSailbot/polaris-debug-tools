@@ -38,6 +38,19 @@
 #define CAN_TX_ALL_BUFFERS_MASK   (FDCAN_TX_BUFFER0 | FDCAN_TX_BUFFER1 | FDCAN_TX_BUFFER2)
 #define LEGACY_I2C_SLAVE_ADDR     0x50U
 
+/* SYS:WATCHDOG — IWDG driven by direct register access (the HAL IWDG module
+ * is disabled in stm32u5xx_hal_conf.h and enabling it there would be lost on
+ * CubeMX regeneration). LSI 32 kHz / prescaler 256 = 125 Hz → 8 ms/tick. */
+#define WDG_KR_START_KEY          0x0000CCCCU
+#define WDG_KR_ACCESS_KEY         0x00005555U
+#define WDG_KR_REFRESH_KEY        0x0000AAAAU
+#define WDG_PR_DIV256             0x00000006U
+#define WDG_MS_PER_TICK           8U
+#define WDG_MIN_TIMEOUT_MS        1000U
+#define WDG_MAX_TIMEOUT_MS        32000U
+#define WDG_DEFAULT_TIMEOUT_MS    8000U
+#define WDG_SYNC_TIMEOUT_MS       10U
+
 typedef struct {
     volatile uint16_t head;
     volatile uint16_t tail;
@@ -90,6 +103,11 @@ typedef struct {
 } I2cProtoState_t;
 
 typedef struct {
+    uint8_t enabled;
+    uint32_t timeout_ms;
+} WdgState_t;
+
+typedef struct {
     char *domain;
     char *command;
     uint8_t argc;
@@ -122,6 +140,7 @@ extern UartProtoState_t g_uart_state;
 extern SpiProtoState_t g_spi_state;
 extern CanProtoState_t g_can_state;
 extern I2cProtoState_t g_i2c_state;
+extern WdgState_t g_wdg_state;
 
 extern uint32_t spi_last_poll;
 
@@ -154,6 +173,10 @@ bool bytes_to_hex(const uint8_t *src, uint16_t len, char *dst, size_t dst_size);
 void uart2_flush_rx(void);
 HAL_StatusTypeDef uart2_wait_for_byte(uint8_t *out, uint32_t timeout_ms);
 void arm_uart1_receive(void);
+
+uint32_t wdg_reload_from_ms(uint32_t timeout_ms);
+bool Dev_WDG_Enable(uint32_t timeout_ms);
+void Dev_WDG_Feed(void);
 
 void Dev_UART_HandleCommand(const ParsedCommand_t *cmd);
 void Dev_UART_ServiceProtocol(void);

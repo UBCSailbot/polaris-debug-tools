@@ -3,7 +3,7 @@
 // The Terminal class itself requires a DOM so it is not tested here.
 // Run with: node --experimental-vm-modules frontend/terminal.test.js
 
-import { formatTs, formatDuration } from './terminal.js';
+import { formatTs, formatDuration } from '../../frontend/terminal.js';
 
 let passed = 0;
 let failed = 0;
@@ -13,7 +13,7 @@ function assert(cond, msg) {
   else        { console.log('PASS:', msg);  passed++; }
 }
 
-// ─── formatTs ────────────────────────────────────────────
+// â”€â”€â”€ formatTs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const d1 = new Date(2026, 2, 28, 9, 5, 3, 42);
 assert(formatTs(d1) === '[09:05:03.042]', 'formatTs pads all fields');
 
@@ -29,7 +29,7 @@ assert(formatTs(d4) === '[12:34:56.789]', 'formatTs normal time');
 // Confirm format is [HH:MM:SS.mmm]
 assert(/^\[\d{2}:\d{2}:\d{2}\.\d{3}\]$/.test(formatTs(d1)), 'formatTs matches expected pattern');
 
-// ─── formatDuration ──────────────────────────────────────
+// â”€â”€â”€ formatDuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 assert(formatDuration(0)        === '00:00:00', 'zero ms');
 assert(formatDuration(999)      === '00:00:00', 'sub-second rounds to 0');
 assert(formatDuration(1000)     === '00:00:01', 'exactly 1 second');

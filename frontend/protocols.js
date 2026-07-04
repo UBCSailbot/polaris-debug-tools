@@ -46,6 +46,14 @@ function requireHexU8(value, fieldName) {
   return normalized;
 }
 
+function requireI2c7BitAddr(value, fieldName) {
+  const normalized = requireHexU8(value, fieldName);
+  if (parseInt(normalized, 16) > 0x7F) {
+    throw new Error(`${fieldName} must be a 7-bit I2C address (00-7F).`);
+  }
+  return normalized;
+}
+
 function requireCanId(value, fieldName) {
   const normalized = requireHex(value, fieldName);
   const parsed = parseInt(normalized, 16);
@@ -238,7 +246,7 @@ export const PROTOCOLS = {
           { name: 'len', placeholder: 'Length (dec, e.g. 6)', required: true },
         ],
         buildCommand(values) {
-          return `I2C:READ:${requireHexU8(values.addr, 'Address')}:${requireHexU8(values.reg, 'Register')}:${requireDec(values.len, 'Length')}`;
+          return `I2C:READ:${requireI2c7BitAddr(values.addr, 'Address')}:${requireHexU8(values.reg, 'Register')}:${requireDec(values.len, 'Length')}`;
         },
       },
       {
@@ -251,7 +259,7 @@ export const PROTOCOLS = {
           { name: 'bytes', placeholder: 'Bytes (hex, e.g. 1020A5)', required: true },
         ],
         buildCommand(values) {
-          return `I2C:WRITE:${requireHexU8(values.addr, 'Address')}:${requireBytePairs(values.bytes, 'Bytes', MAX_BINARY_PAYLOAD_BYTES)}`;
+          return `I2C:WRITE:${requireI2c7BitAddr(values.addr, 'Address')}:${requireBytePairs(values.bytes, 'Bytes', MAX_BINARY_PAYLOAD_BYTES)}`;
         },
       },
     ],

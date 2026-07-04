@@ -384,6 +384,7 @@ Two levels are frozen:
 | `CANFD_MONITOR` | feature | `CANFD:MONITOR:START/STOP` | enables CANFD monitor controls |
 | `I2C_SCAN` | feature | `I2C:SCAN` | enables I2C scan control |
 | `I2C_READ_REG8` | feature | `I2C:READ`, register-style `I2C:WRITE` | enables register read/write controls |
+| `WATCHDOG` | feature | `SYS:WATCHDOG:*` | enables watchdog controls (additive, fw >= 0.3.0) |
 
 Future-cap naming rule:
 
@@ -498,6 +499,52 @@ Success:
 
 ```text
 SYS:INFO:mode=protocol
+```
+
+### 11.6 `SYS:WATCHDOG` (additive, guarded by `WATCHDOG` cap)
+
+Added in firmware 0.3.0 as a v1-compatible extension: firmware that lacks the
+`WATCHDOG` cap answers these commands with `SYS:FAIL:reason=unknown-command`,
+and GUIs must gate watchdog controls on the cap.
+
+Purpose:
+
+- arm the independent hardware watchdog (IWDG) so a wedged firmware loop
+  self-resets instead of hanging the bench
+
+Rules:
+
+- `SYS:WATCHDOG:ENABLE[:<timeout_ms_dec>]` arms the watchdog; the poll loop
+  feeds it every iteration (and inside long blocking operations)
+- `timeout_ms` is decimal, clamp-checked to `1000..32000`; omitted → `8000`
+- re-issuing `ENABLE` retimes the running watchdog
+- **the IWDG cannot be stopped once started** (hardware limitation) —
+  `SYS:WATCHDOG:DISABLE` always fails with `reason=wdg-no-disable`; a power
+  cycle or reset clears it
+- while an SWD debug session halts the core the watchdog is frozen
+  (`DBG_IWDG_STOP`), so breakpoints do not reset the board
+
+Commands and responses:
+
+```text
+SYS:WATCHDOG:ENABLE:5000
+SYS:INFO:watchdog=1;timeout_ms=5000
+
+SYS:WATCHDOG:ENABLE
+SYS:INFO:watchdog=1;timeout_ms=8000
+
+SYS:WATCHDOG:STATUS
+SYS:INFO:watchdog=0;timeout_ms=0
+
+SYS:WATCHDOG:DISABLE
+SYS:FAIL:reason=wdg-no-disable
+```
+
+Possible failures:
+
+```text
+SYS:FAIL:reason=bad-arg      (timeout not decimal or outside 1000..32000)
+SYS:FAIL:reason=wdg-hw       (IWDG register sync failed)
 ```
 
 ---

@@ -8,6 +8,9 @@ const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 
 const protocolParser = require('./frontend/protocol-parser.cjs');
+const { resolveCommandCompletion, isLateResponse } = require('./frontend/command-tracking.cjs');
+const { buildSessionCsv } = require('./frontend/session-csv.cjs');
+const { normalizeListedPorts } = require('./frontend/port-utils.cjs');
 
 const CMD_TIMEOUT_MS = 2000;
 const HANDSHAKE_TIMEOUT_MS = 1500;
@@ -16,6 +19,10 @@ const HANDSHAKE_RETRY_DELAY_MS = 250;
 const MAX_HANDSHAKE_ATTEMPTS = 3;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 4000, 4000];
+// Cap recorded structured frames so a long-running session cannot grow memory
+// without bound. Generous enough that realistic bench sessions are never
+// truncated; CSV export keeps the most recent MAX_SESSION_RECORDS responses.
+const MAX_SESSION_RECORDS = 50000;
 
 let win = null;
 let logStream = null;
@@ -23,6 +30,10 @@ let logPath = null;
 let sessionBase = null;
 let sessionData = [];
 let autoReconnectEnabled = true;
+
+// Rotate the runtime debug log once it exceeds this size so a chatty renderer
+// cannot grow it without bound; one previous generation is kept as .old.log.
+const RUNTIME_DEBUG_MAX_BYTES = 5 * 1024 * 1024;
 
 function appendRuntimeDebug(message) {
   const logsDir = path.join(__dirname, 'logs');
@@ -33,6 +44,13 @@ function appendRuntimeDebug(message) {
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
+    try {
+      if (fs.statSync(debugPath).size > RUNTIME_DEBUG_MAX_BYTES) {
+        fs.renameSync(debugPath, path.join(logsDir, 'runtime-debug.old.log'));
+      }
+    } catch {
+      // Missing file is fine; rotation is best-effort.
+    }
     fs.appendFileSync(debugPath, line, 'utf8');
   } catch {
     // Debug logging must never break app flow.
@@ -40,37 +58,6 @@ function appendRuntimeDebug(message) {
 }
 
 appendRuntimeDebug('main.js loaded');
-
-function normalizeListedPorts(ports) {
-  const seen = new Map();
-
-  for (const port of ports || []) {
-    const portPath = String(port?.path || port?.DeviceID || '').trim();
-
-    if (!portPath) {
-      continue;
-    }
-
-    if (!seen.has(portPath)) {
-      seen.set(portPath, {
-        path: portPath,
-        manufacturer: String(port?.manufacturer || port?.Manufacturer || '').trim(),
-        friendlyName: String(port?.friendlyName || port?.Name || '').trim(),
-      });
-    }
-  }
-
-  return Array.from(seen.values()).sort((a, b) => {
-    const matchA = a.path.match(/^COM(\d+)$/i);
-    const matchB = b.path.match(/^COM(\d+)$/i);
-
-    if (matchA && matchB) {
-      return Number(matchA[1]) - Number(matchB[1]);
-    }
-
-    return a.path.localeCompare(b.path);
-  });
-}
 
 function listWindowsPortsFallback() {
   return new Promise(resolve => {
@@ -147,6 +134,7 @@ function createConnectionState() {
     commandTimeoutHandle: null,
     boardProfile: null,
     handshake: null,
+    lastHostTimeout: null,
   };
 }
 
@@ -208,14 +196,6 @@ function sessionTimestamp() {
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function csvEscape(val) {
-  const str = val == null ? '' : String(val);
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
 }
 
 function openSessionLog() {
@@ -352,7 +332,7 @@ function maybeUpdateBoardProfileFromInfo(connection, parsed) {
   return true;
 }
 
-function recordStructuredFrame(connection, raw, parsed, rtt, localTimeout) {
+function recordStructuredFrame(connection, raw, parsed, rtt, localTimeout, late = false) {
   if (!protocolParser.isTerminalFrame(parsed)) {
     return;
   }
@@ -367,7 +347,12 @@ function recordStructuredFrame(connection, raw, parsed, rtt, localTimeout) {
     status: localTimeout ? 'HOST_TIMEOUT' : parsed.status,
     data: parsed.payload,
     rtt,
+    late: !!late,
   });
+
+  if (sessionData.length > MAX_SESSION_RECORDS) {
+    sessionData.splice(0, sessionData.length - MAX_SESSION_RECORDS);
+  }
 }
 
 function routePrimaryFrame(raw, parsed) {
@@ -397,14 +382,23 @@ function routePrimaryFrame(raw, parsed) {
     return;
   }
 
-  if (protocolParser.isTerminalFrame(parsed) && primary.inFlight) {
-    if (!primary.activeCommand || !primary.activeCommand.domain || primary.activeCommand.domain === parsed.domain) {
-      rtt = Date.now() - primary.activeCommand.sentAt;
-      clearCommandState(primary);
+  let late = false;
+  if (protocolParser.isTerminalFrame(parsed)) {
+    if (primary.inFlight) {
+      const completion = resolveCommandCompletion(primary.activeCommand, parsed.domain, Date.now());
+      if (completion.completes || completion.staleInFlight) {
+        rtt = completion.rtt;
+        clearCommandState(primary);
+      }
+    } else if (isLateResponse(primary.lastHostTimeout, parsed.domain, Date.now())) {
+      // Delayed reply to a command that already produced a HOST_TIMEOUT row —
+      // tag it so the CSV export doesn't look like two results for one command.
+      late = true;
+      primary.lastHostTimeout = null;
     }
   }
 
-  recordStructuredFrame(primary, raw, parsed, rtt, false);
+  recordStructuredFrame(primary, raw, parsed, rtt, false, late);
   sendToRenderer('serial:data', { raw, parsed, rtt, localTimeout: false, handshake });
 }
 
@@ -432,8 +426,9 @@ function routeDualFrame(connection, raw, parsed) {
   }
 
   if (protocolParser.isTerminalFrame(parsed) && connection.inFlight) {
-    if (!connection.activeCommand || !connection.activeCommand.domain || connection.activeCommand.domain === parsed.domain) {
-      rtt = Date.now() - connection.activeCommand.sentAt;
+    const completion = resolveCommandCompletion(connection.activeCommand, parsed.domain, Date.now());
+    if (completion.completes || completion.staleInFlight) {
+      rtt = completion.rtt;
       clearCommandState(connection);
     }
   }
@@ -601,6 +596,7 @@ async function sendTrackedCommand(connection, command) {
     raw = `${parsed.domain}:TIMEOUT:${parsed.payload}`;
 
     clearCommandState(connection);
+    connection.lastHostTimeout = { domain: parsed.domain, at: Date.now() };
     recordStructuredFrame(connection, raw, parsed, null, true);
     sendToRenderer(config.dataChannel, {
       raw,
@@ -811,8 +807,6 @@ ipcMain.handle('log:export-log', async () => {
 ipcMain.handle('log:export-csv', async () => {
   let base;
   let csvPath;
-  let header;
-  let rows;
 
   if (!sessionData.length) {
     return { success: false, error: 'No structured data recorded yet' };
@@ -826,19 +820,7 @@ ipcMain.handle('log:export-csv', async () => {
 
     base = sessionBase || sessionTimestamp();
     csvPath = path.join(logsDir, `${base}.csv`);
-    header = 'timestamp_ms,proto,status,rtt_ms,data,raw\n';
-    rows = sessionData.map(r => (
-      [
-        r.ts,
-        csvEscape(r.proto),
-        csvEscape(r.status),
-        r.rtt != null ? r.rtt : '',
-        csvEscape(r.data),
-        csvEscape(r.raw),
-      ].join(',')
-    )).join('\n');
-
-    fs.writeFileSync(csvPath, header + rows, 'utf8');
+    fs.writeFileSync(csvPath, buildSessionCsv(sessionData), 'utf8');
     return { success: true, path: csvPath };
   } catch (err) {
     return { success: false, error: err.message };
@@ -1014,13 +996,26 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', async () => {
-  clearReconnect(primary);
-  await closePort(primary);
-  closeSessionLog();
+// Electron does not await async before-quit listeners, so hold the quit with
+// preventDefault, finish cleanup, then quit for real exactly once.
+let quitCleanupDone = false;
 
-  clearReconnect(dualA);
-  clearReconnect(dualB);
-  await closePort(dualA);
-  await closePort(dualB);
+app.on('before-quit', event => {
+  if (quitCleanupDone) {
+    return;
+  }
+  event.preventDefault();
+
+  (async () => {
+    clearReconnect(primary);
+    clearReconnect(dualA);
+    clearReconnect(dualB);
+    await closePort(primary);
+    await closePort(dualA);
+    await closePort(dualB);
+    closeSessionLog();
+  })().finally(() => {
+    quitCleanupDone = true;
+    app.quit();
+  });
 });

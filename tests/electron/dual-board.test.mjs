@@ -4,8 +4,8 @@ import {
   computeDualWarnings,
   getDualCommandDisabledReason,
   describeBoardProfile,
-} from './dual-board.js';
-import { PROTOCOLS } from './protocols.js';
+} from '../../frontend/dual-board.js';
+import { PROTOCOLS } from '../../frontend/protocols.js';
 
 let passed = 0;
 let failed = 0;
